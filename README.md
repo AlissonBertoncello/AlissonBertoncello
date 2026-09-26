@@ -6,7 +6,7 @@ Busca produtos em promoção no **Mercado Livre** usando a **API oficial** e (na
 
 | Etapa | O que faz | Status |
 |---|---|---|
-| 1 | Busca ofertas via API do Mercado Livre, filtra por desconto, evita repetição e monta a mensagem | ✅ pronta |
+| 1 | Busca ofertas via API do Mercado Livre, filtra por desconto, evita repetição, gera o **link de afiliado** e monta a mensagem | ✅ pronta |
 | 2 | Envia as mensagens para um grupo de WhatsApp | ⏳ a fazer |
 
 Na etapa 1 o destino é o **console**: a mensagem aparece no terminal e fica salva em `data/saida.jsonl`. O texto já sai no formato do WhatsApp (`*negrito*`, `~riscado~`).
@@ -26,11 +26,28 @@ cp .env.example .env    # no Windows: Copy-Item .env.example .env
 
 O bot gera e renova o access token sozinho. Se preferir, cole um token pronto em `ML_ACCESS_TOKEN`.
 
+### Link de afiliado (Mercado Livre Afiliados)
+A API oficial não gera link de afiliado, então o bot usa o **Linkbuilder** do painel de afiliados, com a sua sessão logada (mesmo método do bot do Telegram). Precisa do **Google Chrome** instalado.
+
+1. Em `ML_ETIQUETA` no `.env`, coloque a **"Etiqueta em uso"** que aparece no [Linkbuilder](https://www.mercadolivre.com.br/afiliados/linkbuilder).
+2. Faça o login uma única vez:
+   ```bash
+   uv run python -m ofertas ml-login
+   ```
+   Abre um Chrome normal com um perfil separado (`data/ml_profile`). Faça login na conta de afiliado, confira que o Linkbuilder aparece logado e **feche o navegador**.
+3. Teste com um produto qualquer:
+   ```bash
+   uv run python -m ofertas converter "https://produto.mercadolivre.com.br/MLB-..."
+   ```
+
+O link é gerado só para as ofertas escolhidas em cada ciclo. Com `afiliado: true` no `config.yaml` (padrão), **oferta sem link de afiliado não é enviada**. Se a sessão expirar, o log avisa para refazer o `ml-login`. Sem Google Chrome, rode `uv run python -m ofertas instalar-navegador` (o login pode ser recusado pelo ML nesse caso).
+
 ## Uso
 
 ```bash
 uv run python -m ofertas check              # o que falta configurar
 uv run python -m ofertas testar --mensagem  # busca e mostra as ofertas (não envia/registra nada)
+uv run python -m ofertas converter "<link>"  # gera o link de afiliado de um produto
 uv run python -m ofertas ciclo              # um ciclo: busca → filtra → escolhe → envia ao destino
 uv run python -m ofertas run                # ciclos em loop, a cada intervalo_minutos
 uv run pytest                               # testes
@@ -42,8 +59,9 @@ Intervalo entre ciclos, quantas ofertas por ciclo, desconto mínimo, faixa de pr
 ## Estrutura
 ```
 ofertas/
-├── main.py              # comandos (check, testar, ciclo, run)
-├── pipeline.py          # coleta → filtros → escolhe → envia
+├── main.py              # comandos (check, testar, converter, ml-login, ciclo, run)
+├── pipeline.py          # coleta → filtros → escolhe → link de afiliado → envia
+├── afiliado_ml.py       # link de afiliado via Linkbuilder (sessão logada)
 ├── formatter.py         # texto da mensagem (formato WhatsApp)
 ├── db.py                # SQLite anti-repetição (data/ofertas.db)
 ├── config.py            # lê .env + config.yaml
@@ -56,5 +74,6 @@ ofertas/
 ```
 
 ## Uso responsável
+- **Divulgação**: avise no grupo que os links são de afiliado (ex: *"Contém links de afiliado; podemos receber comissão, sem custo extra para você."*).
 - Respeite os termos da API do Mercado Livre e não abuse da frequência de busca (os padrões do `config.yaml` são comedidos).
 - Os preços mudam a qualquer momento; a mensagem reflete o preço no momento da coleta.

@@ -20,6 +20,12 @@ def test_mensagem_whatsapp():
     assert msg.endswith("🛒 https://ml/1")
 
 
+def test_mensagem_prefere_link_afiliado():
+    o = _o("1", "Fone", 50.0, 100.0)
+    o.url_afiliado = "https://meli.la/xyz"
+    assert montar_mensagem(o).endswith("🛒 https://meli.la/xyz")
+
+
 def test_filtrar(monkeypatch):
     monkeypatch.setattr(pipeline.db, "ja_enviada", lambda uid, dias: uid == "mercadolivre:3")
     monkeypatch.setattr(config, "desconto_minimo", 25)

@@ -23,5 +23,5 @@ def montar_mensagem(o: Oferta) -> str:
     if o.extra:
         linhas.append(o.extra)
 
-    linhas += ["", _PLATAFORMA.get(o.plataforma, o.plataforma), f"🛒 {o.url}"]
+    linhas += ["", _PLATAFORMA.get(o.plataforma, o.plataforma), f"🛒 {o.link}"]
     return "\n".join(linhas)

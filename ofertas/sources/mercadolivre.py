@@ -4,12 +4,15 @@ Autenticação: a busca exige um access token. O bot gera um sozinho com o
 client_id/client_secret do seu aplicativo (grant_type=client_credentials) e
 renova quando expira. Crie o app em https://developers.mercadolivre.com.br/devcenter.
 Se preferir, cole um token pronto em ML_ACCESS_TOKEN no .env.
+
+O link de afiliado não vem da API: é gerado pelo Linkbuilder (ver afiliado_ml.py).
 """
 import logging
 import time
 
 import requests
 
+from ..afiliado_ml import e_link_ml, extrair_id, gerar_links_afiliado
 from ..config import config
 from ..models import Oferta
 
@@ -80,6 +83,9 @@ class ClienteML:
             params["category"] = categoria
         return self.get(f"/sites/{site}/search", params).get("results") or []
 
+    def item(self, item_id: str) -> dict:
+        return self.get(f"/items/{item_id}")
+
 
 def _imagem(item: dict) -> str | None:
     img = item.get("thumbnail") or ""
@@ -110,7 +116,7 @@ def item_para_oferta(item: dict) -> Oferta | None:
         plataforma="mercadolivre",
         id_produto=str(item["id"]),
         titulo=item["title"].strip(),
-        url=item["permalink"].split("#")[0],
+        url_produto=item["permalink"].split("#")[0].split("?")[0],
         preco=float(preco) if preco is not None else None,
         preco_original=float(original) if original else None,
         imagem=_imagem(item),
@@ -151,3 +157,26 @@ def buscar_ofertas(cliente: ClienteML | None = None) -> list[Oferta]:
         time.sleep(0.5)
     log.info("Mercado Livre: %d ofertas coletadas", len(ofertas))
     return list(ofertas.values())
+
+
+def converter(url: str, cliente: ClienteML | None = None) -> Oferta:
+    """Link de produto do ML -> Oferta com dados da API + link de afiliado."""
+    url = url.split("#")[0]
+    if "meli.la/" in url:  # link de afiliado encurtado: expande até o produto
+        try:
+            url = requests.get(url, allow_redirects=True, timeout=20,
+                               headers={"User-Agent": USER_AGENT}).url.split("#")[0]
+        except requests.RequestException as e:
+            log.warning("Não consegui expandir o link meli.la: %s", e)
+    item_id = extrair_id(url)
+    oferta = None
+    if item_id:
+        try:
+            oferta = item_para_oferta((cliente or ClienteML.do_config()).item(item_id))
+        except ErroAPI as e:
+            log.warning("Não consegui ler o item %s na API: %s", item_id, e)
+    if oferta is None:
+        oferta = Oferta(plataforma="mercadolivre", id_produto=item_id or url[-40:],
+                        titulo="Oferta Mercado Livre", url_produto=url.split("?")[0])
+    gerar_links_afiliado([oferta])
+    return oferta

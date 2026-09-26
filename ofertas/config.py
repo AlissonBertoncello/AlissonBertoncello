@@ -9,6 +9,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
+# Navegador do Playwright fica dentro do projeto (fallback quando não há Google Chrome).
+# Instale com: uv run python -m ofertas instalar-navegador
+os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", str(DATA_DIR / "pw-browsers"))
+
 load_dotenv(BASE_DIR / ".env")
 
 
@@ -30,6 +34,7 @@ class Config:
         self.ml_client_id: str = os.getenv("ML_CLIENT_ID", "").strip()
         self.ml_client_secret: str = os.getenv("ML_CLIENT_SECRET", "").strip()
         self.ml_access_token: str = os.getenv("ML_ACCESS_TOKEN", "").strip()
+        self.ml_etiqueta: str = os.getenv("ML_ETIQUETA", "").strip()
 
         # config.yaml
         self.intervalo_minutos: int = int(geral.get("intervalo_minutos", 45))
@@ -47,6 +52,8 @@ class Config:
 
         fontes = y.get("fontes") or {}
         self.fonte_ml: dict = fontes.get("mercadolivre") or {"ativa": False}
+        # true = só envia ofertas com link de afiliado (sem link, a oferta é pulada)
+        self.ml_afiliado: bool = bool(self.fonte_ml.get("afiliado", True))
 
         self.destino: str = str(y.get("destino") or "console").strip().lower()
 
@@ -74,4 +81,10 @@ def verificar() -> list[str]:
     pendencias = []
     if not (config.ml_access_token or (config.ml_client_id and config.ml_client_secret)):
         pendencias.append("ML_CLIENT_ID / ML_CLIENT_SECRET (app em developers.mercadolivre.com.br)")
+    if config.ml_afiliado:
+        if not config.ml_etiqueta:
+            pendencias.append("ML_ETIQUETA (a 'Etiqueta em uso' do Linkbuilder do ML)")
+        perfil_ml = DATA_DIR / "ml_profile"
+        if not (perfil_ml.exists() and any(perfil_ml.iterdir())):
+            pendencias.append("Sessão do Mercado Livre (rode: uv run python -m ofertas ml-login)")
     return pendencias

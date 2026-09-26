@@ -17,6 +17,7 @@ fontes:
   mercadolivre:
     ativa: true
     site: MLB                  # MLB = Brasil
+    afiliado: true             # true = só envia com link de afiliado (meli.la); false = link normal
     limite_por_busca: 50       # itens pedidos à API por busca/categoria (máx. 50)
     # Buscas por palavra-chave e/ou categorias. Se as duas listas estiverem vazias,
     # o bot usa as categorias padrão abaixo.

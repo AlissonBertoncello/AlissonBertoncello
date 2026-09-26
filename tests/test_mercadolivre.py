@@ -41,7 +41,7 @@ def test_item_para_oferta():
     o = item_para_oferta(ITEM)
     assert o.id_produto == "MLB123456789"
     assert o.titulo == "Fone Bluetooth XYZ"
-    assert o.url == "https://produto.mercadolivre.com.br/MLB-123456789-fone"
+    assert o.url_produto == "https://produto.mercadolivre.com.br/MLB-123456789-fone"
     assert o.desconto == 50
     assert o.imagem == "https://http2.mlstatic.com/D_123-O.jpg"
     assert "Frete grátis" in o.extra and "Loja oficial" in o.extra
@@ -107,3 +107,18 @@ def test_sem_credenciais():
         assert "ML_CLIENT_ID" in str(e)
     else:
         raise AssertionError("esperava ErroAPI")
+
+
+def test_converter_usa_api_e_gera_link(monkeypatch):
+    from ofertas.sources import mercadolivre
+
+    def gerar(ofertas):
+        for o in ofertas:
+            o.url_afiliado = "https://meli.la/abc"
+    monkeypatch.setattr(mercadolivre, "gerar_links_afiliado", gerar)
+    s = SessaoFalsa([Resp(200, ITEM)])
+    o = mercadolivre.converter("https://produto.mercadolivre.com.br/MLB-123456789-fone?x=1",
+                               ClienteML(access_token="T", sessao=s))
+    assert s.chamadas[0][1].endswith("/items/MLB123456789")
+    assert o.titulo == "Fone Bluetooth XYZ"
+    assert o.link == "https://meli.la/abc"

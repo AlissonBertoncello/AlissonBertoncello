@@ -2,7 +2,7 @@ import logging
 import re
 import time
 
-from . import db
+from . import afiliado_ml, db
 from .config import config, dentro_do_horario
 from .destinos import Destino
 from .formatter import montar_mensagem
@@ -64,6 +64,20 @@ def escolher(ofertas: list[Oferta], n: int) -> list[Oferta]:
     return escolhidas
 
 
+def com_link_afiliado(ofertas: list[Oferta]) -> list[Oferta]:
+    """Gera os links de afiliado (só das escolhidas: o Linkbuilder é caro) e
+    descarta as que ficaram sem link, para nunca enviar oferta sem comissão."""
+    try:
+        afiliado_ml.gerar_links_afiliado(ofertas)
+    except Exception as e:
+        log.error("Linkbuilder ML falhou: %s", e)
+    prontas = [o for o in ofertas if o.url_afiliado]
+    for o in ofertas:
+        if not o.url_afiliado:
+            log.warning("Sem link de afiliado, pulando: %s", o.titulo[:60])
+    return prontas
+
+
 def executar_ciclo(destino: Destino, registrar: bool = True) -> int:
     """coletar -> filtrar -> escolher -> enviar. Retorna nº de ofertas enviadas."""
     if not dentro_do_horario():
@@ -73,6 +87,8 @@ def executar_ciclo(destino: Destino, registrar: bool = True) -> int:
     brutas = coletar()
     boas = filtrar(brutas)
     escolhidas = escolher(boas, config.max_posts_por_ciclo)
+    if config.ml_afiliado:
+        escolhidas = com_link_afiliado(escolhidas)
 
     enviadas = 0
     for o in escolhidas:
