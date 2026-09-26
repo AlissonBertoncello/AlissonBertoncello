@@ -1,0 +1,40 @@
+# Configuração do bot de ofertas (o que não é segredo fica aqui; segredos vão no .env)
+
+geral:
+  intervalo_minutos: 45        # de quanto em quanto tempo buscar ofertas novas (comando "run")
+  max_posts_por_ciclo: 3       # máximo de ofertas enviadas por ciclo
+  espacamento_segundos: 60     # pausa entre um envio e outro no mesmo ciclo
+  nao_repetir_dias: 7          # não reenviar o mesmo produto dentro desse prazo
+  horario_ativo: "08:00-23:00" # só envia nesse intervalo (hora local); "" = 24h
+
+filtros:
+  desconto_minimo: 25          # % mínimo de desconto
+  preco_minimo: 0              # 0 = sem limite
+  preco_maximo: 0              # 0 = sem limite
+  palavras_bloqueadas: []      # ex: [capinha, película]
+
+fontes:
+  mercadolivre:
+    ativa: true
+    site: MLB                  # MLB = Brasil
+    limite_por_busca: 50       # itens pedidos à API por busca/categoria (máx. 50)
+    # Buscas por palavra-chave e/ou categorias. Se as duas listas estiverem vazias,
+    # o bot usa as categorias padrão abaixo.
+    buscas: []                 # ex: [air fryer, fone bluetooth, smartwatch]
+    categorias:                # id: nome
+      MLB1648: Informática
+      MLB1000: Eletrônicos, Áudio e Vídeo
+      MLB1051: Celulares e Telefones
+      MLB1574: Casa, Móveis e Decoração
+      MLB5726: Eletrodomésticos
+    # Outras categorias do ML:
+    #   MLB1144: Games
+    #   MLB1276: Esportes e Fitness
+    #   MLB1430: Calçados, Roupas e Bolsas
+    #   MLB1246: Beleza e Cuidado Pessoal
+    #   MLB1132: Brinquedos e Hobbies
+    #   MLB1071: Animais
+
+# Para onde as ofertas vão. Etapa 1: "console" (mostra no terminal e salva em data/saida.jsonl).
+# Etapa 2: "whatsapp".
+destino: console
