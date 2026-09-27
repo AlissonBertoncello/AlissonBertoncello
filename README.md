@@ -108,4 +108,4 @@ ofertas/
 
 **`Failed to spawn: python` / "Controle de Aplicativo bloqueou este arquivo"** — é o Smart App Control do Windows 11. Aperte **Windows**, digite `Controle inteligente de aplicativos`, marque **Desativado** e reinicie o PC (o antivírus continua ativo).
 
-**Erro 403 na busca** — o ML bloqueia a busca (`/sites/MLB/search`) para a maioria dos apps. O bot contorna sozinho: usa os **mais vendidos** de cada categoria e a **busca no catálogo** da API; se nada disso responder, lê a **página de ofertas** do ML (`modo: auto` no `config.yaml`). Rode `uv run python -m ofertas diagnostico` para ver quais caminhos funcionam para o seu app.
+**Erro 403 na busca** — o ML bloqueia a busca (`/sites/MLB/search`) para a maioria dos apps. O bot contorna sozinho: usa os **mais vendidos** de cada categoria e das suas **subcategorias** (em rodízio, `subcategorias_por_busca` por vez) e a **busca no catálogo** da API; se nada disso responder, lê a **página de ofertas** do ML (`modo: auto` no `config.yaml`). Rode `uv run python -m ofertas diagnostico` para ver quais caminhos funcionam para o seu app.

@@ -12,7 +12,12 @@ class ClienteFalso:
     def __init__(self, busca_403=True):
         self.busca_403 = busca_403
         self.busca_bloqueada = False
+        self.rodizio_sub = {}
+        self.filhas = {}
         self.chamadas = []
+
+    def subcategorias(self, cat):
+        return self.filhas.get(cat, [])
 
     def buscar(self, site, **kw):
         self.chamadas.append("buscar")
@@ -21,7 +26,7 @@ class ClienteFalso:
         return [ITEM]
 
     def destaques(self, site, cat):
-        self.chamadas.append("destaques")
+        self.chamadas.append("destaques:" + cat)
         return [{"id": "MLB1", "type": "ITEM"}, {"id": "MLB900", "type": "PRODUCT"}]
 
     def itens(self, ids):
@@ -61,14 +66,14 @@ def test_403_usa_mais_vendidos_e_catalogo(monkeypatch):
     ofertas = mercadolivre.buscar_ofertas(c)
     assert sorted(o.id_produto for o in ofertas) == ["MLB1", "MLB900"]
     assert c.chamadas.count("buscar") == 1  # depois do 403 não tenta mais a busca
-    assert "catalogo" in c.chamadas and "destaques" in c.chamadas
+    assert "catalogo" in c.chamadas and "destaques:MLB1648" in c.chamadas
 
 
 def test_busca_liberada_usa_busca(monkeypatch):
     _config(monkeypatch)
     c = ClienteFalso(busca_403=False)
     assert [o.id_produto for o in mercadolivre.buscar_ofertas(c)] == ["MLB1"]
-    assert "destaques" not in c.chamadas
+    assert not any(ch.startswith("destaques") for ch in c.chamadas)
 
 
 def test_auto_cai_para_pagina(monkeypatch):
@@ -113,3 +118,35 @@ def test_bloqueio_lembrado_entre_ciclos(monkeypatch):
 def test_cliente_padrao_e_reaproveitado(monkeypatch):
     monkeypatch.setattr(mercadolivre, "_cliente", None)
     assert mercadolivre.cliente_padrao() is mercadolivre.cliente_padrao()
+
+
+def test_rodizio_de_subcategorias(monkeypatch):
+    _config(monkeypatch, subcategorias_por_busca=2)
+    c = ClienteFalso()
+    c.filhas = {"MLB1384": ["F1", "F2", "F3"]}
+    for _ in range(3):
+        mercadolivre.buscar_ofertas(c, {"MLB1384": "Bebês"})
+    feitas = [ch.split(":")[1] for ch in c.chamadas if ch.startswith("destaques")]
+    assert feitas == ["MLB1384", "F1", "F2", "F3", "MLB1384", "F1"]
+
+
+def test_subcategoria_sem_ranking_e_pulada(monkeypatch):
+    _config(monkeypatch, subcategorias_por_busca=2)
+
+    class Parcial(ClienteFalso):
+        def destaques(self, site, cat):
+            if cat == "MLB1384":
+                raise ErroAPI("GET /highlights respondeu HTTP 404")
+            return super().destaques(site, cat)
+    c = Parcial()
+    c.filhas = {"MLB1384": ["F1"]}
+    assert sorted(o.id_produto for o in mercadolivre.buscar_ofertas(c, {"MLB1384": "Bebês"})) == ["MLB1", "MLB900"]
+
+
+def test_subcategorias_da_api_com_cache():
+    from tests.test_mercadolivre import Resp, SessaoFalsa
+    s = SessaoFalsa([Resp(200, {"children_categories": [{"id": "MLB1"}, {"id": "MLB2"}]})])
+    c = mercadolivre.ClienteML(access_token="T", sessao=s)
+    assert c.subcategorias("MLB1384") == ["MLB1", "MLB2"]
+    assert c.subcategorias("MLB1384") == ["MLB1", "MLB2"]  # sem nova chamada
+    assert len(s.chamadas) == 1

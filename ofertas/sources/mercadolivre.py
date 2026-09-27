@@ -36,6 +36,8 @@ class ClienteML:
         self._expira_em = 0.0
         # vira True no primeiro 403 da busca: daí em diante vai direto para as alternativas
         self.busca_bloqueada = False
+        self._filhas: dict[str, list[str]] = {}   # cache: categoria -> subcategorias
+        self.rodizio_sub: dict[str, int] = {}     # categoria -> próxima subcategoria da vez
         self.s = sessao or requests.Session()
         self.s.headers.update({"User-Agent": USER_AGENT, "Accept": "application/json"})
 
@@ -92,6 +94,17 @@ class ClienteML:
     def destaques(self, site: str, categoria: str) -> list[dict]:
         """Mais vendidos da categoria: [{"id", "type": ITEM|PRODUCT|USER_PRODUCT, "position"}]."""
         return self.get(f"/highlights/{site}/category/{categoria}").get("content") or []
+
+    def subcategorias(self, categoria: str) -> list[str]:
+        """Ids das subcategorias diretas (consulta a API uma vez por categoria)."""
+        if categoria not in self._filhas:
+            try:
+                filhas = self.get(f"/categories/{categoria}").get("children_categories") or []
+                self._filhas[categoria] = [c["id"] for c in filhas if c.get("id")]
+            except ErroAPI as e:
+                log.warning("Não consegui ler as subcategorias de %s: %s", categoria, e)
+                self._filhas[categoria] = []
+        return self._filhas[categoria]
 
     def itens(self, ids: list[str]) -> list[dict]:
         """Multiget de anúncios (até 20 por chamada); devolve só os que vieram com 200."""
@@ -223,8 +236,29 @@ def _ofertas_de_produtos(cliente: ClienteML, ids: list[str]) -> list[Oferta]:
     return ofertas
 
 
+def fontes_da_vez(cliente: ClienteML, categoria: str, qtd: int) -> list[str]:
+    """Rodízio entre a categoria e as suas subcategorias: a cada chamada, as
+    próximas `qtd` da fila (a lista dos mais vendidos de cada uma é curta)."""
+    nos = [categoria] + cliente.subcategorias(categoria)
+    i = cliente.rodizio_sub.get(categoria, 0)
+    vez = [nos[(i + k) % len(nos)] for k in range(min(max(1, qtd), len(nos)))]
+    cliente.rodizio_sub[categoria] = (i + len(vez)) % len(nos)
+    return vez
+
+
 def _via_destaques(cliente: ClienteML, site: str, categoria: str, limite: int) -> list[Oferta]:
-    """Mais vendidos da categoria -> anúncios (multiget) e produtos de catálogo."""
+    """Mais vendidos das (sub)categorias da vez -> anúncios (multiget) e produtos de catálogo."""
+    qtd = int(config.fonte_ml.get("subcategorias_por_busca", 2))
+    ofertas: list[Oferta] = []
+    for no in fontes_da_vez(cliente, categoria, qtd):
+        try:
+            ofertas += _destaques_de(cliente, site, no, limite)
+        except ErroAPI as e:  # subcategoria sem ranking de mais vendidos
+            log.debug("Mais vendidos de %s: %s", no, e)
+    return ofertas
+
+
+def _destaques_de(cliente: ClienteML, site: str, categoria: str, limite: int) -> list[Oferta]:
     conteudo = cliente.destaques(site, categoria)[:limite]
     ids_itens = [c["id"] for c in conteudo if c.get("type") == "ITEM"]
     ids_produtos = [c["id"] for c in conteudo if c.get("type") == "PRODUCT"]

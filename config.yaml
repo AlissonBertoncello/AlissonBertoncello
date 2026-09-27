@@ -23,6 +23,7 @@ fontes:
     modo: auto
     limite_por_busca: 50       # itens pedidos à API por busca/categoria (máx. 50)
     limite_destaques: 20       # se a busca da API for bloqueada: mais vendidos por categoria
+    subcategorias_por_busca: 2 # mais vendidos: quantas (sub)categorias consultar por vez, em rodízio
     paginas: 1                 # páginas de mercadolivre.com.br/ofertas por categoria (modo página)
 
 # Grupos de destino (na etapa 2, cada um vira um grupo de WhatsApp).
