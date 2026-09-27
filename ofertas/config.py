@@ -52,8 +52,6 @@ class Config:
 
         fontes = y.get("fontes") or {}
         self.fonte_ml: dict = fontes.get("mercadolivre") or {"ativa": False}
-        # true = só envia ofertas com link de afiliado (sem link, a oferta é pulada)
-        self.ml_afiliado: bool = bool(self.fonte_ml.get("afiliado", True))
 
         self.destino: str = str(y.get("destino") or "console").strip().lower()
 
@@ -81,10 +79,9 @@ def verificar() -> list[str]:
     pendencias = []
     if not (config.ml_access_token or (config.ml_client_id and config.ml_client_secret)):
         pendencias.append("ML_CLIENT_ID / ML_CLIENT_SECRET (app em developers.mercadolivre.com.br)")
-    if config.ml_afiliado:
-        if not config.ml_etiqueta:
-            pendencias.append("ML_ETIQUETA (a 'Etiqueta em uso' do Linkbuilder do ML)")
-        perfil_ml = DATA_DIR / "ml_profile"
-        if not (perfil_ml.exists() and any(perfil_ml.iterdir())):
-            pendencias.append("Sessão do Mercado Livre (rode: uv run python -m ofertas ml-login)")
+    if not config.ml_etiqueta:
+        pendencias.append("ML_ETIQUETA (a 'Etiqueta em uso' do Linkbuilder do ML)")
+    perfil_ml = DATA_DIR / "ml_profile"
+    if not (perfil_ml.exists() and any(perfil_ml.iterdir())):
+        pendencias.append("Sessão do Mercado Livre (rode: uv run python -m ofertas ml-login)")
     return pendencias

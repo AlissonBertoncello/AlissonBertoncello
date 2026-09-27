@@ -23,7 +23,6 @@ def cmd_check(_):
     from .afiliado_ml import tem_sessao
     if tem_sessao():
         print("✅ Sessão do Mercado Livre")
-    print(f"ℹ️  Link de afiliado: {'obrigatório' if config.ml_afiliado else 'desligado'}")
     print(f"ℹ️  Destino: {config.destino}")
     for p in pendencias:
         print(f"⚠️  Falta: {p}")
@@ -42,8 +41,12 @@ def cmd_testar(args):
         print(f"[-{o.desconto or 0:>2}%] R$ {o.preco} (de {o.preco_original}) — {o.titulo[:70]}")
     print(f"\nTotal: {len(brutas)} coletadas, {len(boas)} passam nos filtros")
     if args.mensagem and boas:
-        print("\n── Prévia da mensagem ──")
-        print(montar_mensagem(boas[0]))
+        top = pipeline.com_link_afiliado(pipeline.escolher(boas, 3))
+        if top:
+            print("\n── Prévia da mensagem ──")
+            print(montar_mensagem(top[0]))
+        else:
+            print("\n⚠️  Sem prévia: não foi possível gerar o link de afiliado (motivo acima).")
 
 
 def cmd_diagnostico(_):

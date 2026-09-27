@@ -18,7 +18,6 @@ fontes:
   mercadolivre:
     ativa: true
     site: MLB                  # MLB = Brasil
-    afiliado: true             # true = só envia com link de afiliado (meli.la); false = link normal
     # modo: auto = API e, se ela não trouxer nada, a página de ofertas do ML
     #       api = só API | pagina = só a página mercadolivre.com.br/ofertas
     modo: auto

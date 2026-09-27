@@ -64,19 +64,17 @@ def escolher(ofertas: list[Oferta], n: int) -> list[Oferta]:
     return escolhidas
 
 
-def com_link_afiliado(ofertas: list[Oferta], descartar: bool = True) -> list[Oferta]:
-    """Gera os links de afiliado (só das escolhidas: o Linkbuilder é caro) e
-    descarta as que ficaram sem link, para nunca enviar oferta sem comissão.
-    Com descartar=False (prévia no console) elas seguem com o link normal."""
+def com_link_afiliado(ofertas: list[Oferta]) -> list[Oferta]:
+    """Gera os links de afiliado (só das candidatas: o Linkbuilder é caro) e
+    descarta as que ficaram sem link: oferta sem link de afiliado nunca é enviada."""
     try:
         afiliado_ml.gerar_links_afiliado(ofertas)
     except Exception as e:
         log.error("Linkbuilder ML falhou (link de afiliado não gerado): %s", e)
     for o in ofertas:
         if not o.url_afiliado:
-            log.warning("Sem link de afiliado%s: %s",
-                        ", pulando" if descartar else " (prévia com link normal)", o.titulo[:60])
-    return [o for o in ofertas if o.url_afiliado] if descartar else ofertas
+            log.warning("Sem link de afiliado, descartada: %s", o.titulo[:60])
+    return [o for o in ofertas if o.url_afiliado]
 
 
 def executar_ciclo(destino: Destino, registrar: bool = True,
@@ -88,9 +86,14 @@ def executar_ciclo(destino: Destino, registrar: bool = True,
 
     brutas = coletar(categorias)
     boas = filtrar(brutas)
-    escolhidas = escolher(boas, config.max_posts_por_ciclo)
-    if config.ml_afiliado:
-        escolhidas = com_link_afiliado(escolhidas, descartar=destino.nome != "console")
+    n = config.max_posts_por_ciclo
+    # link de afiliado é obrigatório; pega reservas: se uma ficar sem link,
+    # a próxima melhor entra no lugar
+    candidatas = escolher(boas, n * 3)
+    escolhidas = com_link_afiliado(candidatas)[:n]
+    if candidatas and not escolhidas:
+        log.error("Nenhuma oferta enviada: não foi possível gerar link de afiliado "
+                  "(motivo na linha 'Linkbuilder ML falhou' acima)")
 
     enviadas = 0
     for o in escolhidas:
@@ -105,7 +108,7 @@ def executar_ciclo(destino: Destino, registrar: bool = True,
         if o is not escolhidas[-1] and destino.nome != "console":
             time.sleep(config.espacamento_segundos)
 
-    if not escolhidas:
+    if not boas:
         log.info("Nenhuma oferta nova que passe nos filtros neste ciclo")
     log.info("Ciclo: %d coletadas, %d aprovadas, %d enviadas (%s)",
              len(brutas), len(boas), enviadas, destino.nome)

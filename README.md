@@ -48,7 +48,7 @@ A API oficial não gera link de afiliado, então o bot usa o **Linkbuilder** do 
    uv run python -m ofertas converter "https://produto.mercadolivre.com.br/MLB-..."
    ```
 
-O link é gerado só para as ofertas escolhidas em cada ciclo. Com `afiliado: true` no `config.yaml` (padrão), **oferta sem link de afiliado não é enviada**. Se a sessão expirar, o log avisa para refazer o `ml-login`. Sem Google Chrome, rode `uv run python -m ofertas instalar-navegador` (o login pode ser recusado pelo ML nesse caso).
+O link é gerado só para as ofertas escolhidas em cada ciclo. O link de afiliado é **obrigatório**: oferta sem link de afiliado é descartada (o bot tenta a próxima melhor no lugar). Se a sessão expirar, o log avisa para refazer o `ml-login`. Sem Google Chrome, rode `uv run python -m ofertas instalar-navegador` (o login pode ser recusado pelo ML nesse caso).
 
 ## Uso
 

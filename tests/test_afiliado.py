@@ -62,9 +62,45 @@ def test_pipeline_falha_linkbuilder_nao_envia(monkeypatch):
     assert pipeline.com_link_afiliado([Oferta("mercadolivre", "1", "x", "https://ml/1")]) == []
 
 
-def test_previa_console_mantem_sem_link(monkeypatch):
-    def gerar(ofertas):
+
+def test_ciclo_usa_reserva_quando_falta_link(monkeypatch):
+    ofertas = [Oferta("mercadolivre", str(i), f"Produto {i}", f"https://ml/{i}", 10, 100 - i)
+               for i in range(3)]
+    monkeypatch.setattr(pipeline, "coletar", lambda categorias=None: ofertas)
+    monkeypatch.setattr(pipeline, "filtrar", lambda o: o)
+    monkeypatch.setattr(pipeline.config, "max_posts_por_ciclo", 1)
+    monkeypatch.setattr(pipeline, "dentro_do_horario", lambda: True)
+
+    def gerar(lista):  # a melhor oferta (id 0) fica sem link
+        for o in lista:
+            if o.id_produto != "0":
+                o.url_afiliado = f"https://meli.la/{o.id_produto}"
+    monkeypatch.setattr(pipeline.afiliado_ml, "gerar_links_afiliado", gerar)
+
+    enviadas = []
+
+    class Destino:
+        nome = "console"
+
+        def enviar(self, o, msg):
+            enviadas.append(o)
+    assert pipeline.executar_ciclo(Destino(), registrar=False) == 1
+    assert enviadas[0].url_afiliado == "https://meli.la/1"
+
+
+def test_ciclo_sem_link_nao_envia_nada(monkeypatch):
+    monkeypatch.setattr(pipeline, "coletar",
+                        lambda categorias=None: [Oferta("mercadolivre", "1", "x", "https://ml/1", 10, 100)])
+    monkeypatch.setattr(pipeline, "filtrar", lambda o: o)
+    monkeypatch.setattr(pipeline, "dentro_do_horario", lambda: True)
+
+    def gerar(lista):
         raise ErroAfiliado("Sessão do ML não encontrada")
     monkeypatch.setattr(pipeline.afiliado_ml, "gerar_links_afiliado", gerar)
-    o = Oferta("mercadolivre", "1", "x", "https://ml/1")
-    assert pipeline.com_link_afiliado([o], descartar=False) == [o]
+
+    class Destino:
+        nome = "console"
+
+        def enviar(self, o, msg):
+            raise AssertionError("não deveria enviar oferta sem link de afiliado")
+    assert pipeline.executar_ciclo(Destino(), registrar=False) == 0
