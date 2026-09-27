@@ -16,7 +16,8 @@ Na etapa 1 o destino é o **console**: a mensagem aparece no terminal e fica sal
 1. Preencha o `.env` (veja abaixo).
 2. Dê **dois cliques em `BUSCAR_OFERTAS.bat`**: instala o que falta (na primeira vez) e mostra as ofertas encontradas.
 3. Para o link de afiliado: **dois cliques em `LOGIN_MERCADOLIVRE.bat`** (uma vez só).
-4. Para deixar rodando sozinho, de tempos em tempos: **dois cliques em `INICIAR_BOT.bat`**.
+4. Para deixar rodando sozinho: **dois cliques em `INICIAR_BOT.bat`**.
+   Ao iniciar, o bot **pergunta a categoria** (menu numerado) e, na fase de testes, mostra **1 oferta por minuto** dessa categoria (`intervalo_minutos` e `max_posts_por_ciclo` no `config.yaml`).
 
 ## Instalação (pelo terminal)
 
@@ -57,7 +58,8 @@ uv run python -m ofertas diagnostico        # testa quais caminhos da API funcio
 uv run python -m ofertas testar --mensagem  # busca e mostra as ofertas (não envia/registra nada)
 uv run python -m ofertas converter "<link>"  # gera o link de afiliado de um produto
 uv run python -m ofertas ciclo              # um ciclo: busca → filtra → escolhe → envia ao destino
-uv run python -m ofertas run                # ciclos em loop, a cada intervalo_minutos
+uv run python -m ofertas run                # pergunta a categoria e roda em loop, a cada intervalo_minutos
+uv run python -m ofertas run --categoria 3  # já escolhe a categoria (número, MLB... ou nome)
 uv run pytest                               # testes
 ```
 

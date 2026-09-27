@@ -12,12 +12,12 @@ from .sources import mercadolivre
 log = logging.getLogger("ofertas.pipeline")
 
 
-def coletar() -> list[Oferta]:
-    """Busca ofertas nas fontes ativas."""
+def coletar(categorias: dict[str, str] | None = None) -> list[Oferta]:
+    """Busca ofertas nas fontes ativas (só nas categorias dadas, se houver)."""
     todas: list[Oferta] = []
     if config.fonte_ml.get("ativa"):
         try:
-            todas += mercadolivre.buscar_ofertas()
+            todas += mercadolivre.buscar_ofertas(so_categorias=categorias)
         except Exception as e:
             log.error("Mercado Livre: %s", e)
     return todas
@@ -64,31 +64,33 @@ def escolher(ofertas: list[Oferta], n: int) -> list[Oferta]:
     return escolhidas
 
 
-def com_link_afiliado(ofertas: list[Oferta]) -> list[Oferta]:
+def com_link_afiliado(ofertas: list[Oferta], descartar: bool = True) -> list[Oferta]:
     """Gera os links de afiliado (só das escolhidas: o Linkbuilder é caro) e
-    descarta as que ficaram sem link, para nunca enviar oferta sem comissão."""
+    descarta as que ficaram sem link, para nunca enviar oferta sem comissão.
+    Com descartar=False (prévia no console) elas seguem com o link normal."""
     try:
         afiliado_ml.gerar_links_afiliado(ofertas)
     except Exception as e:
         log.error("Linkbuilder ML falhou: %s", e)
-    prontas = [o for o in ofertas if o.url_afiliado]
     for o in ofertas:
         if not o.url_afiliado:
-            log.warning("Sem link de afiliado, pulando: %s", o.titulo[:60])
-    return prontas
+            log.warning("Sem link de afiliado%s: %s",
+                        ", pulando" if descartar else " (prévia com link normal)", o.titulo[:60])
+    return [o for o in ofertas if o.url_afiliado] if descartar else ofertas
 
 
-def executar_ciclo(destino: Destino, registrar: bool = True) -> int:
+def executar_ciclo(destino: Destino, registrar: bool = True,
+                   categorias: dict[str, str] | None = None) -> int:
     """coletar -> filtrar -> escolher -> enviar. Retorna nº de ofertas enviadas."""
     if not dentro_do_horario():
         log.info("Fora do horário ativo (%s) — ciclo pulado", config.horario_ativo)
         return 0
 
-    brutas = coletar()
+    brutas = coletar(categorias)
     boas = filtrar(brutas)
     escolhidas = escolher(boas, config.max_posts_por_ciclo)
     if config.ml_afiliado:
-        escolhidas = com_link_afiliado(escolhidas)
+        escolhidas = com_link_afiliado(escolhidas, descartar=destino.nome != "console")
 
     enviadas = 0
     for o in escolhidas:
@@ -103,6 +105,8 @@ def executar_ciclo(destino: Destino, registrar: bool = True) -> int:
         if o is not escolhidas[-1] and destino.nome != "console":
             time.sleep(config.espacamento_segundos)
 
+    if not escolhidas:
+        log.info("Nenhuma oferta nova que passe nos filtros neste ciclo")
     log.info("Ciclo: %d coletadas, %d aprovadas, %d enviadas (%s)",
              len(brutas), len(boas), enviadas, destino.nome)
     return enviadas

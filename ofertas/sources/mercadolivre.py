@@ -174,8 +174,11 @@ def produto_para_oferta(produto: dict, anuncio: dict | None = None) -> Oferta | 
     )
 
 
-def _consultas() -> list[tuple[str, dict]]:
-    """[(rótulo, {"q": ...} ou {"categoria": ...})] a partir do config.yaml."""
+def _consultas(so_categorias: dict[str, str] | None = None) -> list[tuple[str, dict]]:
+    """[(rótulo, {"q": ...} ou {"categoria": ...})] a partir do config.yaml
+    (ou só das categorias passadas, quando escolhidas no menu)."""
+    if so_categorias:
+        return [(f"categoria {nome}", {"categoria": cid}) for cid, nome in so_categorias.items()]
     fonte = config.fonte_ml
     consultas = [(f"busca '{q}'", {"q": str(q)}) for q in (fonte.get("buscas") or [])]
     consultas += [(f"categoria {nome}", {"categoria": cid}) for cid, nome in categorias().items()]
@@ -222,11 +225,11 @@ def _via_catalogo(cliente: ClienteML, site: str, q: str, limite: int) -> list[Of
     return _ofertas_de_produtos(cliente, ids)
 
 
-def _buscar_api(cliente: ClienteML) -> dict[str, Oferta]:
+def _buscar_api(cliente: ClienteML, so_categorias: dict[str, str] | None = None) -> dict[str, Oferta]:
     site = str(config.fonte_ml.get("site") or "MLB")
     limite = int(config.fonte_ml.get("limite_por_busca", 50))
     limite_alt = int(config.fonte_ml.get("limite_destaques", 20))
-    consultas = _consultas()
+    consultas = _consultas(so_categorias)
     if not consultas:
         log.warning("Mercado Livre: nenhuma busca/categoria no config.yaml")
     ofertas: dict[str, Oferta] = {}
@@ -257,8 +260,9 @@ def _buscar_api(cliente: ClienteML) -> dict[str, Oferta]:
     return ofertas
 
 
-def buscar_ofertas(cliente: ClienteML | None = None) -> list[Oferta]:
-    """Ofertas de todas as buscas/categorias do config (sem repetição).
+def buscar_ofertas(cliente: ClienteML | None = None,
+                   so_categorias: dict[str, str] | None = None) -> list[Oferta]:
+    """Ofertas de todas as buscas/categorias do config, ou só de so_categorias (sem repetição).
 
     modo (config.yaml): "auto" = API e, se ela não trouxer nada, a página de
     ofertas do ML; "api" = só API; "pagina" = só a página de ofertas.
@@ -267,14 +271,14 @@ def buscar_ofertas(cliente: ClienteML | None = None) -> list[Oferta]:
     ofertas: dict[str, Oferta] = {}
     if modo in ("auto", "api"):
         try:
-            ofertas = _buscar_api(cliente or ClienteML.do_config())
+            ofertas = _buscar_api(cliente or ClienteML.do_config(), so_categorias)
         except ErroAPI as e:
             log.error("Mercado Livre API: %s", e)
     if not ofertas and modo in ("auto", "pagina"):
         if modo == "auto":
             log.warning("Mercado Livre: API sem resultados — usando a página de ofertas do ML")
         from . import ml_pagina
-        for o in ml_pagina.buscar_ofertas(categorias(), int(config.fonte_ml.get("paginas", 1))):
+        for o in ml_pagina.buscar_ofertas(so_categorias or categorias(), int(config.fonte_ml.get("paginas", 1))):
             ofertas.setdefault(o.id_produto, o)
     log.info("Mercado Livre: %d ofertas coletadas", len(ofertas))
     return list(ofertas.values())

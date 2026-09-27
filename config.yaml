@@ -1,11 +1,12 @@
 # Configuração do bot de ofertas (o que não é segredo fica aqui; segredos vão no .env)
 
 geral:
-  intervalo_minutos: 45        # de quanto em quanto tempo buscar ofertas novas (comando "run")
-  max_posts_por_ciclo: 3       # máximo de ofertas enviadas por ciclo
+  # FASE DE TESTES: 1 oferta a cada 1 minuto. Em produção, algo como 45 e 3.
+  intervalo_minutos: 1         # de quanto em quanto tempo buscar ofertas novas (comando "run")
+  max_posts_por_ciclo: 1       # máximo de ofertas enviadas por ciclo
   espacamento_segundos: 60     # pausa entre um envio e outro no mesmo ciclo
   nao_repetir_dias: 7          # não reenviar o mesmo produto dentro desse prazo
-  horario_ativo: "08:00-23:00" # só envia nesse intervalo (hora local); "" = 24h
+  horario_ativo: ""            # só envia nesse intervalo, ex: "08:00-23:00"; "" = 24h (testes)
 
 filtros:
   desconto_minimo: 25          # % mínimo de desconto
@@ -24,8 +25,8 @@ fontes:
     limite_por_busca: 50       # itens pedidos à API por busca/categoria (máx. 50)
     limite_destaques: 20       # se a busca da API for bloqueada: mais vendidos por categoria
     paginas: 1                 # páginas de mercadolivre.com.br/ofertas por categoria (modo página)
-    # Buscas por palavra-chave e/ou categorias. Se as duas listas estiverem vazias,
-    # o bot usa as categorias padrão abaixo.
+    # Ao iniciar, o bot PERGUNTA a categoria (menu). As listas abaixo só valem
+    # com "run --todas" (buscas por palavra-chave e/ou categorias).
     buscas: []                 # ex: [air fryer, fone bluetooth, smartwatch]
     categorias:                # id: nome
       MLB1648: Informática

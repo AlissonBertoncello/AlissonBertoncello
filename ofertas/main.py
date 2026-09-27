@@ -107,27 +107,44 @@ def cmd_instalar_navegador(_):
     raise SystemExit(r.returncode)
 
 
-def cmd_ciclo(_):
+def _categoria(args) -> dict[str, str] | None:
+    """Categoria passada em --categoria, ou perguntada no menu (--todas = config.yaml)."""
+    from . import categorias
+    if args.todas:
+        return None
+    if args.categoria:
+        r = categorias.resolver(args.categoria)
+        if not r:
+            raise SystemExit(f"Categoria não reconhecida: {args.categoria}")
+    else:
+        r = categorias.perguntar()
+    return {r[0]: r[1]}
+
+
+def cmd_ciclo(args):
     from . import pipeline
     from .config import config
     from .destinos import obter
-    pipeline.executar_ciclo(obter(config.destino))
+    pipeline.executar_ciclo(obter(config.destino), categorias=_categoria(args))
 
 
-def cmd_run(_):
+def cmd_run(args):
     from . import pipeline
     from .config import config
     from .destinos import obter
+    cats = _categoria(args)
     destino = obter(config.destino)
     log = logging.getLogger("ofertas")
-    log.info("Bot iniciado — ciclo a cada %d min, destino %s",
-             config.intervalo_minutos, destino.nome)
+    log.info("Bot iniciado — %d oferta(s) a cada %d min, destino %s",
+             config.max_posts_por_ciclo, config.intervalo_minutos, destino.nome)
     while True:
+        inicio = time.monotonic()
         try:
-            pipeline.executar_ciclo(destino)
+            pipeline.executar_ciclo(destino, categorias=cats)
         except Exception:
             log.exception("Erro no ciclo")
-        time.sleep(config.intervalo_minutos * 60)
+        # o intervalo conta a partir do início do ciclo (a busca leva alguns segundos)
+        time.sleep(max(5, config.intervalo_minutos * 60 - (time.monotonic() - inicio)))
 
 
 def main():
@@ -157,8 +174,12 @@ def main():
     sub.add_parser("ml-login", help="login único no Mercado Livre (salva a sessão de afiliado)").set_defaults(fn=cmd_ml_login)
     sub.add_parser("instalar-navegador", help="baixa o Chromium (só se não tiver Google Chrome)").set_defaults(fn=cmd_instalar_navegador)
 
-    sub.add_parser("ciclo", help="roda um único ciclo de busca e envio").set_defaults(fn=cmd_ciclo)
-    sub.add_parser("run", help="roda os ciclos em loop").set_defaults(fn=cmd_run)
+    for nome, ajuda, fn in (("ciclo", "roda um único ciclo de busca e envio", cmd_ciclo),
+                            ("run", "pergunta a categoria e roda os ciclos em loop", cmd_run)):
+        pr = sub.add_parser(nome, help=ajuda)
+        pr.add_argument("--categoria", help="número, id (MLB1648) ou nome; sem isso, pergunta no início")
+        pr.add_argument("--todas", action="store_true", help="usa as buscas/categorias do config.yaml")
+        pr.set_defaults(fn=fn)
 
     args = p.parse_args()
     args.fn(args)

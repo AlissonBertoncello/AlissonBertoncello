@@ -60,3 +60,11 @@ def test_pipeline_falha_linkbuilder_nao_envia(monkeypatch):
         raise ErroAfiliado("Sessão do ML expirou")
     monkeypatch.setattr(pipeline.afiliado_ml, "gerar_links_afiliado", gerar)
     assert pipeline.com_link_afiliado([Oferta("mercadolivre", "1", "x", "https://ml/1")]) == []
+
+
+def test_previa_console_mantem_sem_link(monkeypatch):
+    def gerar(ofertas):
+        raise ErroAfiliado("Sessão do ML não encontrada")
+    monkeypatch.setattr(pipeline.afiliado_ml, "gerar_links_afiliado", gerar)
+    o = Oferta("mercadolivre", "1", "x", "https://ml/1")
+    assert pipeline.com_link_afiliado([o], descartar=False) == [o]
