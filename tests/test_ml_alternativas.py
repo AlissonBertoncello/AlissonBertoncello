@@ -78,13 +78,38 @@ def test_busca_liberada_usa_busca(monkeypatch):
 
 def test_auto_cai_para_pagina(monkeypatch):
     _config(monkeypatch, modo="auto")
+    monkeypatch.setattr(mercadolivre, "_pagina_da_vez", {})
 
     class SemNada(ClienteFalso):
         def destaques(self, site, cat):
             raise ErroAPI("HTTP 403")
     monkeypatch.setattr(ml_pagina, "buscar_ofertas",
-                        lambda cats, paginas: [mercadolivre.item_para_oferta(ITEM)])
+                        lambda cats, paginas, inicio: [mercadolivre.item_para_oferta(ITEM)])
     assert [o.id_produto for o in mercadolivre.buscar_ofertas(SemNada())] == ["MLB1"]
+
+
+def test_auto_soma_mais_vendidos_e_pagina_de_ofertas(monkeypatch):
+    _config(monkeypatch, modo="auto")
+    monkeypatch.setattr(mercadolivre, "_pagina_da_vez", {})
+    da_pagina = mercadolivre.item_para_oferta({**ITEM, "id": "MLB777", "title": "Da página"})
+    monkeypatch.setattr(ml_pagina, "buscar_ofertas", lambda cats, paginas, inicio: [da_pagina])
+    ids = sorted(o.id_produto for o in mercadolivre.buscar_ofertas(ClienteFalso()))
+    assert ids == ["MLB1", "MLB777", "MLB900"]
+
+
+def test_rodizio_de_paginas_de_ofertas(monkeypatch):
+    _config(monkeypatch, modo="pagina", paginas_ofertas=1, paginas_ofertas_max=3)
+    monkeypatch.setattr(mercadolivre, "_pagina_da_vez", {})
+    lidas = []
+
+    def ler(cats, paginas, inicio):
+        lidas.append(inicio)
+        return [] if inicio == 2 and len(lidas) > 3 else [mercadolivre.item_para_oferta(ITEM)]
+    monkeypatch.setattr(ml_pagina, "buscar_ofertas", ler)
+    for _ in range(6):
+        mercadolivre.buscar_ofertas(ClienteFalso(), {"MLB1384": "Bebês"})
+    # 1,2,3 e recomeça; na 2ª volta a página 2 veio vazia -> volta para a 1
+    assert lidas == [1, 2, 3, 1, 2, 1]
 
 
 HTML = """

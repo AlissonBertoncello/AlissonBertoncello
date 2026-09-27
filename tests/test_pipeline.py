@@ -27,7 +27,7 @@ def test_mensagem_prefere_link_afiliado():
 
 
 def test_filtrar(monkeypatch):
-    monkeypatch.setattr(pipeline.db, "ja_enviada", lambda uid, dias, grupo: uid == "mercadolivre:3")
+    monkeypatch.setattr(pipeline.db, "ja_enviada", lambda uid, dias, grupo, titulo="": uid == "mercadolivre:3")
     monkeypatch.setattr(config, "desconto_minimo", 25)
     monkeypatch.setattr(config, "preco_minimo", 0)
     monkeypatch.setattr(config, "preco_maximo", 0)

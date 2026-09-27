@@ -1,5 +1,4 @@
 import logging
-import re
 import time
 
 from . import afiliado_ml, db
@@ -28,7 +27,7 @@ def filtrar(ofertas: list[Oferta], grupo: str) -> list[Oferta]:
     for o in ofertas:
         if not o.titulo:
             continue
-        if db.ja_enviada(o.uid, config.nao_repetir_dias, grupo):
+        if db.ja_enviada(o.uid, config.nao_repetir_dias, grupo, o.titulo):
             continue
         if config.desconto_minimo and (o.desconto or 0) < config.desconto_minimo:
             continue
@@ -46,7 +45,7 @@ def filtrar(ofertas: list[Oferta], grupo: str) -> list[Oferta]:
 
 def _chave_similar(titulo: str) -> str:
     """Variações do mesmo produto (cor, tamanho) costumam repetir as primeiras palavras."""
-    return " ".join(re.findall(r"\w+", titulo.lower())[:5])
+    return db.chave_do_titulo(titulo)
 
 
 def escolher(ofertas: list[Oferta], n: int) -> list[Oferta]:

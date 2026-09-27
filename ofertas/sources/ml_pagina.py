@@ -94,12 +94,13 @@ def parse_pagina(html: str) -> list[Oferta]:
     return ofertas
 
 
-def buscar_ofertas(categorias: dict[str, str], paginas: int = 1) -> list[Oferta]:
+def buscar_ofertas(categorias: dict[str, str], paginas: int = 1, inicio: int = 1) -> list[Oferta]:
+    """Páginas inicio..inicio+paginas-1 de mercadolivre.com.br/ofertas de cada categoria."""
     s = requests.Session()
     s.headers.update({"User-Agent": USER_AGENT, "Accept-Language": "pt-BR,pt;q=0.9"})
     ofertas: dict[str, Oferta] = {}
     for cat_id, nome in (categorias or {"": "todas"}).items():
-        for pagina in range(1, max(1, paginas) + 1):
+        for pagina in range(max(1, inicio), max(1, inicio) + max(1, paginas)):
             params = {}
             if cat_id:
                 params["category"] = cat_id

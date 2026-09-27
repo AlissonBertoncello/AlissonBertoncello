@@ -29,3 +29,24 @@ def test_config_padrao_tem_os_grupos():
 def test_grupo_com_whatsapp():
     [g] = cfg.ler_grupos({"bebe": {"categorias": ["MLB1384"], "whatsapp": " Ofertas Bebê "}})
     assert g.whatsapp == "Ofertas Bebê"
+
+
+def test_nao_repete_mesmo_produto_com_id_diferente(monkeypatch, tmp_path):
+    monkeypatch.setattr(db, "_DB", tmp_path / "t.db")
+    db.registrar(Oferta("mercadolivre", "MLB111", "Fone Bluetooth XYZ Pro Max Preto", "u"), "g")
+    # mesmo produto vindo da página de ofertas, com outro id e outra cor
+    assert db.ja_enviada("mercadolivre:MLB999", 7, "g", "Fone Bluetooth XYZ Pro Max Branco")
+    assert not db.ja_enviada("mercadolivre:MLB999", 7, "g", "Mouse Gamer ABC")
+    assert not db.ja_enviada("mercadolivre:MLB999", 7, "outro", "Fone Bluetooth XYZ Pro Max Branco")
+
+
+def test_banco_antigo_ganha_coluna_chave(monkeypatch, tmp_path):
+    import sqlite3
+    arq = tmp_path / "velho.db"
+    with sqlite3.connect(arq) as c:
+        c.execute("CREATE TABLE envios (grupo TEXT, uid TEXT, plataforma TEXT, titulo TEXT,"
+                  " preco REAL, enviada_em TEXT, PRIMARY KEY (grupo, uid))")
+        c.execute("INSERT INTO envios VALUES ('g','mercadolivre:1','mercadolivre','x',1,'2026-01-01T00:00:00')")
+    monkeypatch.setattr(db, "_DB", arq)
+    db.registrar(Oferta("mercadolivre", "2", "Produto Novo", "u"), "g")
+    assert db.total_enviadas() == 2

@@ -90,7 +90,13 @@ grupos:
     nome: Ofertas Mamãe e Bebê
     categorias: [MLB1384]
 ```
-A cada ciclo, cada grupo recebe `max_posts_por_ciclo` oferta(s), alternando as categorias (se a categoria da vez não tiver oferta nova, usa a próxima). O mesmo produto não se repete **no mesmo grupo** por `nao_repetir_dias`. Os links de afiliado de todos os grupos são gerados num único lote.
+A cada ciclo, cada grupo recebe `max_posts_por_ciclo` oferta(s), alternando as categorias (se a categoria da vez não tiver oferta nova, usa a próxima). O mesmo produto — ou variação dele (cor, tamanho) — não se repete **no mesmo grupo** por `nao_repetir_dias`.
+
+**De onde vêm as ofertas de cada categoria** (`modo: auto`, padrão):
+- **Mais vendidos** da API do ML, da categoria e das subcategorias diretas (em rodízio, `subcategorias_por_busca` por vez);
+- **Página de ofertas** do ML da categoria (`mercadolivre.com.br/ofertas?category=...`, só produtos em promoção, ~48 por página), em rodízio de páginas (`paginas_ofertas` por vez, até `paginas_ofertas_max`).
+
+Depois, só passam as que atendem aos filtros (desconto mínimo etc.). Os links de afiliado de todos os grupos são gerados num único lote.
 
 ## Ajustes — `config.yaml`
 Intervalo entre ciclos, quantas ofertas por ciclo, desconto mínimo, faixa de preço, palavras bloqueadas, horário ativo e os **grupos** (acima).

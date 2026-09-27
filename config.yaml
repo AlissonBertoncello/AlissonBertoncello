@@ -18,13 +18,14 @@ fontes:
   mercadolivre:
     ativa: true
     site: MLB                  # MLB = Brasil
-    # modo: auto = API e, se ela não trouxer nada, a página de ofertas do ML
+    # modo: auto = mais vendidos da API + página de ofertas do ML (recomendado)
     #       api = só API | pagina = só a página mercadolivre.com.br/ofertas
     modo: auto
     limite_por_busca: 50       # itens pedidos à API por busca/categoria (máx. 50)
     limite_destaques: 20       # se a busca da API for bloqueada: mais vendidos por categoria
     subcategorias_por_busca: 2 # mais vendidos: quantas (sub)categorias consultar por vez, em rodízio
-    paginas: 1                 # páginas de mercadolivre.com.br/ofertas por categoria (modo página)
+    paginas_ofertas: 1         # páginas de mercadolivre.com.br/ofertas lidas por vez (~48 promoções cada)
+    paginas_ofertas_max: 10    # rodízio: vai da página 1 até esta e recomeça
 
 # Grupos de destino. "whatsapp" = nome EXATO do grupo no WhatsApp do número do bot
 # (liste os nomes com o LOGIN_WHATSAPP.bat ou: uv run python -m ofertas whatsapp-grupos).
