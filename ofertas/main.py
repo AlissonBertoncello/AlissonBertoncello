@@ -30,23 +30,39 @@ def cmd_check(_):
         print("\n🎉 Tudo pronto! Teste com: uv run python -m ofertas testar")
 
 
+def _grupos(args):
+    """Grupos do config.yaml (ou só os passados em --grupo)."""
+    from .config import config
+    grupos = config.grupos
+    if not grupos:
+        raise SystemExit("Nenhum grupo no config.yaml — veja a seção 'grupos'.")
+    if getattr(args, "grupo", None):
+        pedidos = set(args.grupo)
+        grupos = [g for g in grupos if g.chave in pedidos]
+        if not grupos:
+            raise SystemExit(f"Grupo não encontrado no config.yaml: {', '.join(sorted(pedidos))}")
+    return grupos
+
+
 def cmd_testar(args):
-    """Busca e mostra as ofertas, sem enviar nem registrar nada."""
+    """Busca e mostra as ofertas de cada grupo, sem enviar nem registrar nada."""
     from . import pipeline
     from .formatter import montar_mensagem
-    brutas = pipeline.coletar()
-    boas = pipeline.filtrar(brutas)
-    boas.sort(key=lambda o: o.desconto or 0, reverse=True)
-    for o in boas[:args.n]:
-        print(f"[-{o.desconto or 0:>2}%] R$ {o.preco} (de {o.preco_original}) — {o.titulo[:70]}")
-    print(f"\nTotal: {len(brutas)} coletadas, {len(boas)} passam nos filtros")
-    if args.mensagem and boas:
-        top = pipeline.com_link_afiliado(pipeline.escolher(boas, 3))
-        if top:
-            print("\n── Prévia da mensagem ──")
-            print(montar_mensagem(top[0]))
-        else:
-            print("\n⚠️  Sem prévia: não foi possível gerar o link de afiliado (motivo acima).")
+    for g in _grupos(args):
+        print(f"\n══ {g.nome} ══")
+        brutas = pipeline.coletar(g.categorias)
+        boas = pipeline.filtrar(brutas, g.chave)
+        boas.sort(key=lambda o: o.desconto or 0, reverse=True)
+        for o in boas[:args.n]:
+            print(f"[-{o.desconto or 0:>2}%] R$ {o.preco} (de {o.preco_original}) — {o.titulo[:70]}")
+        print(f"Total: {len(brutas)} coletadas, {len(boas)} passam nos filtros")
+        if args.mensagem and boas:
+            top = pipeline.com_link_afiliado(pipeline.escolher(boas, 3))
+            if top:
+                print("\n── Prévia da mensagem ──")
+                print(montar_mensagem(top[0]))
+            else:
+                print("\n⚠️  Sem prévia: não foi possível gerar o link de afiliado (motivo acima).")
 
 
 def cmd_diagnostico(_):
@@ -110,40 +126,36 @@ def cmd_instalar_navegador(_):
     raise SystemExit(r.returncode)
 
 
-def _categoria(args) -> dict[str, str] | None:
-    """Categoria passada em --categoria, ou perguntada no menu (--todas = config.yaml)."""
-    from . import categorias
-    if args.todas:
-        return None
-    if args.categoria:
-        r = categorias.resolver(args.categoria)
-        if not r:
-            raise SystemExit(f"Categoria não reconhecida: {args.categoria}")
-    else:
-        r = categorias.perguntar()
-    return {r[0]: r[1]}
+def _mostrar_grupos(grupos) -> None:
+    print("\n── Grupos ativos ──")
+    for g in grupos:
+        print(f"  • {g.nome}: {', '.join(g.categorias.values())}")
+    print()
 
 
 def cmd_ciclo(args):
     from . import pipeline
     from .config import config
     from .destinos import obter
-    pipeline.executar_ciclo(obter(config.destino), categorias=_categoria(args))
+    grupos = _grupos(args)
+    _mostrar_grupos(grupos)
+    pipeline.executar_ciclo(obter(config.destino), grupos)
 
 
 def cmd_run(args):
     from . import pipeline
     from .config import config
     from .destinos import obter
-    cats = _categoria(args)
+    grupos = _grupos(args)
+    _mostrar_grupos(grupos)
     destino = obter(config.destino)
     log = logging.getLogger("ofertas")
-    log.info("Bot iniciado — %d oferta(s) a cada %d min, destino %s",
+    log.info("Bot iniciado — %d oferta(s) por grupo a cada %d min, destino %s",
              config.max_posts_por_ciclo, config.intervalo_minutos, destino.nome)
     while True:
         inicio = time.monotonic()
         try:
-            pipeline.executar_ciclo(destino, categorias=cats)
+            pipeline.executar_ciclo(destino, grupos)
         except Exception:
             log.exception("Erro no ciclo")
         # o intervalo conta a partir do início do ciclo (a busca leva alguns segundos)
@@ -166,6 +178,7 @@ def main():
     pt = sub.add_parser("testar", help="busca ofertas e mostra (não envia nada)")
     pt.add_argument("-n", type=int, default=15, help="quantas mostrar (padrão 15)")
     pt.add_argument("--mensagem", action="store_true", help="mostra a prévia da mensagem da melhor oferta")
+    pt.add_argument("--grupo", action="append", help="só esse grupo (chave do config.yaml); pode repetir")
     pt.set_defaults(fn=cmd_testar)
 
     sub.add_parser("diagnostico", help="testa quais caminhos de busca do ML funcionam").set_defaults(fn=cmd_diagnostico)
@@ -177,11 +190,10 @@ def main():
     sub.add_parser("ml-login", help="login único no Mercado Livre (salva a sessão de afiliado)").set_defaults(fn=cmd_ml_login)
     sub.add_parser("instalar-navegador", help="baixa o Chromium (só se não tiver Google Chrome)").set_defaults(fn=cmd_instalar_navegador)
 
-    for nome, ajuda, fn in (("ciclo", "roda um único ciclo de busca e envio", cmd_ciclo),
-                            ("run", "pergunta a categoria e roda os ciclos em loop", cmd_run)):
+    for nome, ajuda, fn in (("ciclo", "roda um único ciclo para os grupos", cmd_ciclo),
+                            ("run", "roda os ciclos dos grupos em loop", cmd_run)):
         pr = sub.add_parser(nome, help=ajuda)
-        pr.add_argument("--categoria", help="número, id (MLB1648) ou nome; sem isso, pergunta no início")
-        pr.add_argument("--todas", action="store_true", help="usa as buscas/categorias do config.yaml")
+        pr.add_argument("--grupo", action="append", help="só esse grupo (chave do config.yaml); pode repetir")
         pr.set_defaults(fn=fn)
 
     args = p.parse_args()

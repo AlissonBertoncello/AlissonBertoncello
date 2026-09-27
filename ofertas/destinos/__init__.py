@@ -2,17 +2,17 @@
 
 Etapa 1: "console" (mostra no terminal e salva em data/saida.jsonl).
 Etapa 2: "whatsapp" (envia para o grupo) — basta criar um módulo com a
-mesma função enviar(oferta, mensagem) e registrar abaixo.
+mesma função enviar(oferta, mensagem, grupo) e registrar abaixo.
 """
 from typing import Protocol
 
-from ..models import Oferta
+from ..models import Grupo, Oferta
 
 
 class Destino(Protocol):
     nome: str
 
-    def enviar(self, oferta: Oferta, mensagem: str) -> None: ...
+    def enviar(self, oferta: Oferta, mensagem: str, grupo: Grupo) -> None: ...
 
 
 def obter(nome: str) -> Destino:

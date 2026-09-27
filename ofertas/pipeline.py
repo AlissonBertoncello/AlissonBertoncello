@@ -6,7 +6,7 @@ from . import afiliado_ml, db
 from .config import config, dentro_do_horario
 from .destinos import Destino
 from .formatter import montar_mensagem
-from .models import Oferta
+from .models import Grupo, Oferta
 from .sources import mercadolivre
 
 log = logging.getLogger("ofertas.pipeline")
@@ -23,12 +23,12 @@ def coletar(categorias: dict[str, str] | None = None) -> list[Oferta]:
     return todas
 
 
-def filtrar(ofertas: list[Oferta]) -> list[Oferta]:
+def filtrar(ofertas: list[Oferta], grupo: str) -> list[Oferta]:
     aprovadas = []
     for o in ofertas:
         if not o.titulo:
             continue
-        if db.ja_enviada(o.uid, config.nao_repetir_dias):
+        if db.ja_enviada(o.uid, config.nao_repetir_dias, grupo):
             continue
         if config.desconto_minimo and (o.desconto or 0) < config.desconto_minimo:
             continue
@@ -77,39 +77,63 @@ def com_link_afiliado(ofertas: list[Oferta]) -> list[Oferta]:
     return [o for o in ofertas if o.url_afiliado]
 
 
-def executar_ciclo(destino: Destino, registrar: bool = True,
-                   categorias: dict[str, str] | None = None) -> int:
-    """coletar -> filtrar -> escolher -> enviar. Retorna nº de ofertas enviadas."""
+# rodízio: índice da próxima categoria de cada grupo (vive enquanto o bot roda)
+_proxima: dict[str, int] = {}
+
+
+def candidatas_do_grupo(grupo: Grupo, n: int) -> list[Oferta]:
+    """Candidatas da vez: começa na categoria do rodízio; se ela não tiver oferta
+    nova, tenta a seguinte. A próxima rodada começa depois da categoria usada."""
+    cats = list(grupo.categorias.items())
+    inicio = _proxima.get(grupo.chave, 0) % len(cats)
+    for passo in range(len(cats)):
+        idx = (inicio + passo) % len(cats)
+        cid, nome = cats[idx]
+        brutas = coletar({cid: nome})
+        boas = filtrar(brutas, grupo.chave)
+        log.info("[%s] %s: %d coletadas, %d novas nos filtros", grupo.nome, nome, len(brutas), len(boas))
+        # reservas: se uma ficar sem link de afiliado, a próxima melhor entra no lugar
+        candidatas = escolher(boas, n * 3)
+        if candidatas:
+            _proxima[grupo.chave] = idx + 1
+            return candidatas
+    _proxima[grupo.chave] = inicio + 1
+    log.info("[%s] nenhuma oferta nova nas categorias do grupo", grupo.nome)
+    return []
+
+
+def executar_ciclo(destino: Destino, grupos: list[Grupo], registrar: bool = True) -> int:
+    """Para cada grupo: coletar -> filtrar -> escolher; depois gera os links de
+    afiliado de todos de uma vez e envia. Retorna o nº de ofertas enviadas."""
     if not dentro_do_horario():
         log.info("Fora do horário ativo (%s) — ciclo pulado", config.horario_ativo)
         return 0
 
-    brutas = coletar(categorias)
-    boas = filtrar(brutas)
     n = config.max_posts_por_ciclo
-    # link de afiliado é obrigatório; pega reservas: se uma ficar sem link,
-    # a próxima melhor entra no lugar
-    candidatas = escolher(boas, n * 3)
-    escolhidas = com_link_afiliado(candidatas)[:n]
-    if candidatas and not escolhidas:
-        log.error("Nenhuma oferta enviada: não foi possível gerar link de afiliado "
-                  "(motivo na linha 'Linkbuilder ML falhou' acima)")
+    por_grupo = {g.chave: candidatas_do_grupo(g, n) for g in grupos}
+    todas = [o for lista in por_grupo.values() for o in lista]
+    if todas:
+        # link de afiliado é obrigatório: um único lote no Linkbuilder para todos os grupos
+        com_link_afiliado(todas)
 
     enviadas = 0
-    for o in escolhidas:
-        try:
-            destino.enviar(o, montar_mensagem(o))
-        except Exception as e:
-            log.error("Falha ao enviar '%s': %s", o.titulo[:60], e)
-            continue
-        if registrar:
-            db.registrar(o)
-        enviadas += 1
-        if o is not escolhidas[-1] and destino.nome != "console":
-            time.sleep(config.espacamento_segundos)
+    for g in grupos:
+        candidatas = por_grupo[g.chave]
+        escolhidas = [o for o in candidatas if o.url_afiliado][:n]
+        if candidatas and not escolhidas:
+            log.error("[%s] nenhuma oferta enviada: não foi possível gerar link de afiliado "
+                      "(motivo na linha 'Linkbuilder ML falhou' acima)", g.nome)
+        for o in escolhidas:
+            try:
+                destino.enviar(o, montar_mensagem(o), g)
+            except Exception as e:
+                log.error("[%s] falha ao enviar '%s': %s", g.nome, o.titulo[:60], e)
+                continue
+            if registrar:
+                db.registrar(o, g.chave)
+            enviadas += 1
+            if o is not escolhidas[-1] and destino.nome != "console":
+                time.sleep(config.espacamento_segundos)
 
-    if not boas:
-        log.info("Nenhuma oferta nova que passe nos filtros neste ciclo")
-    log.info("Ciclo: %d coletadas, %d aprovadas, %d enviadas (%s)",
-             len(brutas), len(boas), enviadas, destino.nome)
+    log.info("Ciclo: %d oferta(s) enviada(s) para %d grupo(s) (%s)", enviadas, len(grupos), destino.nome)
     return enviadas

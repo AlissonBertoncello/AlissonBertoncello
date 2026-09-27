@@ -27,7 +27,7 @@ def test_mensagem_prefere_link_afiliado():
 
 
 def test_filtrar(monkeypatch):
-    monkeypatch.setattr(pipeline.db, "ja_enviada", lambda uid, dias: uid == "mercadolivre:3")
+    monkeypatch.setattr(pipeline.db, "ja_enviada", lambda uid, dias, grupo: uid == "mercadolivre:3")
     monkeypatch.setattr(config, "desconto_minimo", 25)
     monkeypatch.setattr(config, "preco_minimo", 0)
     monkeypatch.setattr(config, "preco_maximo", 0)
@@ -38,7 +38,7 @@ def test_filtrar(monkeypatch):
         _o("3", "Teclado", 10, 100),      # já enviada
         _o("4", "Capinha iPhone", 5, 50),  # bloqueada
     ]
-    assert [o.id_produto for o in pipeline.filtrar(ofertas)] == ["1"]
+    assert [o.id_produto for o in pipeline.filtrar(ofertas, "g")] == ["1"]
 
 
 def test_escolher_pula_variacoes():

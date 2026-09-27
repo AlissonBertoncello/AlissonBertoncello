@@ -3,9 +3,9 @@
 geral:
   # FASE DE TESTES: 1 oferta a cada 1 minuto. Em produção, algo como 45 e 3.
   intervalo_minutos: 1         # de quanto em quanto tempo buscar ofertas novas (comando "run")
-  max_posts_por_ciclo: 1       # máximo de ofertas enviadas por ciclo
+  max_posts_por_ciclo: 1       # ofertas enviadas POR GRUPO a cada ciclo
   espacamento_segundos: 60     # pausa entre um envio e outro no mesmo ciclo
-  nao_repetir_dias: 7          # não reenviar o mesmo produto dentro desse prazo
+  nao_repetir_dias: 7          # não reenviar o mesmo produto ao mesmo grupo dentro desse prazo
   horario_ativo: ""            # só envia nesse intervalo, ex: "08:00-23:00"; "" = 24h (testes)
 
 filtros:
@@ -24,22 +24,28 @@ fontes:
     limite_por_busca: 50       # itens pedidos à API por busca/categoria (máx. 50)
     limite_destaques: 20       # se a busca da API for bloqueada: mais vendidos por categoria
     paginas: 1                 # páginas de mercadolivre.com.br/ofertas por categoria (modo página)
-    # Ao iniciar, o bot PERGUNTA a categoria (menu). As listas abaixo só valem
-    # com "run --todas" (buscas por palavra-chave e/ou categorias).
-    buscas: []                 # ex: [air fryer, fone bluetooth, smartwatch]
-    categorias:                # id: nome
-      MLB1648: Informática
-      MLB1000: Eletrônicos, Áudio e Vídeo
-      MLB1051: Celulares e Telefones
-      MLB1574: Casa, Móveis e Decoração
-      MLB5726: Eletrodomésticos
-    # Outras categorias do ML:
-    #   MLB1144: Games
-    #   MLB1276: Esportes e Fitness
-    #   MLB1430: Calçados, Roupas e Bolsas
-    #   MLB1246: Beleza e Cuidado Pessoal
-    #   MLB1132: Brinquedos e Hobbies
-    #   MLB1071: Animais
+
+# Grupos de destino (na etapa 2, cada um vira um grupo de WhatsApp).
+# A cada ciclo, cada grupo recebe max_posts_por_ciclo oferta(s), alternando as
+# categorias do grupo (rodízio). Para criar um grupo, copie um bloco e ajuste.
+grupos:
+  casa_info:
+    nome: Ofertas Casa e Informática
+    categorias: [MLB1574, MLB1648]     # Casa, Móveis e Decoração · Informática
+  bebe:
+    nome: Ofertas Mamãe e Bebê
+    categorias: [MLB1384]              # Bebês
+
+# Categorias do Mercado Livre:
+#   MLB1648 Informática             MLB1000 Eletrônicos, Áudio e Vídeo
+#   MLB1051 Celulares e Telefones   MLB1144 Games
+#   MLB1574 Casa, Móveis e Decoração MLB5726 Eletrodomésticos
+#   MLB1276 Esportes e Fitness      MLB1430 Calçados, Roupas e Bolsas
+#   MLB1246 Beleza e Cuidado Pessoal MLB264586 Saúde
+#   MLB1132 Brinquedos e Hobbies    MLB1384 Bebês
+#   MLB1071 Animais                 MLB5672 Acessórios para Veículos
+#   MLB1500 Construção              MLB263532 Ferramentas
+#   MLB1196 Livros, Revistas e Comics
 
 # Para onde as ofertas vão. Etapa 1: "console" (mostra no terminal e salva em data/saida.jsonl).
 # Etapa 2: "whatsapp".

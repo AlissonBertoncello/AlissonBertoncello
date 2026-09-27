@@ -15,6 +15,9 @@ os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", str(DATA_DIR / "pw-browsers"))
 
 load_dotenv(BASE_DIR / ".env")
 
+from .categorias import nome as nome_categoria  # noqa: E402
+from .models import Grupo  # noqa: E402
+
 
 def _ler_yaml() -> dict:
     caminho = BASE_DIR / "config.yaml"
@@ -54,6 +57,22 @@ class Config:
         self.fonte_ml: dict = fontes.get("mercadolivre") or {"ativa": False}
 
         self.destino: str = str(y.get("destino") or "console").strip().lower()
+        self.grupos: list[Grupo] = ler_grupos(y.get("grupos") or {})
+
+
+def ler_grupos(dados: dict) -> list[Grupo]:
+    """grupos do config.yaml -> [Grupo]. categorias: lista de ids ou {id: nome}."""
+    grupos = []
+    for chave, g in dados.items():
+        g = g or {}
+        cats = g.get("categorias") or []
+        if isinstance(cats, dict):
+            cats = {str(k): str(v) for k, v in cats.items()}
+        else:
+            cats = {str(c).strip().upper(): nome_categoria(str(c).strip().upper()) for c in cats}
+        if cats:
+            grupos.append(Grupo(chave=str(chave), nome=str(g.get("nome") or chave), categorias=cats))
+    return grupos
 
 
 config = Config()
@@ -84,4 +103,6 @@ def verificar() -> list[str]:
     perfil_ml = DATA_DIR / "ml_profile"
     if not (perfil_ml.exists() and any(perfil_ml.iterdir())):
         pendencias.append("Sessão do Mercado Livre (rode: uv run python -m ofertas ml-login)")
+    if not config.grupos:
+        pendencias.append("grupos no config.yaml (pelo menos um grupo com categorias)")
     return pendencias

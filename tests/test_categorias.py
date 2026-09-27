@@ -1,24 +1,26 @@
-from ofertas import categorias
-from ofertas.sources import mercadolivre
+from ofertas import config as cfg
+from ofertas import db
+from ofertas.models import Oferta
 
 
-def test_resolver():
-    assert categorias.resolver("1") == ("MLB1648", "Informática")
-    assert categorias.resolver("mlb1051") == ("MLB1051", "Celulares e Telefones")
-    assert categorias.resolver("games") == ("MLB1144", "Games")
-    assert categorias.resolver("999") is None
-    assert categorias.resolver("") is None
+def test_ler_grupos():
+    grupos = cfg.ler_grupos({
+        "casa_info": {"nome": "Casa e Info", "categorias": ["MLB1574", "mlb1648"]},
+        "bebe": {"categorias": {"MLB1384": "Bebês"}},
+        "vazio": {"nome": "Sem categorias"},
+    })
+    assert [g.chave for g in grupos] == ["casa_info", "bebe"]  # grupo sem categoria é ignorado
+    assert grupos[0].categorias == {"MLB1574": "Casa, Móveis e Decoração", "MLB1648": "Informática"}
+    assert grupos[1].nome == "bebe"
 
 
-def test_perguntar_repete_ate_valido(monkeypatch, capsys):
-    respostas = iter(["abc", "3"])
-    monkeypatch.setattr("builtins.input", lambda _: next(respostas))
-    assert categorias.perguntar() == ("MLB1051", "Celulares e Telefones")
-    assert "Opção inválida" in capsys.readouterr().out
+def test_repeticao_e_por_grupo(monkeypatch, tmp_path):
+    monkeypatch.setattr(db, "_DB", tmp_path / "t.db")
+    o = Oferta("mercadolivre", "MLB1", "x", "https://ml/1")
+    db.registrar(o, "casa")
+    assert db.ja_enviada(o.uid, 7, "casa")
+    assert not db.ja_enviada(o.uid, 7, "bebe")  # outro grupo ainda pode receber
 
 
-def test_so_a_categoria_escolhida(monkeypatch):
-    monkeypatch.setattr(mercadolivre.config, "fonte_ml",
-                        {"buscas": ["air fryer"], "categorias": {"MLB1648": "Info"}})
-    assert mercadolivre._consultas({"MLB1144": "Games"}) == [("categoria Games", {"categoria": "MLB1144"})]
-    assert len(mercadolivre._consultas()) == 2
+def test_config_padrao_tem_os_grupos():
+    assert [g.chave for g in cfg.config.grupos] == ["casa_info", "bebe"]

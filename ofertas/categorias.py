@@ -1,4 +1,4 @@
-"""Menu de categorias do Mercado Livre (escolhida ao iniciar o bot)."""
+"""Categorias do Mercado Livre: nomes usados nos grupos do config.yaml."""
 
 # id: nome (categorias principais do Mercado Livre Brasil)
 CATEGORIAS: dict[str, str] = {
@@ -22,29 +22,6 @@ CATEGORIAS: dict[str, str] = {
 }
 
 
-def resolver(escolha: str) -> tuple[str, str] | None:
-    """"3", "MLB1051" ou parte do nome ("celular") -> (id, nome)."""
-    escolha = escolha.strip()
-    if not escolha:
-        return None
-    itens = list(CATEGORIAS.items())
-    if escolha.isdigit() and 1 <= int(escolha) <= len(itens):
-        return itens[int(escolha) - 1]
-    if escolha.upper().startswith("MLB"):
-        cid = escolha.upper()
-        return cid, CATEGORIAS.get(cid, cid)
-    achadas = [(k, v) for k, v in itens if escolha.lower() in v.lower()]
-    return achadas[0] if len(achadas) == 1 else None
 
-
-def perguntar() -> tuple[str, str]:
-    """Mostra o menu e pergunta até receber uma categoria válida."""
-    print("\n── Em qual categoria buscar as ofertas? ──")
-    for i, nome in enumerate(CATEGORIAS.values(), 1):
-        print(f"  {i:>2}. {nome}")
-    while True:
-        r = resolver(input("\nDigite o número da categoria: "))
-        if r:
-            print(f"✅ Categoria: {r[1]} ({r[0]})\n")
-            return r
-        print("❌ Opção inválida. Digite um dos números da lista.")
+def nome(cid: str) -> str:
+    return CATEGORIAS.get(cid, cid)

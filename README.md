@@ -17,7 +17,7 @@ Na etapa 1 o destino é o **console**: a mensagem aparece no terminal e fica sal
 2. Dê **dois cliques em `BUSCAR_OFERTAS.bat`**: instala o que falta (na primeira vez) e mostra as ofertas encontradas.
 3. Para o link de afiliado: **dois cliques em `LOGIN_MERCADOLIVRE.bat`** (uma vez só).
 4. Para deixar rodando sozinho: **dois cliques em `INICIAR_BOT.bat`**.
-   Ao iniciar, o bot **pergunta a categoria** (menu numerado) e, na fase de testes, mostra **1 oferta por minuto** dessa categoria (`intervalo_minutos` e `max_posts_por_ciclo` no `config.yaml`).
+   O bot roda **todos os grupos** do `config.yaml` numa janela só. A cada ciclo (1 minuto na fase de testes), **cada grupo recebe 1 oferta**, alternando as categorias do grupo.
 
 ## Instalação (pelo terminal)
 
@@ -58,13 +58,26 @@ uv run python -m ofertas diagnostico        # testa quais caminhos da API funcio
 uv run python -m ofertas testar --mensagem  # busca e mostra as ofertas (não envia/registra nada)
 uv run python -m ofertas converter "<link>"  # gera o link de afiliado de um produto
 uv run python -m ofertas ciclo              # um ciclo: busca → filtra → escolhe → envia ao destino
-uv run python -m ofertas run                # pergunta a categoria e roda em loop, a cada intervalo_minutos
-uv run python -m ofertas run --categoria 3  # já escolhe a categoria (número, MLB... ou nome)
+uv run python -m ofertas run                # roda todos os grupos em loop, a cada intervalo_minutos
+uv run python -m ofertas run --grupo bebe   # só um grupo (chave do config.yaml)
 uv run pytest                               # testes
 ```
 
+## Grupos — `config.yaml`
+Cada grupo tem um nome e uma lista de categorias do ML (a lista de ids está comentada no próprio arquivo). Exemplo:
+```yaml
+grupos:
+  casa_info:
+    nome: Ofertas Casa e Informática
+    categorias: [MLB1574, MLB1648]
+  bebe:
+    nome: Ofertas Mamãe e Bebê
+    categorias: [MLB1384]
+```
+A cada ciclo, cada grupo recebe `max_posts_por_ciclo` oferta(s), alternando as categorias (se a categoria da vez não tiver oferta nova, usa a próxima). O mesmo produto não se repete **no mesmo grupo** por `nao_repetir_dias`. Os links de afiliado de todos os grupos são gerados num único lote.
+
 ## Ajustes — `config.yaml`
-Intervalo entre ciclos, quantas ofertas por ciclo, desconto mínimo, faixa de preço, palavras bloqueadas, horário ativo e **o que buscar**: palavras-chave (`buscas`) e/ou categorias do ML (`categorias`).
+Intervalo entre ciclos, quantas ofertas por ciclo, desconto mínimo, faixa de preço, palavras bloqueadas, horário ativo e os **grupos** (acima).
 
 ## Estrutura
 ```

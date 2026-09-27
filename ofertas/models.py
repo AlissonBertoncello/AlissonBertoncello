@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -30,3 +30,11 @@ class Oferta:
         if self.preco and self.preco_original and self.preco_original > self.preco:
             return round(100 * (1 - self.preco / self.preco_original))
         return None
+
+
+@dataclass
+class Grupo:
+    """Um grupo de destino (na etapa 2, um grupo de WhatsApp) e suas categorias."""
+    chave: str
+    nome: str
+    categorias: dict[str, str] = field(default_factory=dict)  # id: nome, em rodízio

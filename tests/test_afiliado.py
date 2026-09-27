@@ -2,7 +2,7 @@ import pytest
 
 from ofertas import afiliado_ml, pipeline
 from ofertas.afiliado_ml import ErroAfiliado, criar_links, extrair_id
-from ofertas.models import Oferta
+from ofertas.models import Grupo, Oferta
 
 
 class PaginaFalsa:
@@ -63,44 +63,76 @@ def test_pipeline_falha_linkbuilder_nao_envia(monkeypatch):
 
 
 
-def test_ciclo_usa_reserva_quando_falta_link(monkeypatch):
-    ofertas = [Oferta("mercadolivre", str(i), f"Produto {i}", f"https://ml/{i}", 10, 100 - i)
-               for i in range(3)]
-    monkeypatch.setattr(pipeline, "coletar", lambda categorias=None: ofertas)
-    monkeypatch.setattr(pipeline, "filtrar", lambda o: o)
+
+def _ciclo(monkeypatch, ofertas_por_cat, gerar):
+    """Prepara executar_ciclo com coleta e Linkbuilder falsos; devolve a lista de envios."""
+    monkeypatch.setattr(pipeline, "coletar", lambda cats: list(ofertas_por_cat[next(iter(cats))]))
+    monkeypatch.setattr(pipeline, "filtrar", lambda o, grupo: o)
     monkeypatch.setattr(pipeline.config, "max_posts_por_ciclo", 1)
     monkeypatch.setattr(pipeline, "dentro_do_horario", lambda: True)
-
-    def gerar(lista):  # a melhor oferta (id 0) fica sem link
-        for o in lista:
-            if o.id_produto != "0":
-                o.url_afiliado = f"https://meli.la/{o.id_produto}"
     monkeypatch.setattr(pipeline.afiliado_ml, "gerar_links_afiliado", gerar)
-
-    enviadas = []
+    monkeypatch.setattr(pipeline, "_proxima", {})
+    envios = []
 
     class Destino:
         nome = "console"
 
-        def enviar(self, o, msg):
-            enviadas.append(o)
-    assert pipeline.executar_ciclo(Destino(), registrar=False) == 1
-    assert enviadas[0].url_afiliado == "https://meli.la/1"
+        def enviar(self, o, msg, grupo):
+            envios.append((grupo.chave, o.id_produto))
+    return Destino(), envios
+
+
+def _todas_com_link(lista):
+    for o in lista:
+        o.url_afiliado = f"https://meli.la/{o.id_produto}"
+
+
+def _of(id_, desconto=50):
+    return Oferta("mercadolivre", id_, f"Produto {id_}", f"https://ml/{id_}", 100 - desconto, 100)
+
+
+def test_ciclo_usa_reserva_quando_falta_link(monkeypatch):
+    def gerar(lista):  # a melhor oferta (A) fica sem link
+        for o in lista:
+            if o.id_produto != "A":
+                o.url_afiliado = "https://meli.la/" + o.id_produto
+    destino, envios = _ciclo(monkeypatch, {"C1": [_of("A", 60), _of("B", 50)]}, gerar)
+    grupo = Grupo("g", "G", {"C1": "Cat 1"})
+    assert pipeline.executar_ciclo(destino, [grupo], registrar=False) == 1
+    assert envios == [("g", "B")]
 
 
 def test_ciclo_sem_link_nao_envia_nada(monkeypatch):
-    monkeypatch.setattr(pipeline, "coletar",
-                        lambda categorias=None: [Oferta("mercadolivre", "1", "x", "https://ml/1", 10, 100)])
-    monkeypatch.setattr(pipeline, "filtrar", lambda o: o)
-    monkeypatch.setattr(pipeline, "dentro_do_horario", lambda: True)
-
     def gerar(lista):
         raise ErroAfiliado("Sessão do ML não encontrada")
-    monkeypatch.setattr(pipeline.afiliado_ml, "gerar_links_afiliado", gerar)
+    destino, envios = _ciclo(monkeypatch, {"C1": [_of("A")]}, gerar)
+    assert pipeline.executar_ciclo(destino, [Grupo("g", "G", {"C1": "x"})], registrar=False) == 0
+    assert envios == []
 
-    class Destino:
-        nome = "console"
 
-        def enviar(self, o, msg):
-            raise AssertionError("não deveria enviar oferta sem link de afiliado")
-    assert pipeline.executar_ciclo(Destino(), registrar=False) == 0
+def test_grupos_recebem_cada_um_sua_oferta_em_um_lote(monkeypatch):
+    lotes = []
+
+    def gerar(lista):
+        lotes.append(len(lista))
+        _todas_com_link(lista)
+    destino, envios = _ciclo(monkeypatch, {"CASA": [_of("casa1")], "BEBE": [_of("bebe1")]}, gerar)
+    grupos = [Grupo("casa", "Casa", {"CASA": "Casa"}), Grupo("bebe", "Bebê", {"BEBE": "Bebês"})]
+    assert pipeline.executar_ciclo(destino, grupos, registrar=False) == 2
+    assert envios == [("casa", "casa1"), ("bebe", "bebe1")]
+    assert lotes == [2]  # um único lote no Linkbuilder para os dois grupos
+
+
+def test_rodizio_alterna_categorias(monkeypatch):
+    destino, envios = _ciclo(monkeypatch, {"CASA": [_of("c")], "INFO": [_of("i")]}, _todas_com_link)
+    grupo = Grupo("g", "G", {"CASA": "Casa", "INFO": "Informática"})
+    for _ in range(3):
+        pipeline.executar_ciclo(destino, [grupo], registrar=False)
+    assert [i for _, i in envios] == ["c", "i", "c"]
+
+
+def test_rodizio_pula_categoria_sem_oferta(monkeypatch):
+    destino, envios = _ciclo(monkeypatch, {"CASA": [], "INFO": [_of("i")]}, _todas_com_link)
+    grupo = Grupo("g", "G", {"CASA": "Casa", "INFO": "Informática"})
+    pipeline.executar_ciclo(destino, [grupo], registrar=False)
+    assert envios == [("g", "i")]
