@@ -136,3 +136,14 @@ def test_rodizio_pula_categoria_sem_oferta(monkeypatch):
     grupo = Grupo("g", "G", {"CASA": "Casa", "INFO": "Informática"})
     pipeline.executar_ciclo(destino, [grupo], registrar=False)
     assert envios == [("g", "i")]
+
+
+def test_whatsapp_espaca_envios_entre_grupos(monkeypatch):
+    destino, envios = _ciclo(monkeypatch, {"CASA": [_of("c")], "BEBE": [_of("b")]}, _todas_com_link)
+    destino.nome = "whatsapp"
+    pausas = []
+    monkeypatch.setattr(pipeline.time, "sleep", pausas.append)
+    monkeypatch.setattr(pipeline.config, "espacamento_segundos", 15)
+    grupos = [Grupo("casa", "Casa", {"CASA": "Casa"}), Grupo("bebe", "Bebê", {"BEBE": "Bebês"})]
+    assert pipeline.executar_ciclo(destino, grupos, registrar=False) == 2
+    assert len(pausas) == 1 and 14 < pausas[0] <= 15  # uma pausa entre os dois envios

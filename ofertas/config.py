@@ -38,6 +38,9 @@ class Config:
         self.ml_client_secret: str = os.getenv("ML_CLIENT_SECRET", "").strip()
         self.ml_access_token: str = os.getenv("ML_ACCESS_TOKEN", "").strip()
         self.ml_etiqueta: str = os.getenv("ML_ETIQUETA", "").strip()
+        self.evolution_url: str = os.getenv("EVOLUTION_URL", "http://localhost:8080").strip()
+        self.evolution_api_key: str = os.getenv("EVOLUTION_API_KEY", "").strip()
+        self.evolution_instancia: str = os.getenv("EVOLUTION_INSTANCIA", "bot-ofertas").strip()
 
         # config.yaml
         self.intervalo_minutos: int = int(geral.get("intervalo_minutos", 45))
@@ -71,7 +74,8 @@ def ler_grupos(dados: dict) -> list[Grupo]:
         else:
             cats = {str(c).strip().upper(): nome_categoria(str(c).strip().upper()) for c in cats}
         if cats:
-            grupos.append(Grupo(chave=str(chave), nome=str(g.get("nome") or chave), categorias=cats))
+            grupos.append(Grupo(chave=str(chave), nome=str(g.get("nome") or chave), categorias=cats,
+                                whatsapp=str(g.get("whatsapp") or "").strip()))
     return grupos
 
 
@@ -103,6 +107,10 @@ def verificar() -> list[str]:
     perfil_ml = DATA_DIR / "ml_profile"
     if not (perfil_ml.exists() and any(perfil_ml.iterdir())):
         pendencias.append("Sessão do Mercado Livre (rode: uv run python -m ofertas ml-login)")
+    if config.destino == "whatsapp":
+        sem = [g.chave for g in config.grupos if not g.whatsapp]
+        if sem:
+            pendencias.append(f"'whatsapp:' (nome do grupo) nos grupos: {', '.join(sem)}")
     if not config.grupos:
         pendencias.append("grupos no config.yaml (pelo menos um grupo com categorias)")
     return pendencias

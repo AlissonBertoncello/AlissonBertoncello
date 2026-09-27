@@ -24,3 +24,8 @@ def test_repeticao_e_por_grupo(monkeypatch, tmp_path):
 
 def test_config_padrao_tem_os_grupos():
     assert [g.chave for g in cfg.config.grupos] == ["casa_info", "bebe"]
+
+
+def test_grupo_com_whatsapp():
+    [g] = cfg.ler_grupos({"bebe": {"categorias": ["MLB1384"], "whatsapp": " Ofertas Bebê "}})
+    assert g.whatsapp == "Ofertas Bebê"

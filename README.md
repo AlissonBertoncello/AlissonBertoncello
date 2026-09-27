@@ -7,9 +7,9 @@ Busca produtos em promoção no **Mercado Livre** usando a **API oficial** e (na
 | Etapa | O que faz | Status |
 |---|---|---|
 | 1 | Busca ofertas via API do Mercado Livre, filtra por desconto, evita repetição, gera o **link de afiliado** e monta a mensagem | ✅ pronta |
-| 2 | Envia as mensagens para um grupo de WhatsApp | ⏳ a fazer |
+| 2 | Envia as ofertas (foto + legenda) para os grupos de WhatsApp via **Evolution API** (gratuita, local) | ✅ pronta |
 
-Na etapa 1 o destino é o **console**: a mensagem aparece no terminal e fica salva em `data/saida.jsonl`. O texto já sai no formato do WhatsApp (`*negrito*`, `~riscado~`).
+O destino é escolhido no `config.yaml`: **`console`** (testes: mostra no terminal e salva em `data/saida.jsonl`) ou **`whatsapp`** (envia para os grupos). O texto sai no formato do WhatsApp (`*negrito*`, `~riscado~`).
 
 ## 🖱️ Jeito fácil (Windows)
 
@@ -18,6 +18,20 @@ Na etapa 1 o destino é o **console**: a mensagem aparece no terminal e fica sal
 3. Para o link de afiliado: **dois cliques em `LOGIN_MERCADOLIVRE.bat`** (uma vez só).
 4. Para deixar rodando sozinho: **dois cliques em `INICIAR_BOT.bat`**.
    O bot roda **todos os grupos** do `config.yaml` numa janela só. A cada ciclo (1 minuto na fase de testes), **cada grupo recebe 1 oferta**, alternando as categorias do grupo.
+
+## 📲 WhatsApp (Evolution API)
+
+O envio usa a [Evolution API](https://doc.evolution-api.com), gratuita, rodando **no seu PC** via Docker. Ela conecta um número de WhatsApp como "aparelho conectado" (igual ao WhatsApp Web).
+
+> ⚠️ Automatizar o WhatsApp não é permitido pelos termos do WhatsApp e o número pode ser **bloqueado**. Use um **número só para o bot**, mantenha um ritmo moderado (ex.: 1 oferta por grupo a cada 30–45 min) e coloque o número como **administrador** dos grupos.
+
+1. Instale o **[Docker Desktop](https://www.docker.com/products/docker-desktop/)** e deixe-o **aberto**.
+2. Adicione o número do bot aos grupos do WhatsApp.
+3. **Dois cliques em `LOGIN_WHATSAPP.bat`**: sobe a Evolution (na 1ª vez baixa ~1 GB), abre um **QR Code** — leia com o celular do número do bot em *WhatsApp > Aparelhos conectados > Conectar um aparelho* — e lista os grupos.
+4. No `config.yaml`, preencha `whatsapp:` de cada grupo com o **nome exato** do grupo e troque `destino: console` por `destino: whatsapp`.
+5. **Dois cliques em `INICIAR_BOT.bat`**. Antes de começar, o bot confere se a Evolution está no ar, se o número está conectado e se os grupos existem.
+
+A senha da Evolution (`EVOLUTION_API_KEY`) é gerada sozinha no `.env` no primeiro uso. A sessão do WhatsApp fica salva no Docker — só precisa ler o QR de novo se desconectar o aparelho no celular. Painel da Evolution (opcional): http://localhost:8080/manager
 
 ## Instalação (pelo terminal)
 
@@ -60,6 +74,8 @@ uv run python -m ofertas converter "<link>"  # gera o link de afiliado de um pro
 uv run python -m ofertas ciclo              # um ciclo: busca → filtra → escolhe → envia ao destino
 uv run python -m ofertas run                # roda todos os grupos em loop, a cada intervalo_minutos
 uv run python -m ofertas run --grupo bebe   # só um grupo (chave do config.yaml)
+uv run python -m ofertas whatsapp-login     # conecta o número do bot (QR Code) e lista os grupos
+uv run python -m ofertas whatsapp-grupos    # lista os grupos do WhatsApp do bot
 uv run pytest                               # testes
 ```
 
@@ -85,6 +101,7 @@ ofertas/
 ├── main.py              # comandos (check, testar, converter, ml-login, ciclo, run)
 ├── pipeline.py          # coleta → filtros → escolhe → link de afiliado → envia
 ├── afiliado_ml.py       # link de afiliado via Linkbuilder (sessão logada)
+├── evolution.py         # cliente da Evolution API (Docker, QR Code, grupos, envio)
 ├── formatter.py         # texto da mensagem (formato WhatsApp)
 ├── db.py                # SQLite anti-repetição (data/ofertas.db)
 ├── config.py            # lê .env + config.yaml
@@ -93,8 +110,11 @@ ofertas/
 │   ├── mercadolivre.py  # cliente da API oficial (OAuth, busca, mais vendidos, catálogo)
 │   └── ml_pagina.py     # plano B: página de ofertas do ML
 └── destinos/
-    ├── __init__.py      # interface Destino (etapa 2 pluga o WhatsApp aqui)
-    └── console.py       # destino da etapa 1
+    ├── __init__.py      # interface Destino
+    ├── console.py       # testes: mostra no terminal
+    └── whatsapp.py      # envia foto + legenda para o grupo
+evolution/
+└── docker-compose.yml   # Evolution API v2.3.7 + Postgres + Redis (local)
 ```
 
 ## Uso responsável
@@ -109,3 +129,11 @@ ofertas/
 **`Failed to spawn: python` / "Controle de Aplicativo bloqueou este arquivo"** — é o Smart App Control do Windows 11. Aperte **Windows**, digite `Controle inteligente de aplicativos`, marque **Desativado** e reinicie o PC (o antivírus continua ativo).
 
 **Erro 403 na busca** — o ML bloqueia a busca (`/sites/MLB/search`) para a maioria dos apps. O bot contorna sozinho: usa os **mais vendidos** de cada categoria e das suas **subcategorias** (em rodízio, `subcategorias_por_busca` por vez) e a **busca no catálogo** da API; se nada disso responder, lê a **página de ofertas** do ML (`modo: auto` no `config.yaml`). Rode `uv run python -m ofertas diagnostico` para ver quais caminhos funcionam para o seu app.
+
+**WhatsApp: "Docker não encontrado" / "docker compose falhou"** — instale o Docker Desktop e deixe-o aberto antes de rodar o bot.
+
+**WhatsApp: "não conseguiu gerar o QR Code"** — a Evolution não está alcançando o WhatsApp: confira a internet, antivírus/firewall, e rode o `LOGIN_WHATSAPP.bat` de novo.
+
+**WhatsApp: "não está conectado"** — o aparelho foi desconectado no celular; rode o `LOGIN_WHATSAPP.bat`.
+
+**WhatsApp: "Grupo ... não encontrado"** — o nome em `whatsapp:` precisa ser igual ao do grupo (veja a lista com `whatsapp-grupos`) e o número do bot precisa estar no grupo.

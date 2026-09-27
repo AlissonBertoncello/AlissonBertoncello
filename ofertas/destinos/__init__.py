@@ -1,8 +1,8 @@
 """Destinos: para onde as ofertas escolhidas são enviadas.
 
 Etapa 1: "console" (mostra no terminal e salva em data/saida.jsonl).
-Etapa 2: "whatsapp" (envia para o grupo) — basta criar um módulo com a
-mesma função enviar(oferta, mensagem, grupo) e registrar abaixo.
+Etapa 2: "whatsapp" (foto + legenda no grupo, via Evolution API).
+Um destino pode ter preparar(grupos), chamado uma vez antes dos ciclos.
 """
 from typing import Protocol
 
@@ -20,6 +20,6 @@ def obter(nome: str) -> Destino:
         from .console import Console
         return Console()
     if nome == "whatsapp":
-        raise SystemExit("Destino 'whatsapp' ainda não implementado (etapa 2). "
-                         "Use destino: console no config.yaml.")
+        from .whatsapp import WhatsApp
+        return WhatsApp()
     raise SystemExit(f"Destino desconhecido no config.yaml: {nome!r}")

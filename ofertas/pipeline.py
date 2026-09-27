@@ -117,6 +117,7 @@ def executar_ciclo(destino: Destino, grupos: list[Grupo], registrar: bool = True
         com_link_afiliado(todas)
 
     enviadas = 0
+    ultimo_envio = 0.0
     for g in grupos:
         candidatas = por_grupo[g.chave]
         escolhidas = [o for o in candidatas if o.url_afiliado][:n]
@@ -124,16 +125,18 @@ def executar_ciclo(destino: Destino, grupos: list[Grupo], registrar: bool = True
             log.error("[%s] nenhuma oferta enviada: não foi possível gerar link de afiliado "
                       "(motivo na linha 'Linkbuilder ML falhou' acima)", g.nome)
         for o in escolhidas:
+            # pausa entre envios (inclusive de grupos diferentes): ritmo mais humano no WhatsApp
+            if enviadas and destino.nome != "console":
+                time.sleep(max(0.0, config.espacamento_segundos - (time.monotonic() - ultimo_envio)))
             try:
                 destino.enviar(o, montar_mensagem(o), g)
             except Exception as e:
                 log.error("[%s] falha ao enviar '%s': %s", g.nome, o.titulo[:60], e)
                 continue
+            ultimo_envio = time.monotonic()
             if registrar:
                 db.registrar(o, g.chave)
             enviadas += 1
-            if o is not escolhidas[-1] and destino.nome != "console":
-                time.sleep(config.espacamento_segundos)
 
     log.info("Ciclo: %d oferta(s) enviada(s) para %d grupo(s) (%s)", enviadas, len(grupos), destino.nome)
     return enviadas

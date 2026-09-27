@@ -129,26 +129,61 @@ def cmd_instalar_navegador(_):
 def _mostrar_grupos(grupos) -> None:
     print("\n── Grupos ativos ──")
     for g in grupos:
-        print(f"  • {g.nome}: {', '.join(g.categorias.values())}")
+        wa = f"  →  WhatsApp: {g.whatsapp}" if g.whatsapp else ""
+        print(f"  • {g.nome}: {', '.join(g.categorias.values())}{wa}")
     print()
+
+
+def _destino_pronto(grupos):
+    """Destino do config.yaml, já checado (no WhatsApp: API no ar, conectado, grupos)."""
+    from .config import config
+    from .destinos import obter
+    destino = obter(config.destino)
+    if hasattr(destino, "preparar"):
+        try:
+            destino.preparar(grupos)
+        except Exception as e:
+            raise SystemExit(f"❌ {e}")
+    return destino
+
+
+def cmd_whatsapp_login(_):
+    from .evolution import ErroWhatsApp, whatsapp_login
+    try:
+        whatsapp_login()
+    except ErroWhatsApp as e:
+        raise SystemExit(f"❌ {e}")
+    cmd_whatsapp_grupos(None)
+
+
+def cmd_whatsapp_grupos(_):
+    from .evolution import ErroWhatsApp, Evolution
+    try:
+        evo = Evolution()
+        evo.subir()
+        grupos = evo.grupos()
+    except ErroWhatsApp as e:
+        raise SystemExit(f"❌ {e}")
+    print("\n── Grupos do WhatsApp do bot (copie o nome para 'whatsapp:' no config.yaml) ──")
+    for nome in sorted(grupos, key=str.lower):
+        print(f"  • {nome}")
+    if not grupos:
+        print("  (nenhum — adicione o número do bot aos grupos, como administrador)")
 
 
 def cmd_ciclo(args):
     from . import pipeline
-    from .config import config
-    from .destinos import obter
     grupos = _grupos(args)
     _mostrar_grupos(grupos)
-    pipeline.executar_ciclo(obter(config.destino), grupos)
+    pipeline.executar_ciclo(_destino_pronto(grupos), grupos)
 
 
 def cmd_run(args):
     from . import pipeline
     from .config import config
-    from .destinos import obter
     grupos = _grupos(args)
     _mostrar_grupos(grupos)
-    destino = obter(config.destino)
+    destino = _destino_pronto(grupos)
     log = logging.getLogger("ofertas")
     log.info("Bot iniciado — %d oferta(s) por grupo a cada %d min, destino %s",
              config.max_posts_por_ciclo, config.intervalo_minutos, destino.nome)
@@ -189,6 +224,9 @@ def main():
 
     sub.add_parser("ml-login", help="login único no Mercado Livre (salva a sessão de afiliado)").set_defaults(fn=cmd_ml_login)
     sub.add_parser("instalar-navegador", help="baixa o Chromium (só se não tiver Google Chrome)").set_defaults(fn=cmd_instalar_navegador)
+
+    sub.add_parser("whatsapp-login", help="conecta o número do bot (QR Code) e lista os grupos").set_defaults(fn=cmd_whatsapp_login)
+    sub.add_parser("whatsapp-grupos", help="lista os grupos do WhatsApp do bot").set_defaults(fn=cmd_whatsapp_grupos)
 
     for nome, ajuda, fn in (("ciclo", "roda um único ciclo para os grupos", cmd_ciclo),
                             ("run", "roda os ciclos dos grupos em loop", cmd_run)):

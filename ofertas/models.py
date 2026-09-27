@@ -38,3 +38,4 @@ class Grupo:
     chave: str
     nome: str
     categorias: dict[str, str] = field(default_factory=dict)  # id: nome, em rodízio
+    whatsapp: str = ""         # nome exato (ou id …@g.us) do grupo no WhatsApp

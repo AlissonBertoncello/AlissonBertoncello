@@ -4,7 +4,7 @@ geral:
   # FASE DE TESTES: 1 oferta a cada 1 minuto. Em produção, algo como 45 e 3.
   intervalo_minutos: 1         # de quanto em quanto tempo buscar ofertas novas (comando "run")
   max_posts_por_ciclo: 1       # ofertas enviadas POR GRUPO a cada ciclo
-  espacamento_segundos: 60     # pausa entre um envio e outro no mesmo ciclo
+  espacamento_segundos: 15     # pausa entre um envio e outro no WhatsApp (mesmo de grupos diferentes)
   nao_repetir_dias: 7          # não reenviar o mesmo produto ao mesmo grupo dentro desse prazo
   horario_ativo: ""            # só envia nesse intervalo, ex: "08:00-23:00"; "" = 24h (testes)
 
@@ -26,16 +26,19 @@ fontes:
     subcategorias_por_busca: 2 # mais vendidos: quantas (sub)categorias consultar por vez, em rodízio
     paginas: 1                 # páginas de mercadolivre.com.br/ofertas por categoria (modo página)
 
-# Grupos de destino (na etapa 2, cada um vira um grupo de WhatsApp).
+# Grupos de destino. "whatsapp" = nome EXATO do grupo no WhatsApp do número do bot
+# (liste os nomes com o LOGIN_WHATSAPP.bat ou: uv run python -m ofertas whatsapp-grupos).
 # A cada ciclo, cada grupo recebe max_posts_por_ciclo oferta(s), alternando as
 # categorias do grupo (rodízio). Para criar um grupo, copie um bloco e ajuste.
 grupos:
   casa_info:
     nome: Ofertas Casa e Informática
     categorias: [MLB1574, MLB1648]     # Casa, Móveis e Decoração · Informática
+    whatsapp: ""                       # ex: "Ofertas Casa & Info"
   bebe:
     nome: Ofertas Mamãe e Bebê
     categorias: [MLB1384]              # Bebês
+    whatsapp: ""                       # ex: "Ofertas Mamãe e Bebê"
 
 # Categorias do Mercado Livre:
 #   MLB1648 Informática             MLB1000 Eletrônicos, Áudio e Vídeo
@@ -48,6 +51,7 @@ grupos:
 #   MLB1500 Construção              MLB263532 Ferramentas
 #   MLB1196 Livros, Revistas e Comics
 
-# Para onde as ofertas vão. Etapa 1: "console" (mostra no terminal e salva em data/saida.jsonl).
-# Etapa 2: "whatsapp".
+# Para onde as ofertas vão:
+#   console  = só mostra no terminal e salva em data/saida.jsonl (testes)
+#   whatsapp = envia foto + legenda para os grupos (Evolution API no Docker)
 destino: console
