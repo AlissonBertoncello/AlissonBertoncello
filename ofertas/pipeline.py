@@ -71,7 +71,7 @@ def com_link_afiliado(ofertas: list[Oferta], descartar: bool = True) -> list[Ofe
     try:
         afiliado_ml.gerar_links_afiliado(ofertas)
     except Exception as e:
-        log.error("Linkbuilder ML falhou: %s", e)
+        log.error("Linkbuilder ML falhou (link de afiliado não gerado): %s", e)
     for o in ofertas:
         if not o.url_afiliado:
             log.warning("Sem link de afiliado%s: %s",

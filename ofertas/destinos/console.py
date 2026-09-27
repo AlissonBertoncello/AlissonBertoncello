@@ -17,6 +17,9 @@ class Console:
         print(mensagem)
         if oferta.imagem:
             print(f"🖼  {oferta.imagem}")
+        if oferta.plataforma == "mercadolivre" and not oferta.url_afiliado:
+            print("⚠️  ATENÇÃO: este link NÃO é de afiliado (a geração falhou — veja o motivo"
+                  " na linha 'Linkbuilder ML falhou' acima).")
         registro = {"em": datetime.now().isoformat(timespec="seconds"),
                     "mensagem": mensagem, "oferta": asdict(oferta)}
         with open(ARQ_SAIDA, "a", encoding="utf-8") as f:
