@@ -86,6 +86,30 @@ class ClienteML:
     def item(self, item_id: str) -> dict:
         return self.get(f"/items/{item_id}")
 
+    # ── alternativas para quando /sites/{site}/search responde 403 ───
+    def destaques(self, site: str, categoria: str) -> list[dict]:
+        """Mais vendidos da categoria: [{"id", "type": ITEM|PRODUCT|USER_PRODUCT, "position"}]."""
+        return self.get(f"/highlights/{site}/category/{categoria}").get("content") or []
+
+    def itens(self, ids: list[str]) -> list[dict]:
+        """Multiget de anúncios (até 20 por chamada); devolve só os que vieram com 200."""
+        corpos = []
+        for i in range(0, len(ids), 20):
+            resp = self.get("/items", {"ids": ",".join(ids[i:i + 20])})
+            corpos += [r["body"] for r in resp if r.get("code") == 200 and r.get("body")]
+        return corpos
+
+    def produto(self, produto_id: str) -> dict:
+        return self.get(f"/products/{produto_id}")
+
+    def itens_do_produto(self, produto_id: str) -> list[dict]:
+        return self.get(f"/products/{produto_id}/items", {"limit": 1}).get("results") or []
+
+    def buscar_produtos(self, site: str, q: str, limite: int = 20) -> list[dict]:
+        """Busca no catálogo (produtos, não anúncios)."""
+        return self.get("/products/search", {"status": "active", "site_id": site, "q": q,
+                                             "limit": max(1, min(limite, 50))}).get("results") or []
+
 
 def _imagem(item: dict) -> str | None:
     img = item.get("thumbnail") or ""
@@ -124,37 +148,134 @@ def item_para_oferta(item: dict) -> Oferta | None:
     )
 
 
+def produto_para_oferta(produto: dict, anuncio: dict | None = None) -> Oferta | None:
+    """Produto de catálogo (+ anúncio vencedor, com o preço) -> Oferta."""
+    anuncio = anuncio or produto.get("buy_box_winner") or {}
+    nome = produto.get("name")
+    if not (produto.get("id") and nome and anuncio.get("price") is not None):
+        return None
+    fotos = produto.get("pictures") or []
+    url = produto.get("permalink") or f"https://www.mercadolivre.com.br/p/{produto['id']}"
+    partes = []
+    if (anuncio.get("shipping") or {}).get("free_shipping"):
+        partes.append("🚚 Frete grátis")
+    if anuncio.get("official_store_id"):
+        partes.append("🏬 Loja oficial")
+    original = anuncio.get("original_price")
+    return Oferta(
+        plataforma="mercadolivre",
+        id_produto=str(produto["id"]),
+        titulo=nome.strip(),
+        url_produto=url.split("#")[0].split("?")[0],
+        preco=float(anuncio["price"]),
+        preco_original=float(original) if original else None,
+        imagem=(fotos[0].get("secure_url") or fotos[0].get("url")) if fotos else None,
+        extra=" · ".join(partes) or None,
+    )
+
+
 def _consultas() -> list[tuple[str, dict]]:
-    """[(rótulo, kwargs de ClienteML.buscar)] a partir do config.yaml."""
+    """[(rótulo, {"q": ...} ou {"categoria": ...})] a partir do config.yaml."""
     fonte = config.fonte_ml
     consultas = [(f"busca '{q}'", {"q": str(q)}) for q in (fonte.get("buscas") or [])]
-    cats = fonte.get("categorias") or {}
-    if not isinstance(cats, dict):
-        cats = {str(c): str(c) for c in cats}
-    consultas += [(f"categoria {nome}", {"categoria": str(cid)}) for cid, nome in cats.items()]
+    consultas += [(f"categoria {nome}", {"categoria": cid}) for cid, nome in categorias().items()]
     return consultas
 
 
-def buscar_ofertas(cliente: ClienteML | None = None) -> list[Oferta]:
-    """Roda todas as buscas/categorias do config e devolve as ofertas (sem repetição)."""
-    cliente = cliente or ClienteML.do_config()
+def categorias() -> dict[str, str]:
+    cats = config.fonte_ml.get("categorias") or {}
+    return {str(k): str(v) for k, v in cats.items()} if isinstance(cats, dict) \
+        else {str(c): str(c) for c in cats}
+
+
+def _ofertas_de_produtos(cliente: ClienteML, ids: list[str]) -> list[Oferta]:
+    ofertas = []
+    for pid in ids:
+        try:
+            produto = cliente.produto(pid)
+            anuncio = produto.get("buy_box_winner")
+            if not anuncio:
+                anuncios = cliente.itens_do_produto(pid)
+                anuncio = anuncios[0] if anuncios else None
+            o = produto_para_oferta(produto, anuncio)
+        except ErroAPI as e:
+            log.debug("Produto %s: %s", pid, e)
+            continue
+        if o:
+            ofertas.append(o)
+    return ofertas
+
+
+def _via_destaques(cliente: ClienteML, site: str, categoria: str, limite: int) -> list[Oferta]:
+    """Mais vendidos da categoria -> anúncios (multiget) e produtos de catálogo."""
+    conteudo = cliente.destaques(site, categoria)[:limite]
+    ids_itens = [c["id"] for c in conteudo if c.get("type") == "ITEM"]
+    ids_produtos = [c["id"] for c in conteudo if c.get("type") == "PRODUCT"]
+    ofertas = [o for o in (item_para_oferta(i) for i in cliente.itens(ids_itens)) if o] \
+        if ids_itens else []
+    return ofertas + _ofertas_de_produtos(cliente, ids_produtos)
+
+
+def _via_catalogo(cliente: ClienteML, site: str, q: str, limite: int) -> list[Oferta]:
+    """Busca por palavra no catálogo -> preço do anúncio vencedor de cada produto."""
+    ids = [p["id"] for p in cliente.buscar_produtos(site, q, limite) if p.get("id")]
+    return _ofertas_de_produtos(cliente, ids)
+
+
+def _buscar_api(cliente: ClienteML) -> dict[str, Oferta]:
     site = str(config.fonte_ml.get("site") or "MLB")
     limite = int(config.fonte_ml.get("limite_por_busca", 50))
+    limite_alt = int(config.fonte_ml.get("limite_destaques", 20))
     consultas = _consultas()
     if not consultas:
         log.warning("Mercado Livre: nenhuma busca/categoria no config.yaml")
     ofertas: dict[str, Oferta] = {}
-    for rotulo, kwargs in consultas:
+    busca_bloqueada = False
+    for rotulo, kw in consultas:
+        achadas: list[Oferta] = []
         try:
-            itens = cliente.buscar(site, limite=limite, **kwargs)
+            if not busca_bloqueada:
+                try:
+                    itens = cliente.buscar(site, limite=limite, **kw)
+                    achadas = [o for o in (item_para_oferta(i) for i in itens) if o]
+                except ErroAPI as e:
+                    if "HTTP 403" not in str(e):
+                        raise
+                    busca_bloqueada = True
+                    log.warning("Mercado Livre: busca da API bloqueada (403) para este app — "
+                                "usando mais vendidos/catálogo")
+            if busca_bloqueada:
+                achadas = (_via_destaques(cliente, site, kw["categoria"], limite_alt)
+                           if "categoria" in kw else _via_catalogo(cliente, site, kw["q"], limite_alt))
         except ErroAPI as e:
             log.error("Mercado Livre %s: %s", rotulo, e)
             continue
-        achadas = [o for o in (item_para_oferta(i) for i in itens) if o]
         for o in achadas:
             ofertas.setdefault(o.id_produto, o)
         log.info("Mercado Livre %s: %d itens", rotulo, len(achadas))
-        time.sleep(0.5)
+        time.sleep(0.3)
+    return ofertas
+
+
+def buscar_ofertas(cliente: ClienteML | None = None) -> list[Oferta]:
+    """Ofertas de todas as buscas/categorias do config (sem repetição).
+
+    modo (config.yaml): "auto" = API e, se ela não trouxer nada, a página de
+    ofertas do ML; "api" = só API; "pagina" = só a página de ofertas.
+    """
+    modo = str(config.fonte_ml.get("modo") or "auto").lower()
+    ofertas: dict[str, Oferta] = {}
+    if modo in ("auto", "api"):
+        try:
+            ofertas = _buscar_api(cliente or ClienteML.do_config())
+        except ErroAPI as e:
+            log.error("Mercado Livre API: %s", e)
+    if not ofertas and modo in ("auto", "pagina"):
+        if modo == "auto":
+            log.warning("Mercado Livre: API sem resultados — usando a página de ofertas do ML")
+        from . import ml_pagina
+        for o in ml_pagina.buscar_ofertas(categorias(), int(config.fonte_ml.get("paginas", 1))):
+            ofertas.setdefault(o.id_produto, o)
     log.info("Mercado Livre: %d ofertas coletadas", len(ofertas))
     return list(ofertas.values())
 

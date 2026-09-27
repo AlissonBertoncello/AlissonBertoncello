@@ -52,6 +52,7 @@ O link é gerado só para as ofertas escolhidas em cada ciclo. Com `afiliado: tr
 
 ```bash
 uv run python -m ofertas check              # o que falta configurar
+uv run python -m ofertas diagnostico        # testa quais caminhos da API funcionam
 uv run python -m ofertas testar --mensagem  # busca e mostra as ofertas (não envia/registra nada)
 uv run python -m ofertas converter "<link>"  # gera o link de afiliado de um produto
 uv run python -m ofertas ciclo              # um ciclo: busca → filtra → escolhe → envia ao destino
@@ -73,7 +74,8 @@ ofertas/
 ├── config.py            # lê .env + config.yaml
 ├── models.py            # Oferta
 ├── sources/
-│   └── mercadolivre.py  # cliente da API oficial (OAuth + busca)
+│   ├── mercadolivre.py  # cliente da API oficial (OAuth, busca, mais vendidos, catálogo)
+│   └── ml_pagina.py     # plano B: página de ofertas do ML
 └── destinos/
     ├── __init__.py      # interface Destino (etapa 2 pluga o WhatsApp aqui)
     └── console.py       # destino da etapa 1
@@ -90,4 +92,4 @@ ofertas/
 
 **`Failed to spawn: python` / "Controle de Aplicativo bloqueou este arquivo"** — é o Smart App Control do Windows 11. Aperte **Windows**, digite `Controle inteligente de aplicativos`, marque **Desativado** e reinicie o PC (o antivírus continua ativo).
 
-**Erro 403 na busca** — o app do Mercado Livre não tem permissão para a busca; confira `ML_CLIENT_ID`/`ML_CLIENT_SECRET` e mande o erro para ajustarmos.
+**Erro 403 na busca** — o ML bloqueia a busca (`/sites/MLB/search`) para a maioria dos apps. O bot contorna sozinho: usa os **mais vendidos** de cada categoria e a **busca no catálogo** da API; se nada disso responder, lê a **página de ofertas** do ML (`modo: auto` no `config.yaml`). Rode `uv run python -m ofertas diagnostico` para ver quais caminhos funcionam para o seu app.

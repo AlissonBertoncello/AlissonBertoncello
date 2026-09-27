@@ -40,6 +40,8 @@ REM 3) Busca as ofertas e mostra na tela (nao envia nada)
 echo.
 uv run python -m ofertas check
 echo.
+uv run python -m ofertas diagnostico
+echo.
 uv run python -m ofertas testar --mensagem
 echo.
 pause

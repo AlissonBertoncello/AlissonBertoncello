@@ -18,7 +18,12 @@ fontes:
     ativa: true
     site: MLB                  # MLB = Brasil
     afiliado: true             # true = só envia com link de afiliado (meli.la); false = link normal
+    # modo: auto = API e, se ela não trouxer nada, a página de ofertas do ML
+    #       api = só API | pagina = só a página mercadolivre.com.br/ofertas
+    modo: auto
     limite_por_busca: 50       # itens pedidos à API por busca/categoria (máx. 50)
+    limite_destaques: 20       # se a busca da API for bloqueada: mais vendidos por categoria
+    paginas: 1                 # páginas de mercadolivre.com.br/ofertas por categoria (modo página)
     # Buscas por palavra-chave e/ou categorias. Se as duas listas estiverem vazias,
     # o bot usa as categorias padrão abaixo.
     buscas: []                 # ex: [air fryer, fone bluetooth, smartwatch]

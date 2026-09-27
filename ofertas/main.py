@@ -46,6 +46,39 @@ def cmd_testar(args):
         print(montar_mensagem(boas[0]))
 
 
+def cmd_diagnostico(_):
+    """Testa cada caminho de busca (API e página) e mostra qual funciona para o seu app."""
+    from .config import config
+    from .sources import ml_pagina
+    from .sources.mercadolivre import ClienteML, ErroAPI
+    c = ClienteML.do_config()
+    site = str(config.fonte_ml.get("site") or "MLB")
+
+    def testar(nome, fn):
+        try:
+            r = fn()
+            print(f"✅ {nome}: {r}")
+            return True
+        except Exception as e:
+            print(f"❌ {nome}: {str(e)[:160]}")
+            return False
+
+    print("── Diagnóstico do Mercado Livre ──")
+    if not testar("Token", lambda: "ok" if c.token() else "vazio"):
+        return
+    testar("Busca /sites/search", lambda: f"{len(c.buscar(site, q='fone', limite=5))} itens")
+    dest: list = []
+    testar("Mais vendidos /highlights", lambda: f"{len(dest.extend(c.destaques(site, 'MLB1648')) or dest)} itens")
+    ids_item = [d["id"] for d in dest if d.get("type") == "ITEM"][:3]
+    ids_prod = [d["id"] for d in dest if d.get("type") == "PRODUCT"][:1]
+    if ids_item:
+        testar("Anúncios /items", lambda: f"{len(c.itens(ids_item))} de {len(ids_item)}")
+    if ids_prod:
+        testar("Produto /products", lambda: c.produto(ids_prod[0]).get("name", "?")[:50])
+    testar("Catálogo /products/search", lambda: f"{len(c.buscar_produtos(site, 'fone', 5))} produtos")
+    testar("Página de ofertas (sem API)", lambda: f"{len(ml_pagina.buscar_ofertas({'': 'todas'}))} ofertas")
+
+
 def cmd_converter(args):
     from .formatter import montar_mensagem
     from .sources import mercadolivre
@@ -114,6 +147,8 @@ def main():
     pt.add_argument("-n", type=int, default=15, help="quantas mostrar (padrão 15)")
     pt.add_argument("--mensagem", action="store_true", help="mostra a prévia da mensagem da melhor oferta")
     pt.set_defaults(fn=cmd_testar)
+
+    sub.add_parser("diagnostico", help="testa quais caminhos de busca do ML funcionam").set_defaults(fn=cmd_diagnostico)
 
     pc = sub.add_parser("converter", help="gera o link de afiliado de um produto e mostra a mensagem")
     pc.add_argument("url")
