@@ -15,7 +15,8 @@ Na etapa 1 o destino é o **console**: a mensagem aparece no terminal e fica sal
 
 1. Preencha o `.env` (veja abaixo).
 2. Dê **dois cliques em `BUSCAR_OFERTAS.bat`**: instala o que falta (na primeira vez) e mostra as ofertas encontradas.
-3. Para deixar rodando sozinho, de tempos em tempos: **dois cliques em `INICIAR_BOT.bat`**.
+3. Para o link de afiliado: **dois cliques em `LOGIN_MERCADOLIVRE.bat`** (uma vez só).
+4. Para deixar rodando sozinho, de tempos em tempos: **dois cliques em `INICIAR_BOT.bat`**.
 
 ## Instalação (pelo terminal)
 
