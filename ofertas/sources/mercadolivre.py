@@ -34,6 +34,8 @@ class ClienteML:
         self._token_fixo = access_token
         self._token = ""
         self._expira_em = 0.0
+        # vira True no primeiro 403 da busca: daí em diante vai direto para as alternativas
+        self.busca_bloqueada = False
         self.s = sessao or requests.Session()
         self.s.headers.update({"User-Agent": USER_AGENT, "Accept": "application/json"})
 
@@ -109,6 +111,18 @@ class ClienteML:
         """Busca no catálogo (produtos, não anúncios)."""
         return self.get("/products/search", {"status": "active", "site_id": site, "q": q,
                                              "limit": max(1, min(limite, 50))}).get("results") or []
+
+
+_cliente: ClienteML | None = None
+
+
+def cliente_padrao() -> ClienteML:
+    """Cliente único enquanto o bot roda: reaproveita o token (válido por horas)
+    e lembra se a busca está bloqueada, em vez de refazer tudo a cada categoria."""
+    global _cliente
+    if _cliente is None:
+        _cliente = ClienteML.do_config()
+    return _cliente
 
 
 def _imagem(item: dict) -> str | None:
@@ -233,21 +247,20 @@ def _buscar_api(cliente: ClienteML, so_categorias: dict[str, str] | None = None)
     if not consultas:
         log.warning("Mercado Livre: nenhuma busca/categoria no config.yaml")
     ofertas: dict[str, Oferta] = {}
-    busca_bloqueada = False
     for rotulo, kw in consultas:
         achadas: list[Oferta] = []
         try:
-            if not busca_bloqueada:
+            if not cliente.busca_bloqueada:
                 try:
                     itens = cliente.buscar(site, limite=limite, **kw)
                     achadas = [o for o in (item_para_oferta(i) for i in itens) if o]
                 except ErroAPI as e:
                     if "HTTP 403" not in str(e):
                         raise
-                    busca_bloqueada = True
+                    cliente.busca_bloqueada = True
                     log.warning("Mercado Livre: busca da API bloqueada (403) para este app — "
                                 "usando mais vendidos/catálogo")
-            if busca_bloqueada:
+            if cliente.busca_bloqueada:
                 achadas = (_via_destaques(cliente, site, kw["categoria"], limite_alt)
                            if "categoria" in kw else _via_catalogo(cliente, site, kw["q"], limite_alt))
         except ErroAPI as e:
@@ -271,7 +284,7 @@ def buscar_ofertas(cliente: ClienteML | None = None,
     ofertas: dict[str, Oferta] = {}
     if modo in ("auto", "api"):
         try:
-            ofertas = _buscar_api(cliente or ClienteML.do_config(), so_categorias)
+            ofertas = _buscar_api(cliente or cliente_padrao(), so_categorias)
         except ErroAPI as e:
             log.error("Mercado Livre API: %s", e)
     if not ofertas and modo in ("auto", "pagina"):
@@ -297,7 +310,7 @@ def converter(url: str, cliente: ClienteML | None = None) -> Oferta:
     oferta = None
     if item_id:
         try:
-            oferta = item_para_oferta((cliente or ClienteML.do_config()).item(item_id))
+            oferta = item_para_oferta((cliente or cliente_padrao()).item(item_id))
         except ErroAPI as e:
             log.warning("Não consegui ler o item %s na API: %s", item_id, e)
     if oferta is None:

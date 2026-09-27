@@ -11,6 +11,7 @@ PRODUTO = {"id": "MLB900", "name": "Air Fryer X", "permalink": "https://www.merc
 class ClienteFalso:
     def __init__(self, busca_403=True):
         self.busca_403 = busca_403
+        self.busca_bloqueada = False
         self.chamadas = []
 
     def buscar(self, site, **kw):
@@ -99,3 +100,16 @@ def test_parse_pagina():
     assert (o.preco, o.preco_original, o.desconto) == (899.9, 1200.0, 25)
     assert o.url_produto == "https://produto.mercadolivre.com.br/MLB-4012345678-fone-_JM"
     assert o.extra == "🚚 Frete grátis"
+
+
+def test_bloqueio_lembrado_entre_ciclos(monkeypatch):
+    _config(monkeypatch)
+    c = ClienteFalso()
+    mercadolivre.buscar_ofertas(c, {"MLB1648": "Info"})
+    mercadolivre.buscar_ofertas(c, {"MLB1051": "Celulares"})
+    assert c.chamadas.count("buscar") == 1  # a busca bloqueada não é tentada de novo
+
+
+def test_cliente_padrao_e_reaproveitado(monkeypatch):
+    monkeypatch.setattr(mercadolivre, "_cliente", None)
+    assert mercadolivre.cliente_padrao() is mercadolivre.cliente_padrao()

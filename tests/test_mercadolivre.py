@@ -122,3 +122,16 @@ def test_converter_usa_api_e_gera_link(monkeypatch):
     assert s.chamadas[0][1].endswith("/items/MLB123456789")
     assert o.titulo == "Fone Bluetooth XYZ"
     assert o.link == "https://meli.la/abc"
+
+
+def test_token_reaproveitado_entre_buscas():
+    s = SessaoFalsa([
+        Resp(200, {"access_token": "TOK", "expires_in": 21600}),
+        Resp(200, {"results": []}),
+        Resp(200, {"results": []}),
+        Resp(200, {"results": []}),
+    ])
+    c = ClienteML("id", "secret", sessao=s)
+    for q in ("a", "b", "c"):
+        c.buscar("MLB", q=q)
+    assert [m for m, *_ in s.chamadas].count("POST") == 1
