@@ -11,7 +11,13 @@ Busca produtos em promoção no **Mercado Livre** usando a **API oficial** e (na
 
 Na etapa 1 o destino é o **console**: a mensagem aparece no terminal e fica salva em `data/saida.jsonl`. O texto já sai no formato do WhatsApp (`*negrito*`, `~riscado~`).
 
-## Instalação
+## 🖱️ Jeito fácil (Windows)
+
+1. Preencha o `.env` (veja abaixo).
+2. Dê **dois cliques em `BUSCAR_OFERTAS.bat`**: instala o que falta (na primeira vez) e mostra as ofertas encontradas.
+3. Para deixar rodando sozinho, de tempos em tempos: **dois cliques em `INICIAR_BOT.bat`**.
+
+## Instalação (pelo terminal)
 
 Requer o [uv](https://docs.astral.sh/uv/) (ele baixa o Python sozinho).
 
@@ -77,3 +83,11 @@ ofertas/
 - **Divulgação**: avise no grupo que os links são de afiliado (ex: *"Contém links de afiliado; podemos receber comissão, sem custo extra para você."*).
 - Respeite os termos da API do Mercado Livre e não abuse da frequência de busca (os padrões do `config.yaml` são comedidos).
 - Os preços mudam a qualquer momento; a mensagem reflete o preço no momento da coleta.
+
+## Problemas comuns
+
+**`uv` não é reconhecido** — use o `BUSCAR_OFERTAS.bat` (ele instala o uv), ou rode `winget install astral-sh.uv` e **feche e reabra** o PowerShell.
+
+**`Failed to spawn: python` / "Controle de Aplicativo bloqueou este arquivo"** — é o Smart App Control do Windows 11. Aperte **Windows**, digite `Controle inteligente de aplicativos`, marque **Desativado** e reinicie o PC (o antivírus continua ativo).
+
+**Erro 403 na busca** — o app do Mercado Livre não tem permissão para a busca; confira `ML_CLIENT_ID`/`ML_CLIENT_SECRET` e mande o erro para ajustarmos.
