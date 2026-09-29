@@ -1,18 +1,20 @@
 # Configuração do bot de ofertas (o que não é segredo fica aqui; segredos vão no .env)
 
 geral:
-  # FASE DE TESTES: 1 oferta a cada 1 minuto. Em produção, algo como 45 e 3.
-  intervalo_minutos: 1         # de quanto em quanto tempo buscar ofertas novas (comando "run")
+  # PRODUÇÃO: 1 oferta por grupo a cada 2h, das 8h às 22h (~7/dia — o recomendado é 4 a 8).
+  # Para testar rápido, use intervalo_minutos: 1 e horario_ativo: "".
+  intervalo_minutos: 120       # de quanto em quanto tempo buscar ofertas novas (comando "run")
   max_posts_por_ciclo: 1       # ofertas enviadas POR GRUPO a cada ciclo
   espacamento_segundos: 15     # pausa entre um envio e outro no WhatsApp (mesmo de grupos diferentes)
   nao_repetir_dias: 7          # não reenviar o mesmo produto ao mesmo grupo dentro desse prazo
-  horario_ativo: ""            # só envia nesse intervalo, ex: "08:00-23:00"; "" = 24h (testes)
+  horario_ativo: "08:00-22:00" # só envia nesse intervalo; "" = 24h
 
 filtros:
   desconto_minimo: 25          # % mínimo de desconto
   preco_minimo: 0              # 0 = sem limite
   preco_maximo: 0              # 0 = sem limite
-  palavras_bloqueadas: []      # ex: [capinha, película]
+  # itens masculinos que aparecem em Beleza (barbear) e Moda Íntima/Praia
+  palavras_bloqueadas: [masculino, masculina, barbeador, barbear, cueca, sunga]
 
 fontes:
   mercadolivre:
@@ -31,15 +33,23 @@ fontes:
 # (liste os nomes com o LOGIN_WHATSAPP.bat ou: uv run python -m ofertas whatsapp-grupos).
 # A cada ciclo, cada grupo recebe max_posts_por_ciclo oferta(s), alternando as
 # categorias do grupo (rodízio). Para criar um grupo, copie um bloco e ajuste.
+# categorias: lista de ids [MLB1246, ...] ou "id: nome" (o nome aparece no log).
 grupos:
-  casa_info:
-    nome: Ofertas Casa e Informática
-    categorias: [MLB1574, MLB1648]     # Casa, Móveis e Decoração · Informática
-    whatsapp: ""                       # ex: "Ofertas Casa & Info"
+  mulher:
+    nome: Achadinhos da Mulher
+    categorias:
+      MLB1246: Beleza e Cuidado Pessoal
+      MLB108704: Vestidos
+      MLB3112: Blusas
+      MLB278018: Leggings
+    whatsapp: "Achadinhos da Mulher 💄"
   bebe:
-    nome: Ofertas Mamãe e Bebê
-    categorias: [MLB1384]              # Bebês
-    whatsapp: ""                       # ex: "Ofertas Mamãe e Bebê"
+    nome: Achadinhos Mamãe e Bebê
+    categorias:
+      MLB1384: Bebês
+      MLB5366: Roupas para Bebês
+      MLB1132: Brinquedos e Hobbies
+    whatsapp: "Achadinhos Mamãe e Bebê 🍼"
 
 # Categorias do Mercado Livre:
 #   MLB1648 Informática             MLB1000 Eletrônicos, Áudio e Vídeo
@@ -51,8 +61,12 @@ grupos:
 #   MLB1071 Animais                 MLB5672 Acessórios para Veículos
 #   MLB1500 Construção              MLB263532 Ferramentas
 #   MLB1196 Livros, Revistas e Comics
+# Subcategorias de moda (dentro de MLB1430 Calçados, Roupas e Bolsas):
+#   MLB108704 Vestidos   MLB3112 Blusas   MLB185489 Saias   MLB278018 Leggings
+#   MLB27250 Macacão     MLB270215 Moda Fitness   MLB430391 Moda Praia
+#   MLB108786 Moda Íntima e Lingerie   MLB1457 Malas e Bolsas   MLB5366 Roupas para Bebês
 
 # Para onde as ofertas vão:
 #   console  = só mostra no terminal e salva em data/saida.jsonl (testes)
 #   whatsapp = envia foto + legenda para os grupos (Evolution API no Docker)
-destino: console
+destino: whatsapp

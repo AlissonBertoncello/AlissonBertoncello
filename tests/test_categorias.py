@@ -23,7 +23,10 @@ def test_repeticao_e_por_grupo(monkeypatch, tmp_path):
 
 
 def test_config_padrao_tem_os_grupos():
-    assert [g.chave for g in cfg.config.grupos] == ["casa_info", "bebe"]
+    grupos = {g.chave: g for g in cfg.config.grupos}
+    assert list(grupos) == ["mulher", "bebe"]
+    assert grupos["mulher"].whatsapp == "Achadinhos da Mulher 💄"
+    assert grupos["bebe"].categorias["MLB5366"] == "Roupas para Bebês"
 
 
 def test_grupo_com_whatsapp():
