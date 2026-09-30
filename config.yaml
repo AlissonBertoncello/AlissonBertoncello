@@ -1,20 +1,21 @@
 # Configuração do bot de ofertas (o que não é segredo fica aqui; segredos vão no .env)
 
 geral:
-  # PRODUÇÃO: 1 oferta por grupo a cada 2h, das 8h às 22h (~7/dia — o recomendado é 4 a 8).
+  # PRODUÇÃO: 1 oferta por grupo a cada 40 min, das 8h às 23h (~22/dia por grupo).
+  # Se muita gente sair dos grupos, aumente (as fontes pesquisadas indicam 4 a 8/dia).
   # Para testar rápido, use intervalo_minutos: 1 e horario_ativo: "".
-  intervalo_minutos: 120       # de quanto em quanto tempo buscar ofertas novas (comando "run")
+  intervalo_minutos: 40        # de quanto em quanto tempo buscar ofertas novas (comando "run")
   max_posts_por_ciclo: 1       # ofertas enviadas POR GRUPO a cada ciclo
   espacamento_segundos: 15     # pausa entre um envio e outro no WhatsApp (mesmo de grupos diferentes)
   nao_repetir_dias: 7          # não reenviar o mesmo produto ao mesmo grupo dentro desse prazo
-  horario_ativo: "08:00-22:00" # só envia nesse intervalo; "" = 24h
+  horario_ativo: "08:00-23:00" # só envia nesse intervalo; "" = 24h
 
 filtros:
   desconto_minimo: 25          # % mínimo de desconto
   preco_minimo: 0              # 0 = sem limite
   preco_maximo: 0              # 0 = sem limite
   # itens masculinos que aparecem em Beleza (barbear) e Moda Íntima/Praia
-  palavras_bloqueadas: [masculino, masculina, barbeador, barbear, cueca, sunga]
+  palavras_bloqueadas: [masculino, masculina, barbeador, barbear, barba, aparador, acabamento, kemei, cueca, sunga]
 
 fontes:
   mercadolivre:
@@ -36,7 +37,7 @@ fontes:
 # categorias: lista de ids [MLB1246, ...] ou "id: nome" (o nome aparece no log).
 grupos:
   mulher:
-    nome: Achadinhos da Mulher
+    nome: Achadinhos da Mulher 💄
     categorias:
       MLB1246: Beleza e Cuidado Pessoal
       MLB108704: Vestidos
@@ -44,7 +45,7 @@ grupos:
       MLB278018: Leggings
     whatsapp: "Achadinhos da Mulher 💄"
   bebe:
-    nome: Achadinhos Mamãe e Bebê
+    nome: Achadinhos Mamãe e Bebê 🍼
     categorias:
       MLB1384: Bebês
       MLB5366: Roupas para Bebês
