@@ -102,6 +102,7 @@ def test_preparar_exige_conexao_e_grupos(monkeypatch):
     evo, _ = _evo({("GET", "/instance/connectionState/bot"):
                    lambda kw: Resp(200, {"instance": {"state": estado["s"]}})})
     monkeypatch.setattr(evo, "subir", lambda: None)
+    monkeypatch.setattr(evo, "aguardar_conexao", lambda espera_s: evo.estado())
     wa = WhatsApp(evo)
     ok = [Grupo("c", "C", whatsapp="Ofertas Casa & Info")]
     with pytest.raises(ErroWhatsApp, match="LOGIN_WHATSAPP"):
@@ -142,9 +143,77 @@ def test_login_sem_qr_explica_o_motivo(monkeypatch):
         def estado(self):
             return "connecting"
 
+        def aguardar_conexao(self, espera_s):
+            return "connecting"
+
         def qr_code(self):
             return None
     monkeypatch.setattr(evolution, "Evolution", EvoFalsa)
     monkeypatch.setattr(evolution.time, "sleep", lambda s: None)
     with pytest.raises(ErroWhatsApp, match="não conseguiu gerar o QR Code"):
         evolution.whatsapp_login(espera_s=0.05)
+
+
+class Relogio:
+    """time.time/time.sleep falsos: sleep só avança o relógio."""
+    def __init__(self):
+        self.agora = 1000.0
+
+    def time(self):
+        return self.agora
+
+    def sleep(self, s):
+        self.agora += s
+
+
+def test_aguardar_conexao_espera_reconectar(monkeypatch):
+    estados = iter(["connecting", "connecting", "open"])
+    evo, _ = _evo({("GET", "/instance/connectionState/bot"):
+                   lambda kw: Resp(200, {"instance": {"state": next(estados)}})})
+    r = Relogio()
+    monkeypatch.setattr(evolution.time, "time", r.time)
+    monkeypatch.setattr(evolution.time, "sleep", r.sleep)
+    assert evo.aguardar_conexao(40) == "open"
+    assert r.agora == 1004.0  # esperou 2 checagens de 2s
+
+
+def test_aguardar_conexao_desiste_no_prazo(monkeypatch):
+    evo, _ = _evo({("GET", "/instance/connectionState/bot"): Resp(200, {"instance": {"state": "close"}})})
+    r = Relogio()
+    monkeypatch.setattr(evolution.time, "time", r.time)
+    monkeypatch.setattr(evolution.time, "sleep", r.sleep)
+    assert evo.aguardar_conexao(10) == "close"
+    assert 1010.0 <= r.agora <= 1012.0
+
+
+def test_login_ja_conectado_nao_pede_qr(monkeypatch, capsys):
+    class EvoFalsa:
+        def subir(self):
+            pass
+
+        def aguardar_conexao(self, espera_s):
+            return "open"
+
+        def qr_code(self):
+            raise AssertionError("não deveria pedir QR Code")
+    monkeypatch.setattr(evolution, "Evolution", EvoFalsa)
+    evolution.whatsapp_login()
+    assert "já está conectado" in capsys.readouterr().out
+
+
+def test_qr_vira_pagina_que_recarrega(monkeypatch, tmp_path):
+    monkeypatch.setattr(evolution, "ARQ_QR", tmp_path / "qr.html")
+    assert evolution.salvar_qr("data:image/png;base64,QUJD")
+    html = (tmp_path / "qr.html").read_text(encoding="utf-8")
+    assert 'src="data:image/png;base64,QUJD"' in html
+    assert 'http-equiv="refresh" content="3"' in html
+    # regravar (novo QR) funciona mesmo com a página "aberta"
+    assert evolution.salvar_qr("data:image/png;base64,REVG")
+    assert "REVG" in (tmp_path / "qr.html").read_text(encoding="utf-8")
+    assert evolution.salvar_qr(conectado=True)
+    assert "conectado" in (tmp_path / "qr.html").read_text(encoding="utf-8")
+
+
+def test_falha_ao_gravar_qr_nao_derruba_o_login(monkeypatch, tmp_path):
+    monkeypatch.setattr(evolution, "ARQ_QR", tmp_path / "nao_existe" / "qr.html")
+    assert evolution.salvar_qr("data:image/png;base64,QUJD") is False

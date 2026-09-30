@@ -18,7 +18,7 @@ from .config import BASE_DIR, DATA_DIR, config
 log = logging.getLogger("ofertas.whatsapp")
 
 COMPOSE = BASE_DIR / "evolution" / "docker-compose.yml"
-ARQ_QR = DATA_DIR / "whatsapp_qr.png"
+ARQ_QR = DATA_DIR / "whatsapp_qr.html"   # página que o navegador recarrega sozinha
 
 
 class ErroWhatsApp(RuntimeError):
@@ -96,6 +96,16 @@ class Evolution:
             raise
         return ((d.get("instance") or {}).get("state")) or "desconhecido"
 
+    def aguardar_conexao(self, espera_s: float = 40, intervalo_s: float = 2) -> str:
+        """Espera o número reconectar sozinho (logo depois de o Docker/Evolution
+        iniciar o estado passa alguns segundos em "connecting"). Devolve o último estado."""
+        fim = time.time() + espera_s
+        estado = self.estado()
+        while estado != "open" and estado != "inexistente" and time.time() < fim:
+            time.sleep(intervalo_s)
+            estado = self.estado()
+        return estado
+
     def qr_code(self) -> str | None:
         """Cria a instância se não existir e devolve o QR Code (imagem base64)."""
         if self.estado() == "inexistente":
@@ -136,42 +146,67 @@ class Evolution:
             "number": destino, "text": texto, "linkPreview": True, "delay": 1200})
 
 
-def salvar_qr(qr_base64: str) -> None:
-    """Grava o QR Code em data/whatsapp_qr.png e abre a imagem."""
-    dados = qr_base64.split(",", 1)[-1]
-    ARQ_QR.write_bytes(base64.b64decode(dados))
+_PAGINA = """<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<meta http-equiv="refresh" content="{recarregar}"><title>WhatsApp do bot</title>
+<style>body{{font-family:sans-serif;text-align:center;padding:24px;background:#f4f4f4}}
+img{{width:320px;height:320px;background:#fff;padding:12px;border-radius:8px}}</style></head>
+<body><h2>{titulo}</h2>{corpo}</body></html>"""
+
+
+def salvar_qr(qr_base64: str | None = None, conectado: bool = False, abrir: bool = False) -> bool:
+    """Grava a página data/whatsapp_qr.html (o navegador recarrega sozinho a cada 3s,
+    então sempre mostra o QR mais recente). Uma página no navegador não fica travada
+    pelo Windows, ao contrário de uma imagem aberta no visualizador de fotos."""
+    if conectado:
+        html = _PAGINA.format(recarregar=3600, titulo="✅ WhatsApp conectado!",
+                              corpo="<p>Pode fechar esta página.</p>")
+    else:
+        dados = (qr_base64 or "").split(",", 1)[-1]
+        base64.b64decode(dados, validate=True)  # garante que é uma imagem válida
+        html = _PAGINA.format(
+            recarregar=3, titulo="Leia o QR Code com o celular do número do bot",
+            corpo=f'<img src="data:image/png;base64,{dados}" alt="QR Code">'
+                  "<p>WhatsApp › Aparelhos conectados › Conectar um aparelho</p>"
+                  "<p><small>O código se renova sozinho — não precisa recarregar.</small></p>")
+    temp = ARQ_QR.with_suffix(".tmp")
     try:
-        if hasattr(os, "startfile"):
-            os.startfile(ARQ_QR)  # Windows
-        else:
+        temp.write_text(html, encoding="utf-8")
+        os.replace(temp, ARQ_QR)
+    except OSError as e:
+        log.warning("Não consegui gravar o QR Code em %s: %s", ARQ_QR, e)
+        return False
+    if abrir:
+        try:
             import webbrowser
             webbrowser.open(ARQ_QR.as_uri())
-    except Exception:
-        pass
+        except Exception:
+            pass
+    return True
 
 
 def whatsapp_login(espera_s: int = 180) -> None:
     """Sobe a Evolution, mostra o QR Code e espera o celular do bot conectar."""
     evo = Evolution()
     evo.subir()
-    if evo.estado() == "open":
+    print("⏳ Verificando a conexão do WhatsApp do bot...")
+    if evo.aguardar_conexao(30) == "open":
         print("✅ O WhatsApp do bot já está conectado.")
         return
     print("\n➡️  No celular do NÚMERO DO BOT: WhatsApp > Aparelhos conectados > Conectar um aparelho")
-    print(f"    e leia o QR Code que abriu na tela (também salvo em {ARQ_QR}).\n")
+    print(f"    e leia o QR Code que vai abrir no navegador (página: {ARQ_QR}).\n")
     fim = time.time() + espera_s
     proximo_qr = 0.0
     recebeu_qr = False
     while time.time() < fim:
         if time.time() >= proximo_qr:
             qr = evo.qr_code()
-            if qr:
-                salvar_qr(qr)
+            if qr and salvar_qr(qr, abrir=not recebeu_qr):  # abre o navegador só na 1ª vez
                 recebeu_qr = True
             # o QR do WhatsApp vence em ~30-40s; enquanto não chega o 1º, tenta de novo logo
             proximo_qr = time.time() + (30 if qr else 5)
         time.sleep(3)
         if evo.estado() == "open":
+            salvar_qr(conectado=True)
             print("✅ WhatsApp conectado! A sessão fica salva no Docker.")
             return
     if not recebeu_qr:

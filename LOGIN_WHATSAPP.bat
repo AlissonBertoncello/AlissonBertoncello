@@ -18,7 +18,7 @@ if errorlevel 1 (
 )
 uv run python -m ofertas whatsapp-login
 echo.
-echo   Copie os nomes dos grupos acima para "whatsapp:" no config.yaml,
-echo   troque "destino: console" por "destino: whatsapp" e abra o INICIAR_BOT.bat
+echo   Confira se os nomes dos grupos acima sao IGUAIS aos do "whatsapp:" no config.yaml
+echo   ^(inclusive emojis^). Depois abra o INICIAR_BOT.bat
 echo.
 pause

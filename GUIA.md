@@ -160,8 +160,10 @@ Necessário para gerar os links `meli.la` (uma vez só; refaça se a sessão exp
 3. Dê **dois cliques em `LOGIN_WHATSAPP.bat`**:
    - na 1ª vez ele baixa a Evolution API (~1 GB) — pode demorar;
    - gera sozinho a `EVOLUTION_API_KEY` no `.env`;
-   - abre uma imagem com o **QR Code**.
-4. No **celular do número do bot**: WhatsApp → **⋮ / Configurações → Aparelhos conectados → Conectar um aparelho** → leia o QR Code. (Ele vence em ~30 s; o bot gera outro sozinho.)
+   - abre o **QR Code numa página do navegador** (ela se atualiza sozinha com o código mais recente).
+4. No **celular do número do bot**: WhatsApp → **⋮ / Configurações → Aparelhos conectados → Conectar um aparelho** → leia o QR Code. (Ele vence em ~30 s; a página mostra o novo sozinha.)
+
+> Se o WhatsApp do bot **já estiver conectado**, o login só confirma isso (espera até 30 s pela reconexão logo depois de abrir o Docker) e lista os grupos — não pede QR.
 5. Aparece `✅ WhatsApp conectado!` e a **lista dos grupos** do número do bot.
 6. Copie os nomes para o `whatsapp:` de cada grupo no `config.yaml` (passo 4.2).
 
@@ -230,7 +232,7 @@ Avise nos grupos que os links são de afiliado (exigência dos programas). Ex.: 
 | `data\saida.jsonl` | ofertas mostradas no modo `console` |
 | `data\ofertas.db` | histórico de envios (controle de repetição) |
 | `data\ml_profile\` | login de afiliado do Mercado Livre |
-| `data\whatsapp_qr.png` | último QR Code gerado |
+| `data\whatsapp_qr.html` | página com o último QR Code gerado |
 
 ---
 
@@ -349,7 +351,8 @@ Relacionadas:
 | `Evolution API fora do ar (http://localhost:8080)` | a Evolution parou durante o uso | abra o Docker Desktop; o bot sobe a Evolution de novo ao reiniciar |
 | `A Evolution API não conseguiu gerar o QR Code` | a Evolution não alcança os servidores do WhatsApp | confira internet, antivírus/firewall/VPN; rode o `LOGIN_WHATSAPP.bat` de novo |
 | `Tempo esgotado sem ler o QR Code` | o QR não foi lido em 3 minutos | rode o `LOGIN_WHATSAPP.bat` de novo e leia com o celular **do número do bot** |
-| `WhatsApp do bot não está conectado (estado: close/connecting)` | aparelho desconectado no celular (ou nunca conectado) | rode o `LOGIN_WHATSAPP.bat` |
+| `WhatsApp do bot não está conectado (estado: close/connecting)` | aparelho desconectado no celular (ou nunca conectado). O bot já espera até 45 s pela reconexão automática antes de dar esse erro | confira no celular do bot em *Aparelhos conectados*; rode o `LOGIN_WHATSAPP.bat` |
+| `Não consegui gravar o QR Code em ...` | o arquivo da página do QR não pôde ser gravado | o login continua tentando; se persistir, feche a página do QR e rode o login de novo, ou conecte pelo painel http://localhost:8080/manager (login com a `EVOLUTION_API_KEY` do `.env`) |
 | `O grupo 'xxx' não tem 'whatsapp:' no config.yaml` | faltou o nome do grupo | preencha `whatsapp:` desse grupo (passo 4.2) |
 | `Grupo 'xxx' não encontrado no WhatsApp do bot` | nome diferente do real, ou o número do bot não está no grupo | rode `uv run python -m ofertas whatsapp-grupos` e copie o nome **exato**; adicione o número do bot ao grupo |
 | `foto recusada (...) — enviando só o texto` | o WhatsApp não aceitou a imagem | não é grave: a oferta vai só com texto e a prévia do link |

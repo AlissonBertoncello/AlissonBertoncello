@@ -16,7 +16,7 @@ class WhatsApp:
     def preparar(self, grupos: list[Grupo]) -> None:
         """Checa tudo antes de começar: API no ar, número conectado e grupos existentes."""
         self.evo.subir()
-        estado = self.evo.estado()
+        estado = self.evo.aguardar_conexao(45)  # logo após iniciar, ainda está reconectando
         if estado != "open":
             raise ErroWhatsApp(f"WhatsApp do bot não está conectado (estado: {estado}) — "
                                "rode o LOGIN_WHATSAPP.bat")
