@@ -18,7 +18,7 @@ O destino é escolhido no `config.yaml`: **`console`** (testes: mostra no termin
 1. Preencha o `.env` (veja abaixo).
 2. Dê **dois cliques em `BUSCAR_OFERTAS.bat`**: instala o que falta (na primeira vez) e mostra as ofertas encontradas.
 3. Para o link de afiliado: **dois cliques em `LOGIN_MERCADOLIVRE.bat`** (uma vez só).
-4. Para deixar rodando sozinho: **dois cliques em `INICIAR_BOT.bat`**.
+4. Para deixar rodando sozinho: **dois cliques em `INICIAR_BOT.bat`**. Para o bot abrir sozinho ao ligar o notebook e sempre que a internet conectar: **`ATIVAR_INICIO_AUTOMATICO.bat`** (uma vez).
    O bot roda **todos os grupos** do `config.yaml` numa janela só. A cada ciclo (1 minuto na fase de testes), **cada grupo recebe 1 oferta**, alternando as categorias do grupo.
 
 ## 📲 WhatsApp (Evolution API)

@@ -41,6 +41,12 @@ if errorlevel 1 (
 REM 3) Roda em loop; se cair, reinicia sozinho
 :loop
 uv run python -m ofertas run
+if "%errorlevel%"=="3" (
+  echo.
+  echo   O bot ja esta rodando em outra janela. Esta janela vai fechar.
+  timeout /t 5 >nul
+  exit /b 0
+)
 echo.
 echo   O bot parou. Reiniciando em 15 segundos... ^(feche a janela para sair^)
 timeout /t 15 >nul

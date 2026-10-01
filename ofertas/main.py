@@ -178,9 +178,33 @@ def cmd_ciclo(args):
     pipeline.executar_ciclo(_destino_pronto(grupos), grupos)
 
 
+# Só um bot por vez: com início automático (ao conectar na internet) e o .bat aberto
+# na mão, dois bots mandariam ofertas em dobro. A trava é uma porta local ocupada
+# enquanto o bot roda; o Windows/Linux libera sozinho quando o processo termina.
+PORTA_TRAVA = 47831
+JA_RODANDO = 3  # código de saída que o INICIAR_BOT.bat entende como "já está rodando"
+_trava = None
+
+
+def travar_instancia(porta: int = PORTA_TRAVA):
+    """Ocupa a porta da trava; se outro bot já a ocupa, encerra com JA_RODANDO."""
+    import socket
+    global _trava
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        s.bind(("127.0.0.1", porta))
+    except OSError:
+        s.close()
+        print("ℹ️  O bot já está rodando em outra janela — esta vai fechar.")
+        raise SystemExit(JA_RODANDO)
+    _trava = s  # mantém a porta ocupada enquanto o processo viver
+    return s
+
+
 def cmd_run(args):
     from . import pipeline
     from .config import config
+    travar_instancia()
     grupos = _grupos(args)
     _mostrar_grupos(grupos)
     destino = _destino_pronto(grupos)

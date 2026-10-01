@@ -225,7 +225,11 @@ Avise nos grupos que os links são de afiliado (exigência dos programas). Ex.: 
 
 **Deixar o PC ligado**
 - Configurações → Sistema → Energia → *Suspender: Nunca*.
-- Para abrir junto com o Windows: `Win + R` → digite `shell:startup` → crie ali um **atalho** para o `INICIAR_BOT.bat`. No Docker Desktop, ative *Settings → General → Start Docker Desktop when you sign in*.
+- **Início automático** (recomendado): dois cliques em **`ATIVAR_INICIO_AUTOMATICO.bat`** (uma vez). O bot passa a abrir sozinho **ao entrar no Windows e sempre que a internet conectar** (inclusive ao voltar da suspensão). Para desligar: `DESATIVAR_INICIO_AUTOMATICO.bat`.
+  - No Docker Desktop, ative *Settings → General → **Start Docker Desktop when you sign in*** — sem o Docker, o WhatsApp não funciona (o bot fica tentando a cada 15 s até ele abrir).
+  - O bot só roda **um por vez**: se já estiver aberto, a nova janela avisa *"O bot já está rodando em outra janela"* e fecha sozinha — sem ofertas em dobro.
+  - Funciona com o seu usuário logado no Windows (na tela de senha, ele espera você entrar).
+  - Para conferir/editar: menu Iniciar → *Agendador de Tarefas* → tarefa **"Bot de Ofertas - inicio automatico"**.
 
 **Arquivos úteis**
 | Arquivo | O que é |
@@ -388,7 +392,10 @@ Em computador de empresa, a BIOS pode estar bloqueada — só o suporte de TI li
 | Erro com `yaml` / `ScannerError` / `mapping values are not allowed` | formatação do arquivo quebrada | use espaços (não TAB), mantenha o alinhamento, e coloque aspas em nomes com `:` ou `#` |
 | `Fora do horário ativo (...) — ciclo pulado` | fora da janela de `horario_ativo` | não é erro; ajuste `horario_ativo` se quiser outro horário |
 
+| `ATIVAR_INICIO_AUTOMATICO.bat` mostra erro em vermelho | o Windows bloqueou a criação da tarefa agendada | clique com o botão direito no `.bat` → **Executar como administrador**; se persistir, envie um print da janela |
+
 ### 13.7 Mensagens que **não** são erro
+- `O bot já está rodando em outra janela — esta vai fechar.` — o início automático (ou você) tentou abrir um segundo bot; o primeiro continua funcionando.
 - `KeyboardInterrupt` — você apertou Ctrl+C (o bot foi parado).
 - `busca da API bloqueada (403) ... usando mais vendidos/catálogo` — caminho alternativo automático.
 - `Sem link de afiliado, descartada` — regra de segurança da comissão.
