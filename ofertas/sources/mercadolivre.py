@@ -160,8 +160,6 @@ def item_para_oferta(item: dict) -> Oferta | None:
     partes = []
     if (item.get("shipping") or {}).get("free_shipping"):
         partes.append("🚚 Frete grátis")
-    if item.get("official_store_id"):
-        partes.append("🏬 Loja oficial")
 
     return Oferta(
         plataforma="mercadolivre",
@@ -186,8 +184,6 @@ def produto_para_oferta(produto: dict, anuncio: dict | None = None) -> Oferta | 
     partes = []
     if (anuncio.get("shipping") or {}).get("free_shipping"):
         partes.append("🚚 Frete grátis")
-    if anuncio.get("official_store_id"):
-        partes.append("🏬 Loja oficial")
     original = anuncio.get("original_price")
     return Oferta(
         plataforma="mercadolivre",

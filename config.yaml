@@ -44,6 +44,9 @@ grupos:
       MLB3112: Blusas
       MLB278018: Leggings
     whatsapp: "Achadinhos da Mulher 💄"
+    # link de convite que vai no fim de cada oferta ("Envie essa oferta para uma amiga!").
+    # Troque o texto entre colchetes pelo link (https://chat.whatsapp.com/...), entre aspas.
+    convite: "[LINK DE CONVITE DO GRUPO ACHADINHOS DA MULHER]"
   bebe:
     nome: Achadinhos Mamãe e Bebê 🍼
     categorias:
@@ -51,6 +54,7 @@ grupos:
       MLB5366: Roupas para Bebês
       MLB1132: Brinquedos e Hobbies
     whatsapp: "Achadinhos Mamãe e Bebê 🍼"
+    convite: "[LINK DE CONVITE DO GRUPO ACHADINHOS MAMÃE E BEBÊ]"
 
 # Categorias do Mercado Livre:
 #   MLB1648 Informática             MLB1000 Eletrônicos, Áudio e Vídeo

@@ -63,6 +63,13 @@ class Config:
         self.grupos: list[Grupo] = ler_grupos(y.get("grupos") or {})
 
 
+def _convite(valor) -> str:
+    """Link de convite do grupo; vazio enquanto for só o lembrete entre colchetes
+    (ex: "[LINK DE CONVITE ...]") ou qualquer coisa que não seja um link."""
+    texto = str(valor or "").strip() if isinstance(valor, str) else ""
+    return texto if texto.startswith(("https://", "http://")) else ""
+
+
 def ler_grupos(dados: dict) -> list[Grupo]:
     """grupos do config.yaml -> [Grupo]. categorias: lista de ids ou {id: nome}."""
     grupos = []
@@ -75,7 +82,8 @@ def ler_grupos(dados: dict) -> list[Grupo]:
             cats = {str(c).strip().upper(): nome_categoria(str(c).strip().upper()) for c in cats}
         if cats:
             grupos.append(Grupo(chave=str(chave), nome=str(g.get("nome") or chave), categorias=cats,
-                                whatsapp=str(g.get("whatsapp") or "").strip()))
+                                whatsapp=str(g.get("whatsapp") or "").strip(),
+                                convite=_convite(g.get("convite"))))
     return grupos
 
 

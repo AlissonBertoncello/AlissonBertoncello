@@ -135,6 +135,7 @@ grupos:
 - **Para criar um grupo novo:** copie um bloco inteiro, mude a chave (`casa_info` → `pet`, por exemplo), o nome, as categorias e o `whatsapp`.
 - A **lista de categorias** (ids `MLB...`) está comentada dentro do próprio `config.yaml`.
 - O `whatsapp:` você preenche depois do passo 6 (lá aparece a lista com os nomes exatos).
+- O `convite:` é o **link de convite do grupo** (no WhatsApp: grupo → *Convidar via link*). Ele vai no fim de cada oferta, com o texto *"💬 Envie essa oferta para uma amiga!"*. Substitua o texto entre colchetes pelo link, **entre aspas**: `convite: "https://chat.whatsapp.com/XXXX"`. Enquanto estiver o texto entre colchetes, essas duas linhas não aparecem na mensagem.
 
 Atenção ao formato do YAML: use **espaços** (nunca TAB) e mantenha o alinhamento igual ao exemplo.
 

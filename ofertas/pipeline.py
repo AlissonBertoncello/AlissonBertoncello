@@ -128,7 +128,7 @@ def executar_ciclo(destino: Destino, grupos: list[Grupo], registrar: bool = True
             if enviadas and destino.nome != "console":
                 time.sleep(max(0.0, config.espacamento_segundos - (time.monotonic() - ultimo_envio)))
             try:
-                destino.enviar(o, montar_mensagem(o), g)
+                destino.enviar(o, montar_mensagem(o, g), g)
             except Exception as e:
                 log.error("[%s] falha ao enviar '%s': %s", g.nome, o.titulo[:60], e)
                 continue

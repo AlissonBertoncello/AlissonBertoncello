@@ -60,7 +60,7 @@ def cmd_testar(args):
             top = pipeline.com_link_afiliado(pipeline.escolher(boas, 3))
             if top:
                 print("\n── Prévia da mensagem ──")
-                print(montar_mensagem(top[0]))
+                print(montar_mensagem(top[0], g))
             else:
                 print("\n⚠️  Sem prévia: não foi possível gerar o link de afiliado (motivo acima).")
 

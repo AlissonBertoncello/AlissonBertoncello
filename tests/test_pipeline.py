@@ -48,3 +48,23 @@ def test_escolher_pula_variacoes():
         _o("3", "Panela Tramontina", 50, 100),
     ]
     assert [o.id_produto for o in pipeline.escolher(ofertas, 3)] == ["1", "3"]
+
+
+def test_mensagem_com_economia_e_convite():
+    from ofertas.models import Grupo
+    o = _o("1", "Kit Banheiro", 69.90, 149.90)
+    o.extra = "🚚 Frete grátis"
+    g = Grupo("mulher", "Mulher", whatsapp="x", convite="https://chat.whatsapp.com/ABC")
+    linhas = montar_mensagem(o, g).split("\n")
+    i = linhas.index("✅ Por: *R$ 69,90*  🔻 *-53%*")
+    assert linhas[i + 1] == "💰 Você economiza *R$ 80,00*"
+    assert linhas[i + 2] == "🚚 Frete grátis"
+    assert linhas[-2:] == ["💬 Envie essa oferta para uma amiga!", "👉 https://chat.whatsapp.com/ABC"]
+
+
+def test_sem_preco_antigo_nao_mostra_economia_e_sem_convite_nao_mostra_rodape():
+    from ofertas.models import Grupo
+    msg = montar_mensagem(_o("1", "Fone", 50.0, None), Grupo("g", "G"))
+    assert "economiza" not in msg
+    assert "amiga" not in msg
+    assert msg.endswith("🛒 https://ml/1")

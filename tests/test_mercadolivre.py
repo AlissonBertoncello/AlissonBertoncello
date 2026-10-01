@@ -44,7 +44,7 @@ def test_item_para_oferta():
     assert o.url_produto == "https://produto.mercadolivre.com.br/MLB-123456789-fone"
     assert o.desconto == 50
     assert o.imagem == "https://http2.mlstatic.com/D_123-O.jpg"
-    assert "Frete grátis" in o.extra and "Loja oficial" in o.extra
+    assert o.extra == "🚚 Frete grátis"  # "Loja oficial" não vai mais na mensagem
 
 
 def test_item_usa_sale_price():

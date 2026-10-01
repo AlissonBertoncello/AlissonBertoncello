@@ -53,3 +53,16 @@ def test_banco_antigo_ganha_coluna_chave(monkeypatch, tmp_path):
     monkeypatch.setattr(db, "_DB", arq)
     db.registrar(Oferta("mercadolivre", "2", "Produto Novo", "u"), "g")
     assert db.total_enviadas() == 2
+
+
+def test_convite_placeholder_entre_colchetes_fica_vazio():
+    grupos = cfg.ler_grupos({
+        "a": {"categorias": ["MLB1"], "convite": "[LINK DE CONVITE DO GRUPO A]"},
+        "b": {"categorias": ["MLB1"], "convite": ["sem aspas vira lista"]},
+        "c": {"categorias": ["MLB1"], "convite": " https://chat.whatsapp.com/XYZ "},
+    })
+    assert [g.convite for g in grupos] == ["", "", "https://chat.whatsapp.com/XYZ"]
+
+
+def test_config_padrao_ainda_sem_link_de_convite():
+    assert all(g.convite == "" for g in cfg.config.grupos)
