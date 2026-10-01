@@ -11,7 +11,7 @@ geral:
   horario_ativo: "08:00-23:00" # só envia nesse intervalo; "" = 24h
 
 filtros:
-  desconto_minimo: 25          # % mínimo de desconto
+  desconto_minimo: 10          # % mínimo de desconto
   preco_minimo: 0              # 0 = sem limite
   preco_maximo: 0              # 0 = sem limite
   # itens masculinos que aparecem em Beleza (barbear) e Moda Íntima/Praia
@@ -46,7 +46,7 @@ grupos:
     whatsapp: "Achadinhos da Mulher 💄"
     # link de convite que vai no fim de cada oferta ("Envie essa oferta para uma amiga!").
     # Troque o texto entre colchetes pelo link (https://chat.whatsapp.com/...), entre aspas.
-    convite: "[LINK DE CONVITE DO GRUPO ACHADINHOS DA MULHER]"
+    convite: "https://chat.whatsapp.com/IDNfRoNrDxI5rw7ZAlVEVK?mode=gi_t"
   bebe:
     nome: Achadinhos Mamãe e Bebê 🍼
     categorias:
@@ -54,7 +54,7 @@ grupos:
       MLB5366: Roupas para Bebês
       MLB1132: Brinquedos e Hobbies
     whatsapp: "Achadinhos Mamãe e Bebê 🍼"
-    convite: "[LINK DE CONVITE DO GRUPO ACHADINHOS MAMÃE E BEBÊ]"
+    convite: "https://chat.whatsapp.com/IzxfbYBYqUdBa8Y2OkhJ5M?mode=gi_t"
 
 # Categorias do Mercado Livre:
 #   MLB1648 Informática             MLB1000 Eletrônicos, Áudio e Vídeo

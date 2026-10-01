@@ -64,5 +64,5 @@ def test_convite_placeholder_entre_colchetes_fica_vazio():
     assert [g.convite for g in grupos] == ["", "", "https://chat.whatsapp.com/XYZ"]
 
 
-def test_config_padrao_ainda_sem_link_de_convite():
-    assert all(g.convite == "" for g in cfg.config.grupos)
+def test_config_padrao_tem_links_de_convite():
+    assert all(g.convite.startswith("https://chat.whatsapp.com/") for g in cfg.config.grupos)
