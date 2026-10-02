@@ -1,6 +1,7 @@
 # Bot de Ofertas para WhatsApp 🔥
 
 > 📘 **Passo a passo completo e solução de erros: [GUIA.md](GUIA.md)**
+> 📣 **Como encher os grupos de compradores: [DIVULGACAO.md](DIVULGACAO.md)**
 
 Busca produtos em promoção no **Mercado Livre** usando a **API oficial** e (na etapa 2) envia para um **grupo de WhatsApp**.
 
