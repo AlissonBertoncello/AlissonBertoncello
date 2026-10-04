@@ -97,6 +97,13 @@ def cmd_diagnostico(_):
     testar("Catálogo /products/search", lambda: f"{len(c.buscar_produtos(site, 'fone', 5))} produtos")
     testar("Página de ofertas (sem API)", lambda: f"{len(ml_pagina.buscar_ofertas({'': 'todas'}))} ofertas")
 
+    from .sources import shopee
+    print("── Diagnóstico da Shopee ──")
+    if not shopee.tem_credenciais():
+        print("ℹ️  Shopee: sem SHOPEE_APP_ID/SHOPEE_APP_SECRET no .env (opcional)")
+    else:
+        testar("Shopee Open API (busca 'fralda')", lambda: f"{len(shopee.buscar('fralda', 5))} ofertas")
+
 
 def cmd_converter(args):
     from .formatter import montar_mensagem

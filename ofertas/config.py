@@ -38,6 +38,8 @@ class Config:
         self.ml_client_secret: str = os.getenv("ML_CLIENT_SECRET", "").strip()
         self.ml_access_token: str = os.getenv("ML_ACCESS_TOKEN", "").strip()
         self.ml_etiqueta: str = os.getenv("ML_ETIQUETA", "").strip()
+        self.shopee_app_id: str = os.getenv("SHOPEE_APP_ID", "").strip()
+        self.shopee_app_secret: str = os.getenv("SHOPEE_APP_SECRET", "").strip()
         self.evolution_url: str = os.getenv("EVOLUTION_URL", "http://localhost:8080").strip()
         self.evolution_api_key: str = os.getenv("EVOLUTION_API_KEY", "").strip()
         self.evolution_instancia: str = os.getenv("EVOLUTION_INSTANCIA", "bot-ofertas").strip()
@@ -58,6 +60,7 @@ class Config:
 
         fontes = y.get("fontes") or {}
         self.fonte_ml: dict = fontes.get("mercadolivre") or {"ativa": False}
+        self.fonte_shopee: dict = fontes.get("shopee") or {"ativa": False}
 
         self.destino: str = str(y.get("destino") or "console").strip().lower()
         self.grupos: list[Grupo] = ler_grupos(y.get("grupos") or {})
@@ -80,10 +83,11 @@ def ler_grupos(dados: dict) -> list[Grupo]:
             cats = {str(k): str(v) for k, v in cats.items()}
         else:
             cats = {str(c).strip().upper(): nome_categoria(str(c).strip().upper()) for c in cats}
-        if cats:
+        shopee = [str(t).strip() for t in (g.get("shopee") or []) if str(t).strip()]
+        if cats or shopee:
             grupos.append(Grupo(chave=str(chave), nome=str(g.get("nome") or chave), categorias=cats,
                                 whatsapp=str(g.get("whatsapp") or "").strip(),
-                                convite=_convite(g.get("convite"))))
+                                convite=_convite(g.get("convite")), shopee=shopee))
     return grupos
 
 
@@ -119,6 +123,10 @@ def verificar() -> list[str]:
         sem = [g.chave for g in config.grupos if not g.whatsapp]
         if sem:
             pendencias.append(f"'whatsapp:' (nome do grupo) nos grupos: {', '.join(sem)}")
+    if config.fonte_shopee.get("ativa") and any(g.shopee for g in config.grupos) \
+            and not (config.shopee_app_id and config.shopee_app_secret):
+        pendencias.append("SHOPEE_APP_ID / SHOPEE_APP_SECRET (opcional: sem eles o bot usa só o "
+                          "Mercado Livre — painel de afiliados da Shopee > Open API)")
     if not config.grupos:
         pendencias.append("grupos no config.yaml (pelo menos um grupo com categorias)")
     return pendencias

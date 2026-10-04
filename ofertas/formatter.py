@@ -3,6 +3,7 @@ from .models import Grupo, Oferta
 
 _PLATAFORMA = {
     "mercadolivre": "💛 Mercado Livre",
+    "shopee": "🧡 Shopee",
 }
 
 

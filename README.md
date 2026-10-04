@@ -3,7 +3,7 @@
 > 📘 **Passo a passo completo e solução de erros: [GUIA.md](GUIA.md)**
 > 📣 **Como encher os grupos de compradores: [DIVULGACAO.md](DIVULGACAO.md)**
 
-Busca produtos em promoção no **Mercado Livre** usando a **API oficial** e (na etapa 2) envia para um **grupo de WhatsApp**.
+Busca produtos em promoção no **Mercado Livre** (API oficial) e na **Shopee** (Open API de afiliados) e (na etapa 2) envia para um **grupo de WhatsApp**.
 
 ## Etapas
 

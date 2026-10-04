@@ -24,17 +24,19 @@ Este guia leva você do zero até o bot rodando, e explica o que fazer em cada e
 
 A cada ciclo (por exemplo, a cada 45 minutos), para **cada grupo** configurado:
 
-1. **Busca promoções** no Mercado Livre nas categorias do grupo, alternando as categorias a cada ciclo:
-   - **mais vendidos** pela API oficial do Mercado Livre (categoria + subcategorias, em rodízio);
-   - **página de ofertas** do Mercado Livre da categoria (só produtos em promoção, uma página por vez, em rodízio).
+1. **Busca promoções**, alternando as lojas a cada ciclo (**meio a meio**):
+   - **Mercado Livre**, nas categorias do grupo (em rodízio): **mais vendidos** pela API oficial (categoria + subcategorias) e **página de ofertas** da categoria;
+   - **Shopee** (opcional), pela Open API de afiliados, nas **palavras-chave** do grupo (em rodízio).
+   Se a loja da vez não tiver oferta nova (ou a Shopee não estiver configurada), usa a outra.
 2. **Filtra**: desconto mínimo, faixa de preço, palavras bloqueadas, e **não repete** produto (nem variação de cor/tamanho) no mesmo grupo dentro do prazo.
 3. **Escolhe** a melhor oferta (maior desconto).
-4. **Gera o link de afiliado** (`meli.la/...`). **Oferta sem link de afiliado é sempre descartada.**
+4. **Gera o link de afiliado** (`meli.la/...` no Mercado Livre; na Shopee o link já vem pronto da API). **Oferta sem link de afiliado é sempre descartada.**
 5. **Envia** para o grupo do WhatsApp: **foto do produto + legenda** com preço "de/por", desconto e link.
 
 ```
-Mercado Livre ──► filtros ──► melhor oferta ──► link de afiliado ──► WhatsApp (grupo)
- (API + ofertas)                                  (Linkbuilder)        (Evolution API)
+Mercado Livre ─┐                               ┌ Linkbuilder (ML)
+ (API + ofertas) ├─► filtros ─► melhor oferta ─┤                  ─► WhatsApp (grupo)
+Shopee (API) ───┘                               └ link já pronto (Shopee)   (Evolution API)
 ```
 
 Tudo roda **no seu PC** (Windows). Não há mensalidade.
@@ -151,6 +153,23 @@ Necessário para gerar os links `meli.la` (uma vez só; refaça se a sessão exp
 4. **Feche o Chrome.** Deve aparecer `✅ Perfil salvo em ...\data\ml_profile`.
 
 > A etiqueta do `.env` (`ML_ETIQUETA`) precisa ser **da mesma conta** em que você fez login aqui.
+
+---
+
+## 5.1 Shopee Afiliados (opcional)
+
+Sem isto o bot funciona normalmente, só com o Mercado Livre.
+
+1. Cadastre-se no **Programa de Afiliados da Shopee**: https://affiliate.shopee.com.br (com a sua conta Shopee).
+2. Já aprovado como afiliado, abra no painel o menu **Open API** e **solicite o acesso** (justificativa sugerida: *"Divulgação automática de ofertas em grupos de WhatsApp, com geração de links de afiliado"*). A aprovação **pode levar alguns dias**.
+3. Aprovado, copie o **App ID** e a **Secret** para o `.env`:
+   ```
+   SHOPEE_APP_ID=seu_app_id
+   SHOPEE_APP_SECRET=sua_secret
+   ```
+4. Reinicie o bot e teste: `uv run python -m ofertas diagnostico` (a seção *Diagnóstico da Shopee* deve mostrar ✅).
+
+As palavras buscadas ficam no campo `shopee:` de cada grupo do `config.yaml` (uma por linha, com `- ` na frente). Para incluir/tirar, é só editar a lista.
 
 ---
 
@@ -278,6 +297,13 @@ O `.env` e a pasta `data\` **não** são afetados (não fazem parte do ZIP).
 | `paginas_ofertas` | 1 | páginas de ofertas lidas por ciclo (~48 promoções cada) |
 | `paginas_ofertas_max` | 10 | rodízio vai da página 1 até esta e recomeça |
 
+### `fontes.shopee`
+| Chave | Padrão | O que faz |
+|---|---|---|
+| `ativa` | `true` | liga/desliga a Shopee (sem credenciais no `.env`, fica desligada sozinha) |
+| `limite_por_busca` | 20 | produtos pedidos por palavra-chave (máx. 50) |
+| `ordenacao` | 2 | 2 = mais vendidos · 1 = relevância · 5 = maior comissão |
+
 ### `grupos` e `destino`
 Veja o passo [4.2](#42-configurar-os-grupos-no-configyaml). `destino`: `console` (só tela) ou `whatsapp`.
 
@@ -327,6 +353,16 @@ Procure pela **mensagem que apareceu na tela** (ou parte dela).
 | `Página de ofertas do ML mudou de layout? N cards, 0 lidos` | o ML mudou o visual da página | os mais vendidos continuam funcionando; é preciso ajustar o código (`ofertas/sources/ml_pagina.py`) |
 | `Nenhuma oferta nova que passe nos filtros` / `nenhuma oferta nova nas categorias do grupo` | já enviou tudo o que havia com desconto suficiente | normal em testes de 1 minuto; aumente o intervalo, adicione categorias ao grupo ou reduza o `desconto_minimo` |
 | `Mercado Livre: 0 ofertas coletadas` | todas as fontes falharam | veja as linhas de erro acima dela; rode `uv run python -m ofertas diagnostico` |
+
+### 13.2.1 Shopee
+
+| Mensagem | Causa | O que fazer |
+|---|---|---|
+| `Shopee: sem SHOPEE_APP_ID/SHOPEE_APP_SECRET no .env — usando só o Mercado Livre` | ainda sem acesso à Open API | **não é erro**; preencha o `.env` quando o acesso for aprovado (seção 5.1) |
+| `Shopee respondeu HTTP 401/403` ou `Shopee API: ... signature/credential` | App ID/Secret errados ou acesso à Open API ainda não liberado | copie de novo do painel (sem espaços/aspas); confira se o acesso à Open API foi aprovado |
+| `Shopee API: ... rate limit / too many requests` | muitas buscas em pouco tempo | temporário; se repetir, aumente o `intervalo_minutos` |
+| `Shopee 'palavra': 0 ofertas` | a palavra não trouxe produtos | troque por uma palavra mais comum na lista `shopee:` do grupo |
+| `Shopee fora do ar` | sem internet ou instabilidade da Shopee | temporário; o ciclo usa o Mercado Livre no lugar |
 
 ### 13.3 Link de afiliado
 

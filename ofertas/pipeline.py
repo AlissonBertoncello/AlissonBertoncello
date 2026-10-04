@@ -6,7 +6,7 @@ from .config import config, dentro_do_horario
 from .destinos import Destino
 from .formatter import montar_mensagem
 from .models import Grupo, Oferta
-from .sources import mercadolivre
+from .sources import mercadolivre, shopee
 
 log = logging.getLogger("ofertas.pipeline")
 
@@ -65,25 +65,33 @@ def escolher(ofertas: list[Oferta], n: int) -> list[Oferta]:
 
 def com_link_afiliado(ofertas: list[Oferta]) -> list[Oferta]:
     """Gera os links de afiliado (só das candidatas: o Linkbuilder é caro) e
-    descarta as que ficaram sem link: oferta sem link de afiliado nunca é enviada."""
-    try:
-        afiliado_ml.gerar_links_afiliado(ofertas)
-    except Exception as e:
-        log.error("Linkbuilder ML falhou (link de afiliado não gerado): %s", e)
+    descarta as que ficaram sem link: oferta sem link de afiliado nunca é enviada.
+    A Shopee já devolve o link de afiliado pronto; o Linkbuilder é só do Mercado Livre."""
+    do_ml = [o for o in ofertas if o.plataforma == "mercadolivre"]
+    if do_ml:
+        try:
+            afiliado_ml.gerar_links_afiliado(do_ml)
+        except Exception as e:
+            log.error("Linkbuilder ML falhou (link de afiliado não gerado): %s", e)
     for o in ofertas:
         if not o.url_afiliado:
             log.warning("Sem link de afiliado, descartada: %s", o.titulo[:60])
     return [o for o in ofertas if o.url_afiliado]
 
 
-# rodízio: índice da próxima categoria de cada grupo (vive enquanto o bot roda)
-_proxima: dict[str, int] = {}
+# rodízios (vivem enquanto o bot roda), por grupo:
+_proxima: dict[str, int] = {}          # próxima categoria do Mercado Livre
+_proxima_shopee: dict[str, int] = {}   # próxima palavra-chave da Shopee
+_loja_da_vez: dict[str, int] = {}      # alterna as lojas a cada ciclo (meio a meio)
+_avisou_shopee: set[str] = set()       # avisa só uma vez que a Shopee está fora
+TENTATIVAS_SHOPEE = 3                  # palavras tentadas por ciclo antes de desistir
 
 
-def candidatas_do_grupo(grupo: Grupo, n: int) -> list[Oferta]:
-    """Candidatas da vez: começa na categoria do rodízio; se ela não tiver oferta
-    nova, tenta a seguinte. A próxima rodada começa depois da categoria usada."""
+def _candidatas_ml(grupo: Grupo, n: int) -> list[Oferta]:
+    """Começa na categoria do rodízio; se ela não tiver oferta nova, tenta a seguinte."""
     cats = list(grupo.categorias.items())
+    if not cats or not config.fonte_ml.get("ativa"):
+        return []
     inicio = _proxima.get(grupo.chave, 0) % len(cats)
     for passo in range(len(cats)):
         idx = (inicio + passo) % len(cats)
@@ -97,6 +105,56 @@ def candidatas_do_grupo(grupo: Grupo, n: int) -> list[Oferta]:
             _proxima[grupo.chave] = idx + 1
             return candidatas
     _proxima[grupo.chave] = inicio + 1
+    return []
+
+
+def _shopee_disponivel(grupo: Grupo) -> bool:
+    if not (grupo.shopee and config.fonte_shopee.get("ativa")):
+        return False
+    if not shopee.tem_credenciais():
+        if "credenciais" not in _avisou_shopee:
+            _avisou_shopee.add("credenciais")
+            log.warning("Shopee: sem SHOPEE_APP_ID/SHOPEE_APP_SECRET no .env — usando só o "
+                        "Mercado Livre por enquanto")
+        return False
+    return True
+
+
+def _candidatas_shopee(grupo: Grupo, n: int) -> list[Oferta]:
+    """Palavra-chave da vez na Shopee; se não render oferta nova, tenta mais algumas."""
+    if not _shopee_disponivel(grupo):
+        return []
+    termos = grupo.shopee
+    inicio = _proxima_shopee.get(grupo.chave, 0) % len(termos)
+    for passo in range(min(TENTATIVAS_SHOPEE, len(termos))):
+        idx = (inicio + passo) % len(termos)
+        try:
+            brutas = shopee.buscar(termos[idx])
+        except Exception as e:
+            log.error("[%s] Shopee '%s': %s", grupo.nome, termos[idx], e)
+            _proxima_shopee[grupo.chave] = idx + 1
+            return []
+        boas = filtrar(brutas, grupo.chave)
+        log.info("[%s] Shopee '%s': %d coletadas, %d novas nos filtros",
+                 grupo.nome, termos[idx], len(brutas), len(boas))
+        candidatas = escolher(boas, n * 3)
+        if candidatas:
+            _proxima_shopee[grupo.chave] = idx + 1
+            return candidatas
+    _proxima_shopee[grupo.chave] = inicio + min(TENTATIVAS_SHOPEE, len(termos))
+    return []
+
+
+def candidatas_do_grupo(grupo: Grupo, n: int) -> list[Oferta]:
+    """Candidatas da vez: alterna as lojas a cada ciclo (Mercado Livre / Shopee);
+    se a loja da vez não tiver oferta nova (ou estiver indisponível), usa a outra."""
+    lojas = [_candidatas_ml, _candidatas_shopee]
+    vez = _loja_da_vez.get(grupo.chave, 0) % len(lojas)
+    _loja_da_vez[grupo.chave] = vez + 1
+    for buscar in (lojas[vez], lojas[1 - vez]):
+        candidatas = buscar(grupo, n)
+        if candidatas:
+            return candidatas
     log.info("[%s] nenhuma oferta nova nas categorias do grupo", grupo.nome)
     return []
 
