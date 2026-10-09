@@ -203,3 +203,17 @@ def test_chrome_nao_abre_se_ninguem_precisar(monkeypatch):
     with afiliado_ml.chrome_compartilhado():
         pass
     assert chrome.abertos == 0
+
+
+def test_chrome_fecha_depois_dos_envios(monkeypatch):
+    chrome = _ChromeFalso().instalar(monkeypatch)
+    ordem = []
+
+    def gerar(lista):  # como o Linkbuilder real: usa a página do Chrome
+        with afiliado_ml.pagina_chrome():
+            _todas_com_link(lista)
+    destino, envios = _ciclo(monkeypatch, {"C1": [_of("A")]}, gerar)
+    destino.enviar = lambda o, msg, g: ordem.append(("enviou", chrome.fechados))
+    pipeline.executar_ciclo(destino, [Grupo("g", "G", {"C1": "x"})], registrar=False)
+    assert ordem == [("enviou", 0)]          # Chrome ainda aberto na hora do envio
+    assert (chrome.abertos, chrome.fechados) == (1, 1)

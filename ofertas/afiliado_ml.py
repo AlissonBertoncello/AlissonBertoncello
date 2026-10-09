@@ -13,6 +13,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -152,14 +153,17 @@ def chrome_compartilhado():
 
 
 def _fechar(estado: dict) -> None:
+    if not estado.get("ctx"):
+        return
+    inicio = time.monotonic()
     try:
-        if estado.get("ctx"):
-            estado["ctx"].close()
+        estado["ctx"].close()
     except Exception as e:
         log.debug("Fechando o Chrome: %s", e)
     finally:
         if estado.get("pw"):
             estado["pw"].stop()
+    log.info("Chrome fechado (%.0f s)", time.monotonic() - inicio)
 
 
 @contextmanager

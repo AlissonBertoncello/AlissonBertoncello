@@ -159,22 +159,8 @@ def candidatas_do_grupo(grupo: Grupo, n: int) -> list[Oferta]:
     return []
 
 
-def executar_ciclo(destino: Destino, grupos: list[Grupo], registrar: bool = True) -> int:
-    """Para cada grupo: coletar -> filtrar -> escolher; depois gera os links de
-    afiliado de todos de uma vez e envia. Retorna o nº de ofertas enviadas."""
-    if not dentro_do_horario():
-        log.info("Fora do horário ativo (%s) — ciclo pulado", config.horario_ativo)
-        return 0
-
-    n = config.max_posts_por_ciclo
-    # um Chrome só no ciclo inteiro (páginas de ofertas + Linkbuilder), aberto só se precisar
-    with afiliado_ml.chrome_compartilhado():
-        por_grupo = {g.chave: candidatas_do_grupo(g, n) for g in grupos}
-        todas = [o for lista in por_grupo.values() for o in lista]
-        if todas:
-            # link de afiliado é obrigatório: um único lote no Linkbuilder para todos os grupos
-            com_link_afiliado(todas)
-
+def _enviar(destino: Destino, grupos: list[Grupo], por_grupo: dict[str, list[Oferta]],
+            n: int, registrar: bool) -> int:
     enviadas = 0
     ultimo_envio = 0.0
     for g in grupos:
@@ -196,6 +182,26 @@ def executar_ciclo(destino: Destino, grupos: list[Grupo], registrar: bool = True
             if registrar:
                 db.registrar(o, g.chave)
             enviadas += 1
+    return enviadas
 
-    log.info("Ciclo: %d oferta(s) enviada(s) para %d grupo(s) (%s)", enviadas, len(grupos), destino.nome)
+
+def executar_ciclo(destino: Destino, grupos: list[Grupo], registrar: bool = True) -> int:
+    """Para cada grupo: coletar -> filtrar -> escolher; depois gera os links de
+    afiliado de todos de uma vez e envia. Retorna o nº de ofertas enviadas."""
+    if not dentro_do_horario():
+        log.info("Fora do horário ativo (%s) — ciclo pulado", config.horario_ativo)
+        return 0
+
+    n = config.max_posts_por_ciclo
+    # um Chrome só no ciclo inteiro (páginas de ofertas + Linkbuilder), aberto só se precisar;
+    # ele fecha depois dos envios, porque fechar o Chrome pode demorar
+    with afiliado_ml.chrome_compartilhado():
+        por_grupo = {g.chave: candidatas_do_grupo(g, n) for g in grupos}
+        todas = [o for lista in por_grupo.values() for o in lista]
+        if todas:
+            # link de afiliado é obrigatório: um único lote no Linkbuilder para todos os grupos
+            com_link_afiliado(todas)
+        enviadas = _enviar(destino, grupos, por_grupo, n, registrar)
+        log.info("Ciclo: %d oferta(s) enviada(s) para %d grupo(s) (%s)",
+                 enviadas, len(grupos), destino.nome)
     return enviadas
