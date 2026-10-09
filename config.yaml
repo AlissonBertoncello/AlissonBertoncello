@@ -29,6 +29,9 @@ fontes:
     subcategorias_por_busca: 2 # mais vendidos: quantas (sub)categorias consultar por vez, em rodízio
     paginas_ofertas: 1         # páginas de mercadolivre.com.br/ofertas lidas por vez (~48 promoções cada)
     paginas_ofertas_max: 10    # rodízio: vai da página 1 até esta e recomeça
+    # página de ofertas: auto = acesso direto e, se vier sem produtos, abre no Google Chrome
+    #                    sempre = só pelo Chrome | nunca = só acesso direto
+    pagina_navegador: auto
   shopee:
     # Open API de afiliados (SHOPEE_APP_ID/SHOPEE_APP_SECRET no .env). Sem as credenciais,
     # o bot usa só o Mercado Livre. As palavras buscadas ficam em "shopee:" de cada grupo.

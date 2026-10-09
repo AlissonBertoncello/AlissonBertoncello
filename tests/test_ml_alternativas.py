@@ -84,7 +84,7 @@ def test_auto_cai_para_pagina(monkeypatch):
         def destaques(self, site, cat):
             raise ErroAPI("HTTP 403")
     monkeypatch.setattr(ml_pagina, "buscar_ofertas",
-                        lambda cats, paginas, inicio: [mercadolivre.item_para_oferta(ITEM)])
+                        lambda cats, paginas, inicio, navegador='auto': [mercadolivre.item_para_oferta(ITEM)])
     assert [o.id_produto for o in mercadolivre.buscar_ofertas(SemNada())] == ["MLB1"]
 
 
@@ -92,7 +92,7 @@ def test_auto_soma_mais_vendidos_e_pagina_de_ofertas(monkeypatch):
     _config(monkeypatch, modo="auto")
     monkeypatch.setattr(mercadolivre, "_pagina_da_vez", {})
     da_pagina = mercadolivre.item_para_oferta({**ITEM, "id": "MLB777", "title": "Da página"})
-    monkeypatch.setattr(ml_pagina, "buscar_ofertas", lambda cats, paginas, inicio: [da_pagina])
+    monkeypatch.setattr(ml_pagina, "buscar_ofertas", lambda cats, paginas, inicio, navegador='auto': [da_pagina])
     ids = sorted(o.id_produto for o in mercadolivre.buscar_ofertas(ClienteFalso()))
     assert ids == ["MLB1", "MLB777", "MLB900"]
 
@@ -102,7 +102,7 @@ def test_rodizio_de_paginas_de_ofertas(monkeypatch):
     monkeypatch.setattr(mercadolivre, "_pagina_da_vez", {})
     lidas = []
 
-    def ler(cats, paginas, inicio):
+    def ler(cats, paginas, inicio, navegador='auto'):
         lidas.append(inicio)
         return [] if inicio == 2 and len(lidas) > 3 else [mercadolivre.item_para_oferta(ITEM)]
     monkeypatch.setattr(ml_pagina, "buscar_ofertas", ler)
@@ -175,3 +175,66 @@ def test_subcategorias_da_api_com_cache():
     assert c.subcategorias("MLB1384") == ["MLB1", "MLB2"]
     assert c.subcategorias("MLB1384") == ["MLB1", "MLB2"]  # sem nova chamada
     assert len(s.chamadas) == 1
+
+
+
+# ── página de ofertas: acesso direto e, se vier vazia, pelo Chrome ─────────────
+
+def _pagina_falsa(monkeypatch, direto, chrome):
+    usados = {"chrome": []}
+    monkeypatch.setattr(ml_pagina, "_html_requests", lambda s, url: direto)
+    monkeypatch.setattr(ml_pagina.time, "sleep", lambda s: None)
+
+    def navegador(urls):
+        usados["chrome"].append(list(urls))
+        return {u: chrome for u in urls} if chrome is not None else {}
+    monkeypatch.setattr(ml_pagina, "_html_navegador", navegador)
+    return usados
+
+
+def test_acesso_direto_com_produtos_nao_abre_chrome(monkeypatch):
+    usados = _pagina_falsa(monkeypatch, HTML, chrome=None)
+    assert len(ml_pagina.buscar_ofertas({"MLB1": "X"})) == 1
+    assert usados["chrome"] == []
+
+
+def test_acesso_direto_vazio_usa_chrome(monkeypatch):
+    usados = _pagina_falsa(monkeypatch, "<html>sem produtos</html>", chrome=HTML)
+    [o] = ml_pagina.buscar_ofertas({"MLB108704": "Vestidos"}, 1, 3)
+    assert o.id_produto == "MLB4012345678"
+    assert usados["chrome"] == [["https://www.mercadolivre.com.br/ofertas?category=MLB108704&page=3"]]
+
+
+def test_vazio_ate_no_chrome_salva_copia_para_diagnostico(monkeypatch, tmp_path, caplog):
+    from ofertas import config as cfg
+    monkeypatch.setattr(cfg, "DATA_DIR", tmp_path)
+    _pagina_falsa(monkeypatch, None, chrome="<html><title>Verificação</title>robô?</html>")
+    assert ml_pagina.buscar_ofertas({"MLB1": "X"}) == []
+    assert "robô?" in (tmp_path / "ml_ofertas_debug.html").read_text(encoding="utf-8")
+    assert any("Verificação" in r.message for r in caplog.records)
+
+
+def test_modo_nunca_nao_abre_chrome(monkeypatch, tmp_path):
+    usados = _pagina_falsa(monkeypatch, "<html></html>", chrome=HTML)
+    assert ml_pagina.buscar_ofertas({"MLB1": "X"}, navegador="nunca") == []
+    assert usados["chrome"] == []
+
+
+def test_modo_sempre_vai_direto_ao_chrome(monkeypatch):
+    chamadas = []
+    monkeypatch.setattr(ml_pagina, "_html_requests", lambda s, url: chamadas.append(url) or HTML)
+    monkeypatch.setattr(ml_pagina, "_html_navegador", lambda urls: {u: HTML for u in urls})
+    assert len(ml_pagina.buscar_ofertas({"MLB1": "X"}, navegador="sempre")) == 1
+    assert chamadas == []
+
+
+def test_erro_ao_abrir_chrome_nao_derruba(monkeypatch, tmp_path):
+    from ofertas import config as cfg
+    monkeypatch.setattr(cfg, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(ml_pagina, "_html_requests", lambda s, url: None)
+    monkeypatch.setattr(ml_pagina.time, "sleep", lambda s: None)
+
+    def quebra(urls):
+        raise RuntimeError("Chrome não encontrado")
+    monkeypatch.setattr(ml_pagina, "_html_navegador", quebra)
+    assert ml_pagina.buscar_ofertas({"MLB1": "X"}) == []

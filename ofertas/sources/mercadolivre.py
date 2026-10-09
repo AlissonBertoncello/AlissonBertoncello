@@ -316,7 +316,8 @@ def _via_pagina_ofertas(cats: dict[str, str]) -> list[Oferta]:
     ofertas: list[Oferta] = []
     for cid, nome in cats.items():
         inicio = _pagina_da_vez.get(cid, 1)
-        achadas = ml_pagina.buscar_ofertas({cid: nome}, por_vez, inicio)
+        achadas = ml_pagina.buscar_ofertas({cid: nome}, por_vez, inicio,
+                                           str(config.fonte_ml.get("pagina_navegador") or "auto"))
         proxima = inicio + por_vez
         # acabaram as páginas (ou chegou no máximo): volta para a primeira
         _pagina_da_vez[cid] = 1 if (not achadas or proxima > maximo) else proxima

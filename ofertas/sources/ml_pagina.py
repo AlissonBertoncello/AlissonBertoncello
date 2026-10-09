@@ -94,27 +94,106 @@ def parse_pagina(html: str) -> list[Oferta]:
     return ofertas
 
 
-def buscar_ofertas(categorias: dict[str, str], paginas: int = 1, inicio: int = 1) -> list[Oferta]:
-    """Páginas inicio..inicio+paginas-1 de mercadolivre.com.br/ofertas de cada categoria."""
+def _url(cat_id: str, pagina: int) -> str:
+    params = []
+    if cat_id:
+        params.append(f"category={cat_id}")
+    if pagina > 1:
+        params.append(f"page={pagina}")
+    return URL_OFERTAS + ("?" + "&".join(params) if params else "")
+
+
+def _html_requests(s: requests.Session, url: str) -> str | None:
+    """Jeito rápido (sem navegador). None se der erro de rede/HTTP."""
+    try:
+        r = s.get(url, timeout=30)
+        r.raise_for_status()
+        return r.text
+    except requests.RequestException as e:
+        log.warning("Página de ofertas (acesso direto) %s: %s", url, e)
+        return None
+
+
+def _html_navegador(urls: list[str]) -> dict[str, str]:
+    """Abre as páginas no Google Chrome de verdade (o mesmo perfil do link de afiliado),
+    como uma pessoa navegando: o ML às vezes responde sem produtos ao acesso direto."""
+    from playwright.sync_api import sync_playwright
+
+    from ..afiliado_ml import _abrir_contexto
+
+    htmls: dict[str, str] = {}
+    with sync_playwright() as pw:
+        ctx = _abrir_contexto(pw)
+        page = ctx.pages[0] if ctx.pages else ctx.new_page()
+        try:
+            for url in urls:
+                try:
+                    page.goto(url, wait_until="domcontentloaded", timeout=45000)
+                    try:
+                        page.wait_for_selector("div.poly-card", timeout=15000)
+                    except Exception:
+                        pass  # sem cards: o HTML vai para o arquivo de diagnóstico
+                    htmls[url] = page.content()
+                except Exception as e:
+                    log.warning("Página de ofertas (Chrome) %s: %s", url, e)
+        finally:
+            ctx.close()
+    return htmls
+
+
+def _salvar_debug(url: str, html: str | None) -> None:
+    """Guarda a página que veio sem produtos, para descobrir o motivo."""
+    from bs4 import BeautifulSoup as _BS
+
+    from ..config import DATA_DIR
+    titulo = ""
+    if html:
+        t = _BS(html, "lxml").title
+        titulo = t.get_text(strip=True)[:80] if t else ""
+    try:
+        (DATA_DIR / "ml_ofertas_debug.html").write_text(html or "", encoding="utf-8")
+    except OSError:
+        pass
+    log.warning("Página de ofertas sem produtos mesmo pelo Chrome (%s | título: %r | %d bytes) — "
+                "cópia salva em data/ml_ofertas_debug.html", url, titulo, len(html or ""))
+
+
+def buscar_ofertas(categorias: dict[str, str], paginas: int = 1, inicio: int = 1,
+                   navegador: str = "auto") -> list[Oferta]:
+    """Páginas inicio..inicio+paginas-1 de mercadolivre.com.br/ofertas de cada categoria.
+
+    navegador: "auto" = tenta o acesso direto e, se vier sem produtos, abre no Chrome;
+    "sempre" = só pelo Chrome; "nunca" = só acesso direto.
+    """
     s = requests.Session()
     s.headers.update({"User-Agent": USER_AGENT, "Accept-Language": "pt-BR,pt;q=0.9"})
-    ofertas: dict[str, Oferta] = {}
-    for cat_id, nome in (categorias or {"": "todas"}).items():
-        for pagina in range(max(1, inicio), max(1, inicio) + max(1, paginas)):
-            params = {}
-            if cat_id:
-                params["category"] = cat_id
-            if pagina > 1:
-                params["page"] = pagina
-            try:
-                r = s.get(URL_OFERTAS, params=params or None, timeout=30)
-                r.raise_for_status()
-            except requests.RequestException as e:
-                log.error("Página de ofertas %s: %s", nome, e)
-                break
-            achadas = parse_pagina(r.text)
-            for o in achadas:
-                ofertas.setdefault(o.id_produto, o)
-            log.info("Página de ofertas %s: %d ofertas", nome, len(achadas))
+    alvos = [(nome, _url(cat_id, pagina))
+             for cat_id, nome in (categorias or {"": "todas"}).items()
+             for pagina in range(max(1, inicio), max(1, inicio) + max(1, paginas))]
+
+    achadas_por_url: dict[str, list[Oferta]] = {}
+    if navegador != "sempre":
+        for _, url in alvos:
+            html = _html_requests(s, url)
+            achadas_por_url[url] = parse_pagina(html) if html else []
             time.sleep(1)
+
+    faltando = [url for _, url in alvos if not achadas_por_url.get(url)]
+    if faltando and navegador != "nunca":
+        try:
+            htmls = _html_navegador(faltando)
+        except Exception as e:
+            log.error("Página de ofertas: não consegui abrir o Chrome: %s", e)
+            htmls = {}
+        for url in faltando:
+            achadas_por_url[url] = parse_pagina(htmls[url]) if htmls.get(url) else []
+            if not achadas_por_url[url]:
+                _salvar_debug(url, htmls.get(url))
+
+    ofertas: dict[str, Oferta] = {}
+    for nome, url in alvos:
+        achadas = achadas_por_url.get(url) or []
+        for o in achadas:
+            ofertas.setdefault(o.id_produto, o)
+        log.info("Página de ofertas %s: %d ofertas", nome, len(achadas))
     return list(ofertas.values())
