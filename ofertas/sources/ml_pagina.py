@@ -117,27 +117,20 @@ def _html_requests(s: requests.Session, url: str) -> str | None:
 def _html_navegador(urls: list[str]) -> dict[str, str]:
     """Abre as páginas no Google Chrome de verdade (o mesmo perfil do link de afiliado),
     como uma pessoa navegando: o ML às vezes responde sem produtos ao acesso direto."""
-    from playwright.sync_api import sync_playwright
-
-    from ..afiliado_ml import _abrir_contexto
+    from ..afiliado_ml import pagina_chrome
 
     htmls: dict[str, str] = {}
-    with sync_playwright() as pw:
-        ctx = _abrir_contexto(pw)
-        page = ctx.pages[0] if ctx.pages else ctx.new_page()
-        try:
-            for url in urls:
+    with pagina_chrome() as page:
+        for url in urls:
+            try:
+                page.goto(url, wait_until="domcontentloaded", timeout=45000)
                 try:
-                    page.goto(url, wait_until="domcontentloaded", timeout=45000)
-                    try:
-                        page.wait_for_selector("div.poly-card", timeout=15000)
-                    except Exception:
-                        pass  # sem cards: o HTML vai para o arquivo de diagnóstico
-                    htmls[url] = page.content()
-                except Exception as e:
-                    log.warning("Página de ofertas (Chrome) %s: %s", url, e)
-        finally:
-            ctx.close()
+                    page.wait_for_selector("div.poly-card", timeout=15000)
+                except Exception:
+                    pass  # sem cards: o HTML vai para o arquivo de diagnóstico
+                htmls[url] = page.content()
+            except Exception as e:
+                log.warning("Página de ofertas (Chrome) %s: %s", url, e)
     return htmls
 
 
@@ -158,6 +151,12 @@ def _salvar_debug(url: str, html: str | None) -> None:
                 "cópia salva em data/ml_ofertas_debug.html", url, titulo, len(html or ""))
 
 
+# No modo "auto", quando o acesso direto vem sem produtos, as próximas buscas vão
+# direto ao Chrome (sem perder tempo); de vez em quando o acesso direto é testado de novo.
+RETESTAR_DIRETO_A_CADA = 20
+_pular_direto = 0
+
+
 def buscar_ofertas(categorias: dict[str, str], paginas: int = 1, inicio: int = 1,
                    navegador: str = "auto") -> list[Oferta]:
     """Páginas inicio..inicio+paginas-1 de mercadolivre.com.br/ofertas de cada categoria.
@@ -171,12 +170,20 @@ def buscar_ofertas(categorias: dict[str, str], paginas: int = 1, inicio: int = 1
              for cat_id, nome in (categorias or {"": "todas"}).items()
              for pagina in range(max(1, inicio), max(1, inicio) + max(1, paginas))]
 
+    global _pular_direto
     achadas_por_url: dict[str, list[Oferta]] = {}
-    if navegador != "sempre":
+    direto = navegador == "nunca" or (navegador == "auto" and _pular_direto <= 0)
+    if navegador == "auto" and _pular_direto > 0:
+        _pular_direto -= 1
+    if direto:
         for _, url in alvos:
             html = _html_requests(s, url)
             achadas_por_url[url] = parse_pagina(html) if html else []
             time.sleep(1)
+        if navegador == "auto" and not any(achadas_por_url.values()):
+            _pular_direto = RETESTAR_DIRETO_A_CADA
+            log.info("Página de ofertas: acesso direto veio sem produtos — "
+                     "as próximas %d buscas vão direto pelo Chrome", RETESTAR_DIRETO_A_CADA)
 
     faltando = [url for _, url in alvos if not achadas_por_url.get(url)]
     if faltando and navegador != "nunca":

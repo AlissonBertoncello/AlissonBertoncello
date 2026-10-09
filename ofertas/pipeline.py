@@ -167,11 +167,13 @@ def executar_ciclo(destino: Destino, grupos: list[Grupo], registrar: bool = True
         return 0
 
     n = config.max_posts_por_ciclo
-    por_grupo = {g.chave: candidatas_do_grupo(g, n) for g in grupos}
-    todas = [o for lista in por_grupo.values() for o in lista]
-    if todas:
-        # link de afiliado é obrigatório: um único lote no Linkbuilder para todos os grupos
-        com_link_afiliado(todas)
+    # um Chrome só no ciclo inteiro (páginas de ofertas + Linkbuilder), aberto só se precisar
+    with afiliado_ml.chrome_compartilhado():
+        por_grupo = {g.chave: candidatas_do_grupo(g, n) for g in grupos}
+        todas = [o for lista in por_grupo.values() for o in lista]
+        if todas:
+            # link de afiliado é obrigatório: um único lote no Linkbuilder para todos os grupos
+            com_link_afiliado(todas)
 
     enviadas = 0
     ultimo_envio = 0.0

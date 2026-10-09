@@ -296,7 +296,7 @@ O `.env` e a pasta `data\` **não** são afetados (não fazem parte do ZIP).
 | `subcategorias_por_busca` | 2 | (sub)categorias consultadas por ciclo, em rodízio |
 | `paginas_ofertas` | 1 | páginas de ofertas lidas por ciclo (~48 promoções cada) |
 | `paginas_ofertas_max` | 10 | rodízio vai da página 1 até esta e recomeça |
-| `pagina_navegador` | `auto` | página de ofertas: `auto` = acesso direto e, se vier sem produtos, abre no Google Chrome; `sempre` = só pelo Chrome; `nunca` = só acesso direto |
+| `pagina_navegador` | `auto` | página de ofertas: `auto` = acesso direto e, se vier sem produtos, abre no Google Chrome (e as próximas 20 buscas já vão direto pelo Chrome); `sempre` = só pelo Chrome; `nunca` = só acesso direto |
 
 ### `fontes.shopee`
 | Chave | Padrão | O que faz |
@@ -352,6 +352,7 @@ Procure pela **mensagem que apareceu na tela** (ou parte dela).
 | `busca da API bloqueada (403) para este app — usando mais vendidos/catálogo` | o ML bloqueia a busca para a maioria dos apps | **não é erro** — o bot usa os caminhos alternativos sozinho |
 | `Página de ofertas ...: 403` ou erro de conexão | o site do ML recusou/limitou o acesso | temporário: o bot continua com os mais vendidos; se persistir, aumente o `intervalo_minutos` |
 | `Página de ofertas do ML mudou de layout? N cards, 0 lidos` | o ML mudou o visual da página | os mais vendidos continuam funcionando; é preciso ajustar o código (`ofertas/sources/ml_pagina.py`) |
+| `Página de ofertas: acesso direto veio sem produtos — as próximas 20 buscas vão direto pelo Chrome` | aviso normal: o ML não mostrou produtos sem o navegador | nada a fazer; o bot usa um único Chrome por ciclo (páginas de ofertas + link de afiliado) |
 | `Página de ofertas sem produtos mesmo pelo Chrome (... título ...)` — cópia em `data/ml_ofertas_debug.html` | o ML não mostrou produtos nem abrindo pelo Chrome (verificação de robô, login ou página nova) | o bot segue com os mais vendidos e a Shopee; envie o arquivo `data\ml_ofertas_debug.html` para análise |
 | `Página de ofertas: não consegui abrir o Chrome` | Google Chrome não instalado ou travado | instale/atualize o Google Chrome; feche janelas do Chrome do bot que tenham ficado abertas |
 | `Nenhuma oferta nova que passe nos filtros` / `nenhuma oferta nova nas categorias do grupo` | já enviou tudo o que havia com desconto suficiente | normal em testes de 1 minuto; aumente o intervalo, adicione categorias ao grupo ou reduza o `desconto_minimo` |

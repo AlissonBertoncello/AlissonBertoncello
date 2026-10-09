@@ -1,3 +1,5 @@
+import pytest
+
 from ofertas.sources import mercadolivre, ml_pagina
 from ofertas.sources.mercadolivre import ErroAPI, produto_para_oferta
 
@@ -180,6 +182,11 @@ def test_subcategorias_da_api_com_cache():
 
 # ── página de ofertas: acesso direto e, se vier vazia, pelo Chrome ─────────────
 
+@pytest.fixture(autouse=True)
+def _zera_pulo_do_acesso_direto(monkeypatch):
+    monkeypatch.setattr(ml_pagina, "_pular_direto", 0)
+
+
 def _pagina_falsa(monkeypatch, direto, chrome):
     usados = {"chrome": []}
     monkeypatch.setattr(ml_pagina, "_html_requests", lambda s, url: direto)
@@ -238,3 +245,23 @@ def test_erro_ao_abrir_chrome_nao_derruba(monkeypatch, tmp_path):
         raise RuntimeError("Chrome não encontrado")
     monkeypatch.setattr(ml_pagina, "_html_navegador", quebra)
     assert ml_pagina.buscar_ofertas({"MLB1": "X"}) == []
+
+
+def test_acesso_direto_vazio_e_pulado_nas_proximas_buscas(monkeypatch):
+    diretas = []
+    monkeypatch.setattr(ml_pagina, "_html_requests", lambda s, url: diretas.append(url) or "<html></html>")
+    monkeypatch.setattr(ml_pagina.time, "sleep", lambda s: None)
+    monkeypatch.setattr(ml_pagina, "_html_navegador", lambda urls: {u: HTML for u in urls})
+    monkeypatch.setattr(ml_pagina, "RETESTAR_DIRETO_A_CADA", 2)
+    for _ in range(4):
+        assert len(ml_pagina.buscar_ofertas({"MLB1": "X"})) == 1
+    # 1ª tenta direto (vazio) -> 2ª e 3ª só Chrome -> 4ª testa o direto de novo
+    assert len(diretas) == 2
+
+
+def test_acesso_direto_volta_a_ser_usado_quando_funciona(monkeypatch):
+    usados = _pagina_falsa(monkeypatch, HTML, chrome=HTML)
+    monkeypatch.setattr(ml_pagina, "_pular_direto", 1)
+    ml_pagina.buscar_ofertas({"MLB1": "X"})          # pulou o direto: Chrome
+    ml_pagina.buscar_ofertas({"MLB1": "X"})          # retesta: direto funciona
+    assert len(usados["chrome"]) == 1 and ml_pagina._pular_direto == 0

@@ -13,6 +13,7 @@ import re
 import shutil
 import subprocess
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 
 from .config import DATA_DIR, config
@@ -130,6 +131,67 @@ def _abrir_contexto(pw):
         return pw.chromium.launch_persistent_context(str(PERFIL_DIR), **kwargs)
 
 
+# Chrome compartilhado: dentro de chrome_compartilhado(), a página de ofertas e o
+# Linkbuilder usam a mesma janela (aberta só se alguém precisar e fechada no fim).
+_compartilhado: dict | None = None
+
+
+@contextmanager
+def chrome_compartilhado():
+    """Abre o Chrome no máximo uma vez durante o bloco (ex: um ciclo do bot)."""
+    global _compartilhado
+    if _compartilhado is not None:  # já dentro de um bloco
+        yield
+        return
+    _compartilhado = {}
+    try:
+        yield
+    finally:
+        estado, _compartilhado = _compartilhado, None
+        _fechar(estado)
+
+
+def _fechar(estado: dict) -> None:
+    try:
+        if estado.get("ctx"):
+            estado["ctx"].close()
+    except Exception as e:
+        log.debug("Fechando o Chrome: %s", e)
+    finally:
+        if estado.get("pw"):
+            estado["pw"].stop()
+
+
+@contextmanager
+def pagina_chrome():
+    """Página do Chrome headless com a sessão do ML: a compartilhada do bloco
+    chrome_compartilhado(), ou uma própria que fecha ao sair."""
+    from playwright.sync_api import sync_playwright
+
+    if _compartilhado is None:
+        with sync_playwright() as pw:
+            ctx = _abrir_contexto(pw)
+            try:
+                yield ctx.pages[0] if ctx.pages else ctx.new_page()
+            finally:
+                ctx.close()
+        return
+
+    page = _compartilhado.get("page")
+    if page is None or page.is_closed():
+        _fechar(_compartilhado)  # janela anterior travou/fechou: começa de novo
+        _compartilhado.clear()
+        pw = sync_playwright().start()
+        try:
+            ctx = _abrir_contexto(pw)
+        except Exception:
+            pw.stop()
+            raise
+        page = ctx.pages[0] if ctx.pages else ctx.new_page()
+        _compartilhado.update(pw=pw, ctx=ctx, page=page)
+    yield page
+
+
 def criar_links(page, urls: list[str], etiqueta: str) -> list[str]:
     """Chama a API interna do Linkbuilder de dentro da página logada; retorna os short links.
 
@@ -172,23 +234,16 @@ def gerar_links_afiliado(ofertas: list[Oferta]) -> int:
     if not tem_sessao():
         raise ErroAfiliado("Sessão do ML não encontrada — rode: uv run python -m ofertas ml-login")
 
-    from playwright.sync_api import sync_playwright
-
-    with sync_playwright() as pw:
-        ctx = _abrir_contexto(pw)
-        page = ctx.pages[0] if ctx.pages else ctx.new_page()
-        try:
-            page.goto(URL_LINKBUILDER, wait_until="domcontentloaded")
-            if "login" in page.url or "registration" in page.url:
-                raise ErroAfiliado("Sessão do ML expirou — rode de novo: "
-                                   "uv run python -m ofertas ml-login")
-            page.wait_for_timeout(1500)  # deixa os scripts de sessão da página rodarem
-            for i in range(0, len(pendentes), TAMANHO_LOTE):
-                lote = pendentes[i:i + TAMANHO_LOTE]
-                links = criar_links(page, [o.url_produto for o in lote], config.ml_etiqueta)
-                for o, link in zip(lote, links):
-                    o.url_afiliado = link
-        finally:
-            ctx.close()
+    with pagina_chrome() as page:
+        page.goto(URL_LINKBUILDER, wait_until="domcontentloaded")
+        if "login" in page.url or "registration" in page.url:
+            raise ErroAfiliado("Sessão do ML expirou — rode de novo: "
+                               "uv run python -m ofertas ml-login")
+        page.wait_for_timeout(1500)  # deixa os scripts de sessão da página rodarem
+        for i in range(0, len(pendentes), TAMANHO_LOTE):
+            lote = pendentes[i:i + TAMANHO_LOTE]
+            links = criar_links(page, [o.url_produto for o in lote], config.ml_etiqueta)
+            for o, link in zip(lote, links):
+                o.url_afiliado = link
     log.info("Mercado Livre: %d links de afiliado gerados", len(pendentes))
     return len(pendentes)

@@ -147,3 +147,59 @@ def test_whatsapp_espaca_envios_entre_grupos(monkeypatch):
     grupos = [Grupo("casa", "Casa", {"CASA": "Casa"}), Grupo("bebe", "Bebê", {"BEBE": "Bebês"})]
     assert pipeline.executar_ciclo(destino, grupos, registrar=False) == 2
     assert len(pausas) == 1 and 14 < pausas[0] <= 15  # uma pausa entre os dois envios
+
+
+# ── Chrome compartilhado no ciclo ─────────────────────────────────────────────
+
+class _ChromeFalso:
+    def __init__(self):
+        self.abertos = 0
+        self.fechados = 0
+
+    def instalar(self, monkeypatch):
+        import playwright.sync_api as sp
+        chrome = self
+
+        class Pagina:
+            def is_closed(self):
+                return False
+
+        class Ctx:
+            pages = [Pagina()]
+
+            def close(self):
+                chrome.fechados += 1
+
+        class PW:
+            def start(self):
+                return self
+
+            def stop(self):
+                pass
+
+        monkeypatch.setattr(sp, "sync_playwright", lambda: PW())
+
+        def abrir(pw):
+            chrome.abertos += 1
+            return Ctx()
+        monkeypatch.setattr(afiliado_ml, "_abrir_contexto", abrir)
+        return self
+
+
+def test_chrome_abre_uma_vez_por_bloco(monkeypatch):
+    chrome = _ChromeFalso().instalar(monkeypatch)
+    with afiliado_ml.chrome_compartilhado():
+        with afiliado_ml.pagina_chrome() as p1:
+            pass
+        with afiliado_ml.pagina_chrome() as p2:
+            pass
+        assert p1 is p2 and chrome.fechados == 0
+    assert (chrome.abertos, chrome.fechados) == (1, 1)
+    assert afiliado_ml._compartilhado is None
+
+
+def test_chrome_nao_abre_se_ninguem_precisar(monkeypatch):
+    chrome = _ChromeFalso().instalar(monkeypatch)
+    with afiliado_ml.chrome_compartilhado():
+        pass
+    assert chrome.abertos == 0
