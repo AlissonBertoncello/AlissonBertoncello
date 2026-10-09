@@ -161,7 +161,7 @@ Peça **ao administrador**, nunca poste sem permissão:
 ## Retenção — para quem entrou não sair
 
 - **Qualidade das ofertas:** se o grupo parecer fraco, suba o `desconto_minimo` (hoje 10%) para 20–25%.
-- **Ritmo:** hoje é 1 oferta a cada 40 min. Se a taxa de saída passar de **~5% por semana**, aumente o `intervalo_minutos` (60–90).
+- **Ritmo:** hoje é 1 oferta a cada 30 min. Se a taxa de saída passar de **~5% por semana**, aumente o `intervalo_minutos` (60–90).
 - **Mensagem fixada** com "silencie o grupo e confira quando quiser" — reduz saídas por incômodo.
 - **Indicação:** o rodapé "Envie essa oferta para uma amiga" já está em toda oferta — é o canal mais barato que existe.
 

@@ -210,7 +210,7 @@ Dê **dois cliques em `INICIAR_BOT.bat`**. As ofertas aparecem **na tela** (e fi
    ```
 3. Abra o `INICIAR_BOT.bat`. Deve aparecer `WhatsApp pronto: N grupo(s) encontrados` e as ofertas chegam no grupo com foto.
 
-Para testes rápidos, o `config.yaml` vem com `intervalo_minutos: 1` (1 oferta por grupo por minuto).
+O `config.yaml` vem com `intervalo_minutos: 30` (1 oferta por grupo a cada 30 min). Para testes rápidos, use `intervalo_minutos: 5` e volte para 30 depois.
 
 ---
 
@@ -219,7 +219,7 @@ Para testes rápidos, o `config.yaml` vem com `intervalo_minutos: 1` (1 oferta p
 No `config.yaml`:
 ```yaml
 geral:
-  intervalo_minutos: 45          # teste: 1 → produção: 30 a 60
+  intervalo_minutos: 30          # teste: 5 → produção: 30
   horario_ativo: "08:00-23:00"   # não envia de madrugada ("" = 24h)
 
 destino: whatsapp
@@ -275,7 +275,7 @@ O `.env` e a pasta `data\` **não** são afetados (não fazem parte do ZIP).
 ### `geral`
 | Chave | Padrão | O que faz |
 |---|---|---|
-| `intervalo_minutos` | 1 (teste) | tempo entre ciclos; produção: 30–60 |
+| `intervalo_minutos` | 30 | tempo entre ciclos (teste: 5) |
 | `max_posts_por_ciclo` | 1 | ofertas enviadas **por grupo** a cada ciclo |
 | `espacamento_segundos` | 15 | pausa entre um envio e outro (inclusive entre grupos) |
 | `nao_repetir_dias` | 7 | não reenviar o mesmo produto ao mesmo grupo nesse prazo |

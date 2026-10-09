@@ -1,10 +1,10 @@
 # Configuração do bot de ofertas (o que não é segredo fica aqui; segredos vão no .env)
 
 geral:
-  # PRODUÇÃO: 1 oferta por grupo a cada 40 min, das 8h às 23h (~22/dia por grupo).
+  # PRODUÇÃO: 1 oferta por grupo a cada 30 min, das 8h às 23h (~30/dia por grupo).
   # Se muita gente sair dos grupos, aumente (as fontes pesquisadas indicam 4 a 8/dia).
   # Para testar rápido, use intervalo_minutos: 1 e horario_ativo: "".
-  intervalo_minutos: 40        # de quanto em quanto tempo buscar ofertas novas (comando "run")
+  intervalo_minutos: 30        # de quanto em quanto tempo buscar ofertas novas (comando "run")
   max_posts_por_ciclo: 1       # ofertas enviadas POR GRUPO a cada ciclo
   espacamento_segundos: 15     # pausa entre um envio e outro no WhatsApp (mesmo de grupos diferentes)
   nao_repetir_dias: 7          # não reenviar o mesmo produto ao mesmo grupo dentro desse prazo
