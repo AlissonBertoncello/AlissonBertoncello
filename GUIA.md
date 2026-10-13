@@ -137,6 +137,15 @@ grupos:
 - **Para criar um grupo novo:** copie um bloco inteiro, mude a chave (`casa_info` → `pet`, por exemplo), o nome, as categorias e o `whatsapp`.
 - A **lista de categorias** (ids `MLB...`) está comentada dentro do próprio `config.yaml`.
 - O `whatsapp:` você preenche depois do passo 6 (lá aparece a lista com os nomes exatos).
+- **`nome:` × `whatsapp:`** — o `nome:` é só o rótulo que aparece no log; o `whatsapp:` é o nome **exato** do grupo no WhatsApp, que o bot procura. **Trocou o nome do grupo no WhatsApp? Troque também o `whatsapp:`**. Não mude a chave do grupo (`mulher:`, `bebe:`): é ela que guarda o histórico de ofertas já enviadas.
+- **Vários grupos com as mesmas ofertas** (ex.: o grupo 1 lotou e você criou o grupo 2): use uma lista no `whatsapp:`. O bot busca uma vez e manda a mesma oferta para todos, com pausa de `espacamento_segundos` entre eles:
+  ```yaml
+    whatsapp:
+      - "Achadinhos da Gabi 💄"
+      - "Achadinhos da Gabi 💄 2"
+  ```
+  Dica: use no `convite:` um link do Bitly e troque para onde ele aponta quando um grupo lotar.
+- **Grupo Fitness:** já está pronto no fim do `config.yaml`, desligado (linhas com `#`). Para ligar, crie o grupo, adicione o número do bot como admin e tire o `# ` do começo das linhas do bloco.
 - O `convite:` é o **link de convite do grupo** (no WhatsApp: grupo → *Convidar via link*). Ele vai no fim de cada oferta, com o texto *"💬 Envie essa oferta para uma amiga!"*. Substitua o texto entre colchetes pelo link, **entre aspas**: `convite: "https://chat.whatsapp.com/XXXX"`. Enquanto estiver o texto entre colchetes, essas duas linhas não aparecem na mensagem.
 
 Atenção ao formato do YAML: use **espaços** (nunca TAB) e mantenha o alinhamento igual ao exemplo.
@@ -286,7 +295,7 @@ O `.env` e a pasta `data\` **não** são afetados (não fazem parte do ZIP).
 |---|---|---|
 | `desconto_minimo` | 25 | % mínimo de desconto |
 | `preco_minimo` / `preco_maximo` | 0 | faixa de preço (0 = sem limite) |
-| `palavras_bloqueadas` | `[]` | ignora títulos com essas palavras, ex.: `[capinha, película]` |
+| `palavras_bloqueadas` | `[]` | ignora títulos com essas palavras **inteiras** (`pet` bloqueia "Cama Pet", mas não "Tapete"), ex.: `[capinha, película]` |
 
 ### `fontes.mercadolivre`
 | Chave | Padrão | O que faz |
@@ -379,7 +388,8 @@ Sempre que o link não puder ser gerado, aparece `Linkbuilder ML falhou (link de
 | `Sessão do ML expirou` | o login venceu | rode o `LOGIN_MERCADOLIVRE.bat` de novo |
 | `ML_ETIQUETA não configurada no .env` | faltou a etiqueta | preencha `ML_ETIQUETA` (passo 4.1) |
 | `Tag is not associated with this affiliate` (error_code 109) | a etiqueta do `.env` não é da conta logada | copie a "Etiqueta em uso" do Linkbuilder **da mesma conta**; se o login foi em outra conta, apague `data\ml_profile` e refaça o login |
-| `createLink respondeu HTTP ...` / `createLink devolveu 0 links` | o ML recusou a geração | refaça o login; se persistir, anote a mensagem completa para análise |
+| `Linkbuilder recusou o lote (...) — tentando item por item` | o ML recusou o lote de links (ex.: HTTP 500) | nada a fazer: o bot tenta cada produto separado; só o produto recusado fica de fora (`Linkbuilder recusou '...'`) |
+| `createLink respondeu HTTP ...` / `createLink devolveu 0 links` / `nenhum link gerado nem item por item` | o ML recusou a geração de todos os links | se for só uma vez, é instabilidade do ML (o próximo ciclo tenta de novo); se repetir, refaça o login e anote a mensagem completa para análise |
 | `Google Chrome não encontrado` | Chrome não instalado | instale o Google Chrome |
 | `Executable doesn't exist` | sem Chrome e sem o Chromium do projeto | instale o Google Chrome (recomendado) ou rode `uv run python -m ofertas instalar-navegador` |
 
@@ -401,6 +411,7 @@ Relacionadas:
 | `Não consegui gravar o QR Code em ...` | o arquivo da página do QR não pôde ser gravado | o login continua tentando; se persistir, feche a página do QR e rode o login de novo, ou conecte pelo painel http://localhost:8080/manager (login com a `EVOLUTION_API_KEY` do `.env`) |
 | `O grupo 'xxx' não tem 'whatsapp:' no config.yaml` | faltou o nome do grupo | preencha `whatsapp:` desse grupo (passo 4.2) |
 | `Grupo 'xxx' não encontrado no WhatsApp do bot` | nome diferente do real, ou o número do bot não está no grupo | rode `uv run python -m ofertas whatsapp-grupos` e copie o nome **exato**; adicione o número do bot ao grupo |
+| `[Grupo → Nome no WhatsApp] falha ao enviar ...` (vários grupos no `whatsapp:`) | um dos grupos da lista não recebeu | os outros grupos recebem normalmente; a oferta só volta num próximo ciclo se **nenhum** grupo recebeu |
 | `foto recusada (...) — enviando só o texto` | o WhatsApp não aceitou a imagem | não é grave: a oferta vai só com texto e a prévia do link |
 | `falha ao enviar '...': ... HTTP 400/500` | a Evolution não conseguiu enviar (desconexão, bloqueio temporário) | a oferta **não** é marcada como enviada e volta num próximo ciclo; se repetir, confira a conexão (`LOGIN_WHATSAPP.bat`) |
 | O número do bot foi **bloqueado** pelo WhatsApp | envio automatizado detectado | use outro número, aumente o `intervalo_minutos` e o `espacamento_segundos`, envie para menos grupos |

@@ -39,6 +39,10 @@ class ErroAfiliado(RuntimeError):
     pass
 
 
+class SessaoExpirada(ErroAfiliado):
+    """Sem login no ML: nenhum link sai até rodar o ml-login de novo."""
+
+
 def e_link_ml(url: str) -> bool:
     return any(d in url for d in ("mercadolivre.com", "mercadolibre.com", "meli.la/"))
 
@@ -216,7 +220,7 @@ def criar_links(page, urls: list[str], etiqueta: str) -> list[str]:
         {"api": API_CREATELINK, "urls": urls, "tag": etiqueta},
     )
     if r.get("http") in (401, 403):
-        raise ErroAfiliado("Sessão do ML expirou — rode de novo: uv run python -m ofertas ml-login")
+        raise SessaoExpirada("Sessão do ML expirou — rode de novo: uv run python -m ofertas ml-login")
     if r.get("http") != 200 or not r.get("dados"):
         raise ErroAfiliado(f"createLink respondeu HTTP {r.get('http')}: {r.get('texto', '')}")
     itens = r["dados"].get("urls") or []
@@ -241,13 +245,38 @@ def gerar_links_afiliado(ofertas: list[Oferta]) -> int:
     with pagina_chrome() as page:
         page.goto(URL_LINKBUILDER, wait_until="domcontentloaded")
         if "login" in page.url or "registration" in page.url:
-            raise ErroAfiliado("Sessão do ML expirou — rode de novo: "
-                               "uv run python -m ofertas ml-login")
+            raise SessaoExpirada("Sessão do ML expirou — rode de novo: "
+                                 "uv run python -m ofertas ml-login")
         page.wait_for_timeout(1500)  # deixa os scripts de sessão da página rodarem
         for i in range(0, len(pendentes), TAMANHO_LOTE):
-            lote = pendentes[i:i + TAMANHO_LOTE]
-            links = criar_links(page, [o.url_produto for o in lote], config.ml_etiqueta)
-            for o, link in zip(lote, links):
-                o.url_afiliado = link
-    log.info("Mercado Livre: %d links de afiliado gerados", len(pendentes))
-    return len(pendentes)
+            _gerar_lote(page, pendentes[i:i + TAMANHO_LOTE])
+    gerados = sum(1 for o in pendentes if o.url_afiliado)
+    log.info("Mercado Livre: %d links de afiliado gerados", gerados)
+    return gerados
+
+
+def _gerar_lote(page, lote: list[Oferta]) -> None:
+    """Lote inteiro de uma vez; se o Linkbuilder recusar (ex: HTTP 500), tenta item por
+    item, para que um produto problemático não derrube os outros."""
+    try:
+        links = criar_links(page, [o.url_produto for o in lote], config.ml_etiqueta)
+    except SessaoExpirada:
+        raise
+    except ErroAfiliado as e:
+        if len(lote) == 1:
+            raise
+        log.warning("Linkbuilder recusou o lote (%s) — tentando item por item", e)
+        falhas = 0
+        for o in lote:
+            try:
+                [o.url_afiliado] = criar_links(page, [o.url_produto], config.ml_etiqueta)
+            except SessaoExpirada:
+                raise
+            except ErroAfiliado as e_item:
+                falhas += 1
+                log.warning("Linkbuilder recusou '%s': %s", o.titulo[:60], e_item)
+        if falhas == len(lote):
+            raise ErroAfiliado(f"nenhum link gerado nem item por item ({e})")
+        return
+    for o, link in zip(lote, links):
+        o.url_afiliado = link

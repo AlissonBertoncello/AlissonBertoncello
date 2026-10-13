@@ -15,7 +15,8 @@ filtros:
   preco_minimo: 0              # 0 = sem limite
   preco_maximo: 0              # 0 = sem limite
   # itens masculinos que aparecem em Beleza (barbear) e Moda Íntima/Praia
-  palavras_bloqueadas: [masculino, masculina, barbeador, barbear, barba, aparador, acabamento, kemei, cueca, sunga]
+  palavras_bloqueadas: [masculino, masculina, barbeador, barbear, barba, aparador, acabamento, kemei, cueca, sunga,
+                        cachorro, cão, gato, pet, óculos, lente, câmera, club 6]
 
 fontes:
   mercadolivre:
@@ -47,13 +48,18 @@ fontes:
 # categorias: lista de ids [MLB1246, ...] ou "id: nome" (o nome aparece no log).
 grupos:
   mulher:
-    nome: Achadinhos da Mulher 💄
+    nome: Achadinhos da Gabi 💄
     categorias:
       MLB1246: Beleza e Cuidado Pessoal
       MLB108704: Vestidos
       MLB3112: Blusas
       MLB278018: Leggings
-    whatsapp: "Achadinhos da Mulher 💄"
+    # nome EXATO do grupo no WhatsApp (veja com: uv run python -m ofertas whatsapp-grupos).
+    # Vários grupos recebendo as mesmas ofertas: use uma lista, ex:
+    #   whatsapp:
+    #     - "Achadinhos da Gabi 💄"
+    #     - "Achadinhos da Gabi 💄 2"
+    whatsapp: "Achadinhos da Gabi 💄"
     # link de convite que vai no fim de cada oferta ("Envie essa oferta para uma amiga!").
     # Troque o texto entre colchetes pelo link (https://chat.whatsapp.com/...), entre aspas.
     convite: "https://chat.whatsapp.com/IDNfRoNrDxI5rw7ZAlVEVK?mode=gi_t"
@@ -165,6 +171,52 @@ grupos:
 #   MLB108704 Vestidos   MLB3112 Blusas   MLB185489 Saias   MLB278018 Leggings
 #   MLB27250 Macacão     MLB270215 Moda Fitness   MLB430391 Moda Praia
 #   MLB108786 Moda Íntima e Lingerie   MLB1457 Malas e Bolsas   MLB5366 Roupas para Bebês
+
+  # ── Grupo Fitness (desligado) ─────────────────────────────────────────────
+  # Para ligar: crie o grupo no WhatsApp, adicione o número do bot como admin,
+  # tire o "# " do começo das linhas abaixo e coloque o nome exato e o convite.
+  # fitness:
+  #   nome: Achadinhos Fitness 💪
+  #   categorias:
+  #     MLB1276: Esportes e Fitness
+  #     MLB278018: Leggings
+  #   whatsapp:
+  #     - "Achadinhos Fitness 💪"
+  #   convite: "[link de convite do grupo fitness]"
+  #   shopee:
+  #     # roupas
+  #     - legging fitness
+  #     - top fitness
+  #     - conjunto fitness feminino
+  #     - shorts fitness
+  #     - macaquinho fitness
+  #     - meia esportiva
+  #     - tênis de corrida
+  #     - bolsa academia
+  #     # treino em casa
+  #     - tapete de yoga
+  #     - mini band elástico
+  #     - faixa elástica exercício
+  #     - elástico extensor
+  #     - halter
+  #     - caneleira peso
+  #     - corda de pular
+  #     - roda abdominal
+  #     - bola suíça
+  #     - colchonete
+  #     - rolo de massagem
+  #     - luva academia
+  #     # suplementos e acessórios
+  #     - whey protein
+  #     - creatina
+  #     - pré-treino
+  #     - coqueteleira
+  #     - garrafa térmica
+  #     - garrafa de água 2 litros
+  #     - balança de bioimpedância
+  #     - smartwatch
+  #     - fone bluetooth esportivo
+  #     - cinta modeladora
 
 # Para onde as ofertas vão:
 #   console  = só mostra no terminal e salva em data/saida.jsonl (testes)

@@ -38,6 +38,7 @@ class Grupo:
     chave: str
     nome: str
     categorias: dict[str, str] = field(default_factory=dict)  # id: nome, em rodízio
-    whatsapp: str = ""         # nome exato (ou id …@g.us) do grupo no WhatsApp
+    # nomes exatos (ou ids …@g.us) dos grupos do WhatsApp: todos recebem as mesmas ofertas
+    whatsapp: list[str] = field(default_factory=list)
     convite: str = ""          # link de convite do grupo, no fim de cada mensagem
     shopee: list[str] = field(default_factory=list)  # palavras-chave buscadas na Shopee

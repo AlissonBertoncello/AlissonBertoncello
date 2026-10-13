@@ -1,4 +1,5 @@
 import logging
+import re
 import time
 
 from . import afiliado_ml, db
@@ -22,6 +23,13 @@ def coletar(categorias: dict[str, str] | None = None) -> list[Oferta]:
     return todas
 
 
+def tem_palavra_bloqueada(titulo: str) -> bool:
+    """Compara palavras inteiras: "pet" bloqueia "Cama Pet", mas não "Tapete"."""
+    titulo = titulo.lower()
+    return any(re.search(rf"(?<!\w){re.escape(p.lower())}(?!\w)", titulo)
+               for p in config.palavras_bloqueadas if p)
+
+
 def filtrar(ofertas: list[Oferta], grupo: str) -> list[Oferta]:
     aprovadas = []
     for o in ofertas:
@@ -36,8 +44,7 @@ def filtrar(ofertas: list[Oferta], grupo: str) -> list[Oferta]:
                 continue
             if config.preco_maximo and o.preco > config.preco_maximo:
                 continue
-        titulo = o.titulo.lower()
-        if any(p in titulo for p in config.palavras_bloqueadas):
+        if tem_palavra_bloqueada(o.titulo):
             continue
         aprovadas.append(o)
     return aprovadas

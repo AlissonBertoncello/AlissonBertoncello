@@ -66,7 +66,7 @@ def test_id_direto_e_grupo_inexistente():
 
 def test_envia_foto_com_legenda():
     evo, s = _evo({("POST", "/message/sendMedia/bot"): Resp(201, {"key": {}})})
-    grupo = Grupo("casa", "Casa", {"X": "x"}, whatsapp="Ofertas Casa & Info")
+    grupo = Grupo("casa", "Casa", {"X": "x"}, whatsapp=["Ofertas Casa & Info"])
     WhatsApp(evo).enviar(_oferta(), "🔥 *Fone*", grupo)
     metodo, caminho, kw = s.chamadas[-1]
     assert (metodo, caminho) == ("POST", "/message/sendMedia/bot")
@@ -79,7 +79,7 @@ def test_envia_foto_com_legenda():
 def test_foto_recusada_cai_para_texto():
     evo, s = _evo({("POST", "/message/sendMedia/bot"): Resp(400, {"message": "bad media"}),
                    ("POST", "/message/sendText/bot"): Resp(201, {"key": {}})})
-    WhatsApp(evo).enviar(_oferta(), "msg", Grupo("c", "C", whatsapp="111@g.us"))
+    WhatsApp(evo).enviar(_oferta(), "msg", Grupo("c", "C", whatsapp=["111@g.us"]))
     assert s.chamadas[-1][1] == "/message/sendText/bot"
     assert s.chamadas[-1][2]["json"] == {"number": "111@g.us", "text": "msg",
                                          "linkPreview": True, "delay": 1200}
@@ -87,14 +87,14 @@ def test_foto_recusada_cai_para_texto():
 
 def test_sem_imagem_envia_texto():
     evo, s = _evo({("POST", "/message/sendText/bot"): Resp(201, {})})
-    WhatsApp(evo).enviar(_oferta(imagem=None), "msg", Grupo("c", "C", whatsapp="111@g.us"))
+    WhatsApp(evo).enviar(_oferta(imagem=None), "msg", Grupo("c", "C", whatsapp=["111@g.us"]))
     assert [c[1] for c in s.chamadas] == ["/message/sendText/bot"]
 
 
 def test_falha_no_envio_propaga_erro():
     evo, _ = _evo({("POST", "/message/sendText/bot"): Resp(500, {"message": "down"})})
     with pytest.raises(ErroWhatsApp, match="HTTP 500"):
-        WhatsApp(evo).enviar(_oferta(imagem=None), "msg", Grupo("c", "C", whatsapp="111@g.us"))
+        WhatsApp(evo).enviar(_oferta(imagem=None), "msg", Grupo("c", "C", whatsapp=["111@g.us"]))
 
 
 def test_preparar_exige_conexao_e_grupos(monkeypatch):
@@ -104,7 +104,7 @@ def test_preparar_exige_conexao_e_grupos(monkeypatch):
     monkeypatch.setattr(evo, "subir", lambda: None)
     monkeypatch.setattr(evo, "aguardar_conexao", lambda espera_s: evo.estado())
     wa = WhatsApp(evo)
-    ok = [Grupo("c", "C", whatsapp="Ofertas Casa & Info")]
+    ok = [Grupo("c", "C", whatsapp=["Ofertas Casa & Info"])]
     with pytest.raises(ErroWhatsApp, match="LOGIN_WHATSAPP"):
         wa.preparar(ok)
     estado["s"] = "open"
@@ -217,3 +217,40 @@ def test_qr_vira_pagina_que_recarrega(monkeypatch, tmp_path):
 def test_falha_ao_gravar_qr_nao_derruba_o_login(monkeypatch, tmp_path):
     monkeypatch.setattr(evolution, "ARQ_QR", tmp_path / "nao_existe" / "qr.html")
     assert evolution.salvar_qr("data:image/png;base64,QUJD") is False
+
+
+# ── mesma oferta para vários grupos do WhatsApp ───────────────────────────────
+
+def test_config_aceita_um_ou_varios_grupos_do_whatsapp():
+    from ofertas import config as cfg
+    um, varios = cfg.ler_grupos({
+        "a": {"categorias": ["MLB1"], "whatsapp": " Grupo A "},
+        "b": {"categorias": ["MLB1"], "whatsapp": ["Grupo B1", " Grupo B2 ", ""]},
+    })
+    assert um.whatsapp == ["Grupo A"]
+    assert varios.whatsapp == ["Grupo B1", "Grupo B2"]
+
+
+def test_mesma_oferta_vai_para_todos_os_grupos_com_pausa(monkeypatch):
+    from ofertas.destinos import whatsapp as wa_mod
+    pausas = []
+    monkeypatch.setattr(wa_mod.time, "sleep", pausas.append)
+    evo, s = _evo({("POST", "/message/sendMedia/bot"): Resp(201, {})})
+    grupo = Grupo("c", "C", whatsapp=["Ofertas Casa & Info", "Ofertas Mamãe e Bebê"])
+    WhatsApp(evo).enviar(_oferta(), "msg", grupo)
+    envios = [c[2]["json"]["number"] for c in s.chamadas if c[1] == "/message/sendMedia/bot"]
+    assert envios == ["111@g.us", "222@g.us"]
+    assert len(pausas) == 1
+
+
+def test_falha_em_um_grupo_nao_impede_os_outros(monkeypatch):
+    from ofertas.destinos import whatsapp as wa_mod
+    monkeypatch.setattr(wa_mod.time, "sleep", lambda s: None)
+
+    def responde(kw):
+        return Resp(500, {"message": "down"}) if kw["json"]["number"] == "111@g.us" else Resp(201, {})
+    evo, s = _evo({("POST", "/message/sendText/bot"): responde})
+    grupo = Grupo("c", "C", whatsapp=["111@g.us", "222@g.us"])
+    WhatsApp(evo).enviar(_oferta(imagem=None), "msg", grupo)  # não levanta erro
+    with pytest.raises(ErroWhatsApp, match="nenhum grupo"):
+        WhatsApp(evo).enviar(_oferta(imagem=None), "msg", Grupo("c", "C", whatsapp=["111@g.us", "111@g.us"]))

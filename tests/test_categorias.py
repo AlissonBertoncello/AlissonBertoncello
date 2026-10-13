@@ -25,13 +25,13 @@ def test_repeticao_e_por_grupo(monkeypatch, tmp_path):
 def test_config_padrao_tem_os_grupos():
     grupos = {g.chave: g for g in cfg.config.grupos}
     assert list(grupos) == ["mulher", "bebe"]
-    assert grupos["mulher"].whatsapp == "Achadinhos da Mulher 💄"
+    assert grupos["mulher"].whatsapp == ["Achadinhos da Gabi 💄"]
     assert grupos["bebe"].categorias["MLB5366"] == "Roupas para Bebês"
 
 
 def test_grupo_com_whatsapp():
     [g] = cfg.ler_grupos({"bebe": {"categorias": ["MLB1384"], "whatsapp": " Ofertas Bebê "}})
-    assert g.whatsapp == "Ofertas Bebê"
+    assert g.whatsapp == ["Ofertas Bebê"]
 
 
 def test_nao_repete_mesmo_produto_com_id_diferente(monkeypatch, tmp_path):

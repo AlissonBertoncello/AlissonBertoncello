@@ -217,3 +217,46 @@ def test_chrome_fecha_depois_dos_envios(monkeypatch):
     pipeline.executar_ciclo(destino, [Grupo("g", "G", {"C1": "x"})], registrar=False)
     assert ordem == [("enviou", 0)]          # Chrome ainda aberto na hora do envio
     assert (chrome.abertos, chrome.fechados) == (1, 1)
+
+
+# ── Linkbuilder: lote recusado -> item por item ───────────────────────────────
+
+def _criar_falso(monkeypatch, recusa):
+    """createLink falso: lote com mais de 1 URL dá HTTP 500; item em `recusa` sempre falha."""
+    chamadas = []
+
+    def criar(page, urls, etiqueta):
+        chamadas.append(list(urls))
+        if len(urls) > 1:
+            raise ErroAfiliado("createLink respondeu HTTP 500: ")
+        if urls[0] in recusa:
+            raise ErroAfiliado("createLink respondeu HTTP 500: ")
+        return ["https://meli.la/" + urls[0][-1]]
+    monkeypatch.setattr(afiliado_ml, "criar_links", criar)
+    return chamadas
+
+
+def test_lote_recusado_tenta_item_por_item(monkeypatch):
+    chamadas = _criar_falso(monkeypatch, recusa={"https://ml/B"})
+    lote = [_of("A"), _of("B"), _of("C")]
+    afiliado_ml._gerar_lote(None, lote)
+    assert [o.url_afiliado for o in lote] == ["https://meli.la/A", "", "https://meli.la/C"]
+    assert len(chamadas) == 4  # o lote + 3 tentativas individuais
+
+
+def test_item_por_item_sem_nenhum_link_e_erro(monkeypatch):
+    _criar_falso(monkeypatch, recusa={"https://ml/A", "https://ml/B"})
+    with pytest.raises(ErroAfiliado, match="item por item"):
+        afiliado_ml._gerar_lote(None, [_of("A"), _of("B")])
+
+
+def test_sessao_expirada_nao_tenta_item_por_item(monkeypatch):
+    chamadas = []
+
+    def criar(page, urls, etiqueta):
+        chamadas.append(urls)
+        raise afiliado_ml.SessaoExpirada("Sessão do ML expirou")
+    monkeypatch.setattr(afiliado_ml, "criar_links", criar)
+    with pytest.raises(afiliado_ml.SessaoExpirada):
+        afiliado_ml._gerar_lote(None, [_of("A"), _of("B")])
+    assert len(chamadas) == 1

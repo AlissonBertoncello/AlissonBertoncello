@@ -2,7 +2,7 @@
 
 Objetivo: trazer para os grupos **pessoas com intenção de compra** (não curiosos), manter elas lá e medir o que funciona.
 
-**Grupos:** 💄 Achadinhos da Mulher · 🍼 Achadinhos Mamãe e Bebê
+**Grupos:** 💄 Achadinhos da Gabi · 🍼 Achadinhos Mamãe e Bebê
 **Público:** mulheres de 22 a 45 anos (as mesmas pessoas servem para os dois grupos)
 **Datas que mandam no calendário:** 🎁 Dia das Crianças **12/10** · 🖤 Black Friday **27/11** · 🎄 Natal
 

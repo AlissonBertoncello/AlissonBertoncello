@@ -136,7 +136,7 @@ def cmd_instalar_navegador(_):
 def _mostrar_grupos(grupos) -> None:
     print("\n── Grupos ativos ──")
     for g in grupos:
-        wa = f"  →  WhatsApp: {g.whatsapp}" if g.whatsapp else ""
+        wa = f"  →  WhatsApp: {' | '.join(g.whatsapp)}" if g.whatsapp else ""
         print(f"  • {g.nome}: {', '.join(g.categorias.values())}{wa}")
     print()
 

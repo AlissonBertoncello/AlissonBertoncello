@@ -54,7 +54,7 @@ def test_mensagem_com_economia_e_convite():
     from ofertas.models import Grupo
     o = _o("1", "Kit Banheiro", 69.90, 149.90)
     o.extra = "🚚 Frete grátis"
-    g = Grupo("mulher", "Mulher", whatsapp="x", convite="https://chat.whatsapp.com/ABC")
+    g = Grupo("mulher", "Mulher", whatsapp=["x"], convite="https://chat.whatsapp.com/ABC")
     linhas = montar_mensagem(o, g).split("\n")
     i = linhas.index("✅ Por: *R$ 69,90*  🔻 *-53%*")
     assert linhas[i + 1] == "💰 Você economiza *R$ 80,00*"
@@ -68,3 +68,15 @@ def test_sem_preco_antigo_nao_mostra_economia_e_sem_convite_nao_mostra_rodape():
     assert "economiza" not in msg
     assert "amiga" not in msg
     assert msg.endswith("🛒 https://ml/1")
+
+
+def test_palavra_bloqueada_compara_palavra_inteira(monkeypatch):
+    from ofertas import pipeline
+    monkeypatch.setattr(pipeline.config, "palavras_bloqueadas", ["pet", "lente", "club 6", "cão"])
+    assert pipeline.tem_palavra_bloqueada("Cama Pet Grande")
+    assert pipeline.tem_palavra_bloqueada("Lenço Para Limpeza Lente Óculos")
+    assert pipeline.tem_palavra_bloqueada("Club 6 Voyage Desodorante Colônia")
+    assert pipeline.tem_palavra_bloqueada("Ração Para Cão Adulto")
+    assert not pipeline.tem_palavra_bloqueada("Tapete De Atividades Bebê")
+    assert not pipeline.tem_palavra_bloqueada("Sérum Excelente Hidratação")
+    assert not pipeline.tem_palavra_bloqueada("Kit Coleção Proteção Solar")

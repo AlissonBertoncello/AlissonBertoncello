@@ -73,6 +73,12 @@ def _convite(valor) -> str:
     return texto if texto.startswith(("https://", "http://")) else ""
 
 
+def _lista(valor) -> list[str]:
+    """"Grupo" ou ["Grupo 1", "Grupo 2"] -> lista sem itens vazios."""
+    itens = valor if isinstance(valor, list) else [valor]
+    return [str(v).strip() for v in itens if v is not None and str(v).strip()]
+
+
 def ler_grupos(dados: dict) -> list[Grupo]:
     """grupos do config.yaml -> [Grupo]. categorias: lista de ids ou {id: nome}."""
     grupos = []
@@ -86,7 +92,7 @@ def ler_grupos(dados: dict) -> list[Grupo]:
         shopee = [str(t).strip() for t in (g.get("shopee") or []) if str(t).strip()]
         if cats or shopee:
             grupos.append(Grupo(chave=str(chave), nome=str(g.get("nome") or chave), categorias=cats,
-                                whatsapp=str(g.get("whatsapp") or "").strip(),
+                                whatsapp=_lista(g.get("whatsapp")),
                                 convite=_convite(g.get("convite")), shopee=shopee))
     return grupos
 
