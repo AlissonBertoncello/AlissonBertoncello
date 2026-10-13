@@ -80,3 +80,18 @@ def test_palavra_bloqueada_compara_palavra_inteira(monkeypatch):
     assert not pipeline.tem_palavra_bloqueada("Tapete De Atividades Bebê")
     assert not pipeline.tem_palavra_bloqueada("Sérum Excelente Hidratação")
     assert not pipeline.tem_palavra_bloqueada("Kit Coleção Proteção Solar")
+
+
+def test_bloquear_por_grupo(monkeypatch):
+    from ofertas import config as cfg
+    from ofertas import pipeline
+    monkeypatch.setattr(pipeline.config, "palavras_bloqueadas", ["masculino"])
+    monkeypatch.setattr(pipeline.config, "desconto_minimo", 0)
+    monkeypatch.setattr(pipeline.db, "ja_enviada", lambda *a, **k: False)
+    ofertas = [Oferta("x", "1", "Molinete de Pesca", "u", 10, 20),
+               Oferta("x", "2", "Tênis Masculino Corrida", "u", 10, 20),
+               Oferta("x", "3", "Legging Fitness", "u", 10, 20)]
+    assert [o.id_produto for o in pipeline.filtrar(ofertas, "fit", ["pesca"])] == ["3"]
+    assert [o.id_produto for o in pipeline.filtrar(ofertas, "outro")] == ["1", "3"]
+    [g] = cfg.ler_grupos({"fit": {"categorias": ["MLB1276"], "bloquear": ["pesca", " bicicleta "]}})
+    assert g.bloquear == ["pesca", "bicicleta"]

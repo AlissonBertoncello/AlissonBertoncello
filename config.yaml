@@ -15,6 +15,7 @@ filtros:
   preco_minimo: 0              # 0 = sem limite
   preco_maximo: 0              # 0 = sem limite
   # itens masculinos que aparecem em Beleza (barbear) e Moda Íntima/Praia
+  # vale para TODOS os grupos (palavras inteiras); para um grupo só, use "bloquear:" no grupo
   palavras_bloqueadas: [masculino, masculina, barbeador, barbear, barba, aparador, acabamento, kemei, cueca, sunga,
                         cachorro, cão, gato, pet, óculos, lente, câmera, club 6]
 
@@ -175,6 +176,8 @@ grupos:
   # ── Grupo Fitness (desligado) ─────────────────────────────────────────────
   # Para ligar: crie o grupo no WhatsApp, adicione o número do bot como admin,
   # tire o "# " do começo das linhas abaixo e coloque o nome exato e o convite.
+  # Categorias: MLB1276 é ampla (tem pesca, ciclismo, camping...). Abra o
+  # VER_CATEGORIAS.bat, digite MLB1276 e troque pelas subcategorias de fitness.
   # fitness:
   #   nome: Achadinhos Fitness 💪
   #   categorias:
@@ -183,6 +186,8 @@ grupos:
   #   whatsapp:
   #     - "Achadinhos Fitness 💪"
   #   convite: "[link de convite do grupo fitness]"
+  #   bloquear: [pesca, molinete, anzol, isca, bicicleta, bike, ciclismo, camping,
+  #              barraca, airsoft, paintball, caça]   # só neste grupo (+ a lista geral)
   #   shopee:
   #     # roupas
   #     - legging fitness

@@ -106,6 +106,14 @@ class ClienteML:
                 self._filhas[categoria] = []
         return self._filhas[categoria]
 
+    def categoria(self, categoria: str) -> dict:
+        """{"id", "name", "path_from_root", "children_categories": [{"id", "name",
+        "total_items_in_this_category"}]}."""
+        return self.get(f"/categories/{categoria}")
+
+    def categorias_raiz(self, site: str = "MLB") -> list[dict]:
+        return self.get(f"/sites/{site}/categories")
+
     def itens(self, ids: list[str]) -> list[dict]:
         """Multiget de anúncios (até 20 por chamada); devolve só os que vieram com 200."""
         corpos = []

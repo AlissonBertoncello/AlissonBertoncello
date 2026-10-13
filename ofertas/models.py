@@ -42,3 +42,4 @@ class Grupo:
     whatsapp: list[str] = field(default_factory=list)
     convite: str = ""          # link de convite do grupo, no fim de cada mensagem
     shopee: list[str] = field(default_factory=list)  # palavras-chave buscadas na Shopee
+    bloquear: list[str] = field(default_factory=list)  # palavras proibidas só neste grupo

@@ -100,7 +100,7 @@ def ciclo(monkeypatch, credenciais):
     monkeypatch.setattr(pipeline.config, "fonte_ml", {"ativa": True})
     monkeypatch.setattr(pipeline.config, "max_posts_por_ciclo", 1)
     monkeypatch.setattr(pipeline, "dentro_do_horario", lambda: True)
-    monkeypatch.setattr(pipeline, "filtrar", lambda o, grupo: o)
+    monkeypatch.setattr(pipeline, "filtrar", lambda o, grupo, bloquear=(): o)
     gerados = []
 
     def gerar(lista):

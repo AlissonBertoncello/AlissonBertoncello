@@ -79,6 +79,7 @@ uv run python -m ofertas run                # roda todos os grupos em loop, a ca
 uv run python -m ofertas run --grupo bebe   # só um grupo (chave do config.yaml)
 uv run python -m ofertas whatsapp-login     # conecta o número do bot (QR Code) e lista os grupos
 uv run python -m ofertas whatsapp-grupos    # lista os grupos do WhatsApp do bot
+uv run python -m ofertas categorias MLB1276 # subcategorias do ML com os códigos (VER_CATEGORIAS.bat)
 uv run pytest                               # testes
 ```
 

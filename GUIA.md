@@ -135,7 +135,8 @@ grupos:
     whatsapp: "Nome exato do outro grupo"
 ```
 - **Para criar um grupo novo:** copie um bloco inteiro, mude a chave (`casa_info` → `pet`, por exemplo), o nome, as categorias e o `whatsapp`.
-- A **lista de categorias** (ids `MLB...`) está comentada dentro do próprio `config.yaml`.
+- **Códigos das categorias (`MLB...`):** abra o **`VER_CATEGORIAS.bat`**. Ele mostra as categorias principais; digite um código (ex.: `MLB1276`) para ver as subcategorias, já no formato `MLB...: Nome (N anúncios)`. Copie as linhas que quiser para `categorias:`. (No terminal: `uv run python -m ofertas categorias MLB1276 --niveis 2`.) Outra forma: em mercadolivre.com.br/ofertas, clique na categoria no filtro — o código aparece no endereço (`?category=MLB...`).
+- **Palavras proibidas só em um grupo:** `bloquear: [pesca, bicicleta]` dentro do grupo. Vale junto com a lista geral `palavras_bloqueadas` (que vale para todos). As duas comparam palavras inteiras.
 - O `whatsapp:` você preenche depois do passo 6 (lá aparece a lista com os nomes exatos).
 - **`nome:` × `whatsapp:`** — o `nome:` é só o rótulo que aparece no log; o `whatsapp:` é o nome **exato** do grupo no WhatsApp, que o bot procura. **Trocou o nome do grupo no WhatsApp? Troque também o `whatsapp:`**. Não mude a chave do grupo (`mulher:`, `bebe:`): é ela que guarda o histórico de ofertas já enviadas.
 - **Vários grupos com as mesmas ofertas** (ex.: o grupo 1 lotou e você criou o grupo 2): use uma lista no `whatsapp:`. O bot busca uma vez e manda a mesma oferta para todos, com pausa de `espacamento_segundos` entre eles:
@@ -295,7 +296,7 @@ O `.env` e a pasta `data\` **não** são afetados (não fazem parte do ZIP).
 |---|---|---|
 | `desconto_minimo` | 25 | % mínimo de desconto |
 | `preco_minimo` / `preco_maximo` | 0 | faixa de preço (0 = sem limite) |
-| `palavras_bloqueadas` | `[]` | ignora títulos com essas palavras **inteiras** (`pet` bloqueia "Cama Pet", mas não "Tapete"), ex.: `[capinha, película]` |
+| `palavras_bloqueadas` | `[]` | vale para todos os grupos (para um grupo só, use `bloquear:` no grupo); ignora títulos com essas palavras **inteiras** (`pet` bloqueia "Cama Pet", mas não "Tapete"), ex.: `[capinha, película]` |
 
 ### `fontes.mercadolivre`
 | Chave | Padrão | O que faz |
@@ -332,6 +333,7 @@ Os `.bat` fazem tudo com dois cliques. Se preferir o PowerShell, dentro da pasta
 | `uv run python -m ofertas ml-login` | login de afiliado (= `LOGIN_MERCADOLIVRE.bat`) |
 | `uv run python -m ofertas whatsapp-login` | conecta o WhatsApp (= `LOGIN_WHATSAPP.bat`) |
 | `uv run python -m ofertas whatsapp-grupos` | lista os grupos do número do bot |
+| `uv run python -m ofertas categorias [MLB...] [--niveis 2]` | mostra categorias/subcategorias do ML com os códigos (= `VER_CATEGORIAS.bat`) |
 | `uv run python -m ofertas ciclo` | roda um único ciclo |
 | `uv run python -m ofertas run` | roda em loop (= `INICIAR_BOT.bat`) |
 | `uv run python -m ofertas run --grupo bebe` | roda só um grupo (chave do `config.yaml`) |

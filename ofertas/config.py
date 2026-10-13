@@ -93,7 +93,8 @@ def ler_grupos(dados: dict) -> list[Grupo]:
         if cats or shopee:
             grupos.append(Grupo(chave=str(chave), nome=str(g.get("nome") or chave), categorias=cats,
                                 whatsapp=_lista(g.get("whatsapp")),
-                                convite=_convite(g.get("convite")), shopee=shopee))
+                                convite=_convite(g.get("convite")), shopee=shopee,
+                                bloquear=_lista(g.get("bloquear"))))
     return grupos
 
 

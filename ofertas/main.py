@@ -51,7 +51,7 @@ def cmd_testar(args):
     for g in _grupos(args):
         print(f"\n══ {g.nome} ══")
         brutas = pipeline.coletar(g.categorias)
-        boas = pipeline.filtrar(brutas, g.chave)
+        boas = pipeline.filtrar(brutas, g.chave, g.bloquear)
         boas.sort(key=lambda o: o.desconto or 0, reverse=True)
         for o in boas[:args.n]:
             print(f"[-{o.desconto or 0:>2}%] R$ {o.preco} (de {o.preco_original}) — {o.titulo[:70]}")
@@ -103,6 +103,42 @@ def cmd_diagnostico(_):
         print("ℹ️  Shopee: sem SHOPEE_APP_ID/SHOPEE_APP_SECRET no .env (opcional)")
     else:
         testar("Shopee Open API (busca 'fralda')", lambda: f"{len(shopee.buscar('fralda', 5))} ofertas")
+
+
+def _linha_categoria(c: dict, recuo: str) -> str:
+    total = c.get("total_items_in_this_category")
+    qtd = f"  ({total:,} anúncios)".replace(",", ".") if isinstance(total, int) else ""
+    return f"{recuo}{c['id']}: {c['name']}{qtd}"
+
+
+def cmd_categorias(args):
+    """Mostra as categorias do ML com os códigos, no formato do config.yaml."""
+    from .sources.mercadolivre import ErroAPI, cliente_padrao
+    cliente = cliente_padrao()
+    try:
+        if not args.id:
+            print("\n── Categorias principais do Mercado Livre ──")
+            for c in sorted(cliente.categorias_raiz(), key=lambda c: c["name"]):
+                print(f"  {c['id']}: {c['name']}")
+            print("\nVeja as subcategorias de uma delas com: uv run python -m ofertas categorias MLB1276")
+            return
+        cat = cliente.categoria(args.id.strip().upper())
+        caminho = " > ".join(p["name"] for p in cat.get("path_from_root") or []) or cat.get("name")
+        print(f"\n── {caminho} ({cat['id']}) ──")
+        filhas = cat.get("children_categories") or []
+        if not filhas:
+            print("  (sem subcategorias: use esta mesma categoria no config.yaml)")
+        for f in sorted(filhas, key=lambda c: -(c.get("total_items_in_this_category") or 0)):
+            print(_linha_categoria(f, "  "))
+            if args.niveis > 1:
+                for n in sorted(cliente.categoria(f["id"]).get("children_categories") or [],
+                                key=lambda c: -(c.get("total_items_in_this_category") or 0)):
+                    print(_linha_categoria(n, "      "))
+    except ErroAPI as e:
+        raise SystemExit(f"❌ {e}")
+    print("\nCopie as linhas que quiser (código: nome) para 'categorias:' do grupo no config.yaml.")
+    if filhas:
+        print("Para abrir uma subcategoria: uv run python -m ofertas categorias <código>")
 
 
 def cmd_converter(args):
@@ -248,6 +284,12 @@ def main():
     pt.set_defaults(fn=cmd_testar)
 
     sub.add_parser("diagnostico", help="testa quais caminhos de busca do ML funcionam").set_defaults(fn=cmd_diagnostico)
+
+    pk = sub.add_parser("categorias", help="mostra as categorias do ML com os códigos para o config.yaml")
+    pk.add_argument("id", nargs="?", help="código da categoria (ex.: MLB1276); sem código = principais")
+    pk.add_argument("--niveis", type=int, choices=(1, 2), default=1,
+                    help="2 = mostra também as subcategorias das subcategorias")
+    pk.set_defaults(fn=cmd_categorias)
 
     pc = sub.add_parser("converter", help="gera o link de afiliado de um produto e mostra a mensagem")
     pc.add_argument("url")

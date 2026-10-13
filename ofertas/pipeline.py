@@ -23,14 +23,15 @@ def coletar(categorias: dict[str, str] | None = None) -> list[Oferta]:
     return todas
 
 
-def tem_palavra_bloqueada(titulo: str) -> bool:
-    """Compara palavras inteiras: "pet" bloqueia "Cama Pet", mas não "Tapete"."""
+def tem_palavra_bloqueada(titulo: str, extras: list[str] = ()) -> bool:
+    """Lista geral + `extras` (as do grupo). Compara palavras inteiras:
+    "pet" bloqueia "Cama Pet", mas não "Tapete"."""
     titulo = titulo.lower()
     return any(re.search(rf"(?<!\w){re.escape(p.lower())}(?!\w)", titulo)
-               for p in config.palavras_bloqueadas if p)
+               for p in [*config.palavras_bloqueadas, *extras] if p)
 
 
-def filtrar(ofertas: list[Oferta], grupo: str) -> list[Oferta]:
+def filtrar(ofertas: list[Oferta], grupo: str, bloquear: list[str] = ()) -> list[Oferta]:
     aprovadas = []
     for o in ofertas:
         if not o.titulo:
@@ -44,7 +45,7 @@ def filtrar(ofertas: list[Oferta], grupo: str) -> list[Oferta]:
                 continue
             if config.preco_maximo and o.preco > config.preco_maximo:
                 continue
-        if tem_palavra_bloqueada(o.titulo):
+        if tem_palavra_bloqueada(o.titulo, bloquear):
             continue
         aprovadas.append(o)
     return aprovadas
@@ -104,7 +105,7 @@ def _candidatas_ml(grupo: Grupo, n: int) -> list[Oferta]:
         idx = (inicio + passo) % len(cats)
         cid, nome = cats[idx]
         brutas = coletar({cid: nome})
-        boas = filtrar(brutas, grupo.chave)
+        boas = filtrar(brutas, grupo.chave, grupo.bloquear)
         log.info("[%s] %s: %d coletadas, %d novas nos filtros", grupo.nome, nome, len(brutas), len(boas))
         # reservas: se uma ficar sem link de afiliado, a próxima melhor entra no lugar
         candidatas = escolher(boas, n * 3)
@@ -141,7 +142,7 @@ def _candidatas_shopee(grupo: Grupo, n: int) -> list[Oferta]:
             log.error("[%s] Shopee '%s': %s", grupo.nome, termos[idx], e)
             _proxima_shopee[grupo.chave] = idx + 1
             return []
-        boas = filtrar(brutas, grupo.chave)
+        boas = filtrar(brutas, grupo.chave, grupo.bloquear)
         log.info("[%s] Shopee '%s': %d coletadas, %d novas nos filtros",
                  grupo.nome, termos[idx], len(brutas), len(boas))
         candidatas = escolher(boas, n * 3)
