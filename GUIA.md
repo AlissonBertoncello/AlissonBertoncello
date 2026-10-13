@@ -119,6 +119,8 @@ Regras: sem aspas, sem espaços, exatamente como aparece. Ex.: `ML_ETIQUETA=minh
 > No Windows, arquivos que começam com ponto podem não aparecer no Explorador. Use o `notepad .env` como acima.
 
 ### 4.2 Configurar os grupos no `config.yaml`
+
+> 🖱️ **Jeito fácil: `CONFIGURAR.bat`** — abre um **painel no navegador** onde dá para configurar tudo desta seção (e das seções 8 e 11) sem mexer no arquivo: grupos, nomes do WhatsApp (escolhendo da lista), categorias do Mercado Livre (navegando pelas subcategorias), palavras da Shopee, palavras bloqueadas, intervalo, horário, filtros e as credenciais do `.env`. Veja a seção [9.1](#91-painel-de-configuração). O que está abaixo é o jeito manual, editando o arquivo.
 ```powershell
 notepad config.yaml
 ```
@@ -146,7 +148,7 @@ grupos:
       - "Achadinhos da Gabi 💄 2"
   ```
   Dica: use no `convite:` um link do Bitly e troque para onde ele aponta quando um grupo lotar.
-- **Grupo Fitness:** já está pronto no fim do `config.yaml`, desligado (linhas com `#`). Para ligar, crie o grupo, adicione o número do bot como admin e tire o `# ` do começo das linhas do bloco.
+- **Ligar/desligar um grupo:** `ativo: false` desliga o grupo sem apagar a configuração (apague a linha, ou use `true`, para ligar). O **grupo Fitness** já está pronto no `config.yaml`, desligado: crie o grupo no WhatsApp, adicione o número do bot como admin e ligue (no painel é só a chave *Ativo*).
 - O `convite:` é o **link de convite do grupo** (no WhatsApp: grupo → *Convidar via link*). Ele vai no fim de cada oferta, com o texto *"💬 Envie essa oferta para uma amiga!"*. Substitua o texto entre colchetes pelo link, **entre aspas**: `convite: "https://chat.whatsapp.com/XXXX"`. Enquanto estiver o texto entre colchetes, essas duas linhas não aparecem na mensagem.
 
 Atenção ao formato do YAML: use **espaços** (nunca TAB) e mantenha o alinhamento igual ao exemplo.
@@ -260,6 +262,22 @@ Avise nos grupos que os links são de afiliado (exigência dos programas). Ex.: 
   - Funciona com o seu usuário logado no Windows (na tela de senha, ele espera você entrar).
   - Para conferir/editar: menu Iniciar → *Agendador de Tarefas* → tarefa **"Bot de Ofertas - inicio automatico"**.
 
+### 9.1 Painel de configuração
+
+Dois cliques em **`CONFIGURAR.bat`**: o painel abre no navegador (endereço `http://127.0.0.1:8765`, só no seu notebook). Para fechar o painel, feche a janela preta.
+
+| Aba | O que dá para fazer |
+|---|---|
+| **Início** | ver se o bot está rodando, quantas ofertas cada grupo recebeu hoje e os últimos envios |
+| **Grupos** | ligar/desligar grupos, criar e excluir, trocar nome, grupos do WhatsApp (o botão **Carregar grupos do WhatsApp** traz os nomes exatos, com emoji — precisa do Docker aberto), link de convite, **categorias do Mercado Livre** (botão *+ Adicionar categoria* navega pelas categorias e subcategorias com o nº de anúncios), palavras da Shopee e palavras bloqueadas do grupo |
+| **Envio e filtros** | intervalo, ofertas por vez, pausa entre mensagens, dias sem repetir, horário de envio (mostra a estimativa de mensagens por dia), desconto/preço mínimo e máximo, palavras bloqueadas de todos os grupos, lojas ligadas e destino |
+| **Contas** | ML_CLIENT_ID/SECRET, ML_ETIQUETA, SHOPEE_APP_ID/SECRET. Campos secretos nunca aparecem na tela: deixe em branco para manter |
+
+- Mude o que quiser e clique em **Salvar** (a barra aparece embaixo quando há alteração). Se algo estiver errado, o painel mostra o que corrigir e **não grava nada**.
+- **Não precisa reiniciar o bot:** com ele rodando, as mudanças valem em até 10 segundos (o log mostra `Configuração atualizada`). Exceção: trocar o destino (WhatsApp/tela) só vale ao reabrir o bot.
+- Se um grupo novo do WhatsApp não for encontrado, o bot avisa no log e **continua com os grupos anteriores** até você corrigir.
+- O painel mantém os comentários do `config.yaml` e guarda cópias em `data\config_anterior.yaml` (versão antes de salvar) e `data\meu_config.yaml` (a sua versão atual).
+
 **Arquivos úteis**
 | Arquivo | O que é |
 |---|---|
@@ -267,14 +285,15 @@ Avise nos grupos que os links são de afiliado (exigência dos programas). Ex.: 
 | `data\ofertas.db` | histórico de envios (controle de repetição) |
 | `data\ml_profile\` | login de afiliado do Mercado Livre |
 | `data\whatsapp_qr.html` | página com o último QR Code gerado |
+| `data\meu_config.yaml` | cópia da sua configuração, gravada a cada **Salvar** do painel |
 
 ---
 
 ## 10. Atualizar o projeto
 
-1. **Antes**, copie o seu `config.yaml` para outro lugar (ex.: `config-backup.yaml` na Área de Trabalho) — a atualização **substitui** esse arquivo.
+1. **Antes**, copie o seu `config.yaml` para outro lugar (ex.: `config-backup.yaml` na Área de Trabalho) — a atualização **substitui** esse arquivo. (Se você usa o painel, ele já guarda essa cópia em `data\meu_config.yaml`.)
 2. Baixe o ZIP de novo (**Code → Download ZIP**) e extraia **por cima** da pasta.
-3. Reabra o `config.yaml` e recoloque seus ajustes (grupos, `whatsapp:`, `destino`, intervalos).
+3. Copie o seu backup (ou `data\meu_config.yaml`) por cima do `config.yaml` novo, renomeando para `config.yaml`. Depois abra o `CONFIGURAR.bat` e confira se está tudo certo.
 
 O `.env` e a pasta `data\` **não** são afetados (não fazem parte do ZIP).
 
@@ -333,6 +352,7 @@ Os `.bat` fazem tudo com dois cliques. Se preferir o PowerShell, dentro da pasta
 | `uv run python -m ofertas ml-login` | login de afiliado (= `LOGIN_MERCADOLIVRE.bat`) |
 | `uv run python -m ofertas whatsapp-login` | conecta o WhatsApp (= `LOGIN_WHATSAPP.bat`) |
 | `uv run python -m ofertas whatsapp-grupos` | lista os grupos do número do bot |
+| `uv run python -m ofertas painel` | abre o painel de configuração (= `CONFIGURAR.bat`) |
 | `uv run python -m ofertas categorias [MLB...] [--niveis 2]` | mostra categorias/subcategorias do ML com os códigos (= `VER_CATEGORIAS.bat`) |
 | `uv run python -m ofertas ciclo` | roda um único ciclo |
 | `uv run python -m ofertas run` | roda em loop (= `INICIAR_BOT.bat`) |

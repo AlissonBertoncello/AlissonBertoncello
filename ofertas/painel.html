@@ -1,0 +1,571 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel do Bot de Ofertas</title>
+<style>
+  :root {
+    --bg: #f6f5f2; --card: #ffffff; --ink: #1d1b18; --muted: #6b665e; --line: #e4e0d8;
+    --accent: #c2410c; --accent-ink: #ffffff; --accent-soft: #fdebdd;
+    --ok: #15803d; --ok-soft: #dcfce7; --bad: #b91c1c; --bad-soft: #fee2e2; --chip: #f1eee8;
+    --shadow: 0 1px 2px rgba(0,0,0,.05), 0 4px 16px rgba(0,0,0,.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161513; --card: #211f1c; --ink: #f1ede6; --muted: #a8a197; --line: #34312c;
+      --accent: #fb923c; --accent-ink: #1b1209; --accent-soft: #3b2415;
+      --ok: #4ade80; --ok-soft: #13301f; --bad: #f87171; --bad-soft: #3a1717; --chip: #2c2925;
+      --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { background: var(--card); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+  .topo { max-width: 980px; margin: 0 auto; padding: 14px 16px 0; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  h1 { font-size: 18px; margin: 0; flex: 1; }
+  .badge { font-size: 13px; padding: 3px 10px; border-radius: 99px; background: var(--chip); color: var(--muted); }
+  .badge.ok { background: var(--ok-soft); color: var(--ok); }
+  .badge.bad { background: var(--bad-soft); color: var(--bad); }
+  nav { max-width: 980px; margin: 0 auto; padding: 0 16px; display: flex; gap: 4px; overflow-x: auto; }
+  nav button { background: none; border: 0; border-bottom: 3px solid transparent; padding: 12px 12px 9px;
+               font: inherit; color: var(--muted); cursor: pointer; white-space: nowrap; }
+  nav button.ativo { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+  main { max-width: 980px; margin: 0 auto; padding: 20px 16px 120px; }
+  section { display: none; } section.ativo { display: block; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-bottom: 16px; box-shadow: var(--shadow); }
+  .card h2 { font-size: 16px; margin: 0 0 4px; }
+  .card > p.ajuda { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
+  .grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+  label.campo { display: block; }
+  label.campo > span { display: block; font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+  label.campo > small, .dica { display: block; color: var(--muted); font-size: 13px; margin-top: 4px; }
+  input[type=text], input[type=number], input[type=password], input[type=time], input[type=url], textarea, select {
+    width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--bg); color: var(--ink); font: inherit; }
+  input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  input[readonly] { color: var(--muted); }
+  textarea { min-height: 140px; resize: vertical; }
+  .linha { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  button.bt { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 8px;
+              padding: 8px 14px; font: inherit; cursor: pointer; }
+  button.bt:hover { border-color: var(--muted); }
+  button.bt.prim { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  button.bt.perigo { color: var(--bad); }
+  button.bt.peq { padding: 4px 10px; font-size: 13px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px; border: 1px solid var(--line); border-radius: 8px;
+           background: var(--bg); min-height: 42px; align-items: center; }
+  .chip { background: var(--chip); border-radius: 99px; padding: 3px 4px 3px 10px; font-size: 14px; display: inline-flex; align-items: center; gap: 4px; }
+  .chip b { font-weight: 600; color: var(--muted); font-size: 12px; }
+  .chip button { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 0 6px; border-radius: 99px; }
+  .chip button:hover { color: var(--bad); }
+  .chips input { border: 0; background: transparent; flex: 1; min-width: 140px; padding: 4px; }
+  .chips input:focus { outline: 0; }
+  details.grupo { background: var(--card); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 12px; box-shadow: var(--shadow); }
+  details.grupo > summary { list-style: none; cursor: pointer; padding: 14px 18px; display: flex; align-items: center; gap: 10px; }
+  details.grupo > summary::-webkit-details-marker { display: none; }
+  details.grupo > summary .nome { font-weight: 600; flex: 1; }
+  details.grupo > summary .seta { transition: transform .15s; color: var(--muted); }
+  details.grupo[open] > summary .seta { transform: rotate(90deg); }
+  details.grupo .corpo { padding: 4px 18px 18px; display: grid; gap: 16px; border-top: 1px solid var(--line); padding-top: 16px; }
+  .chave { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+  .chave input { display: none; }
+  .chave .trilho { width: 38px; height: 22px; border-radius: 99px; background: var(--line); position: relative; transition: background .15s; }
+  .chave .trilho::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .15s; }
+  .chave input:checked + .trilho { background: var(--ok); }
+  .chave input:checked + .trilho::after { left: 19px; }
+  .barra { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line); z-index: 6;
+           transform: translateY(100%); transition: transform .2s; }
+  .barra.visivel { transform: none; }
+  .barra .dentro { max-width: 980px; margin: 0 auto; padding: 12px 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .barra .msg { flex: 1; color: var(--muted); }
+  .aviso { border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; }
+  .aviso.ok { background: var(--ok-soft); color: var(--ok); }
+  .aviso.bad { background: var(--bad-soft); color: var(--bad); }
+  .aviso ul { margin: 6px 0 0; padding-left: 20px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; }
+  .numeros { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+  .numero { background: var(--bg); border-radius: 10px; padding: 12px 14px; }
+  .numero .v { font-size: 26px; font-weight: 700; }
+  .numero .r { color: var(--muted); font-size: 13px; }
+  dialog { border: 1px solid var(--line); border-radius: 14px; padding: 0; width: min(640px, calc(100vw - 32px));
+           background: var(--card); color: var(--ink); max-height: 85vh; }
+  dialog::backdrop { background: rgba(0,0,0,.4); }
+  .dlg-topo { padding: 16px 18px 10px; border-bottom: 1px solid var(--line); }
+  .dlg-topo h3 { margin: 0 0 6px; font-size: 16px; }
+  .trilha { font-size: 13px; color: var(--muted); }
+  .trilha a { color: var(--accent); cursor: pointer; text-decoration: none; }
+  .dlg-lista { overflow-y: auto; max-height: 55vh; }
+  .dlg-item { display: flex; align-items: center; gap: 8px; padding: 9px 18px; border-bottom: 1px solid var(--line); }
+  .dlg-item .n { flex: 1; } .dlg-item .n small { color: var(--muted); display: block; font-size: 12px; }
+  .dlg-pe { padding: 12px 18px; display: flex; justify-content: flex-end; gap: 8px; }
+  .vazio { color: var(--muted); padding: 18px; text-align: center; }
+  .toast { position: fixed; top: 16px; right: 16px; z-index: 20; background: var(--ink); color: var(--bg);
+           padding: 10px 16px; border-radius: 10px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 360px; }
+  .toast.on { opacity: 1; }
+  @media (max-width: 560px) { .topo h1 { font-size: 16px; } details.grupo .corpo { padding: 14px; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="topo">
+    <h1>🛍️ Painel do Bot de Ofertas</h1>
+    <span id="st-bot" class="badge">verificando…</span>
+  </div>
+  <nav id="abas">
+    <button data-aba="inicio" class="ativo">Início</button>
+    <button data-aba="grupos">Grupos</button>
+    <button data-aba="envio">Envio e filtros</button>
+    <button data-aba="contas">Contas</button>
+  </nav>
+</header>
+
+<main>
+  <div id="aviso"></div>
+
+  <!-- ── Início ── -->
+  <section id="aba-inicio" class="ativo">
+    <div class="card">
+      <h2>Hoje</h2>
+      <p class="ajuda">Ofertas enviadas hoje em cada grupo. Atualiza sozinho a cada 30 segundos.</p>
+      <div id="hoje" class="numeros"></div>
+    </div>
+    <div class="card">
+      <h2>Últimos envios</h2>
+      <div style="overflow-x:auto"><table><thead><tr><th>Quando</th><th>Grupo</th><th>Loja</th><th>Produto</th></tr></thead>
+      <tbody id="envios"></tbody></table></div>
+    </div>
+  </section>
+
+  <!-- ── Grupos ── -->
+  <section id="aba-grupos">
+    <div class="linha" style="margin-bottom:14px">
+      <p class="dica" style="flex:1;margin:0">Cada grupo recebe ofertas das suas categorias do Mercado Livre e palavras da Shopee, alternando as lojas.</p>
+      <button class="bt" id="bt-wa">🔄 Carregar grupos do WhatsApp</button>
+      <button class="bt prim" id="bt-novo">+ Novo grupo</button>
+    </div>
+    <div id="lista-grupos"></div>
+    <datalist id="dl-wa"></datalist>
+  </section>
+
+  <!-- ── Envio e filtros ── -->
+  <section id="aba-envio">
+    <div class="card">
+      <h2>Ritmo de envio</h2>
+      <p class="ajuda">Vale para todos os grupos.</p>
+      <div class="grade">
+        <label class="campo"><span>Intervalo entre ofertas (minutos)</span>
+          <input type="number" min="1" data-c="geral.intervalo_minutos">
+          <small>De quanto em quanto tempo cada grupo recebe oferta nova.</small></label>
+        <label class="campo"><span>Ofertas por grupo a cada vez</span>
+          <input type="number" min="1" max="10" data-c="geral.max_posts_por_ciclo"></label>
+        <label class="campo"><span>Pausa entre mensagens (segundos)</span>
+          <input type="number" min="0" data-c="geral.espacamento_segundos">
+          <small>Entre um grupo e outro. Ritmo mais humano no WhatsApp.</small></label>
+        <label class="campo"><span>Não repetir o produto por (dias)</span>
+          <input type="number" min="0" data-c="geral.nao_repetir_dias"></label>
+      </div>
+      <div style="margin-top:16px">
+        <span style="font-weight:600;font-size:14px">Horário de envio</span>
+        <div class="linha" style="margin-top:6px">
+          <label class="chave"><input type="checkbox" id="h-24"><span class="trilho"></span> 24 horas</label>
+          <span id="h-faixa" class="linha">das <input type="time" id="h-ini" style="width:auto"> às <input type="time" id="h-fim" style="width:auto"></span>
+        </div>
+      </div>
+      <p class="dica" id="estimativa" style="margin-top:12px"></p>
+    </div>
+
+    <div class="card">
+      <h2>Filtros</h2>
+      <p class="ajuda">Só passam ofertas que atendem a tudo isto.</p>
+      <div class="grade">
+        <label class="campo"><span>Desconto mínimo (%)</span><input type="number" min="0" max="99" data-c="filtros.desconto_minimo"></label>
+        <label class="campo"><span>Preço mínimo (R$)</span><input type="number" min="0" step="0.01" data-c="filtros.preco_minimo"><small>0 = sem limite</small></label>
+        <label class="campo"><span>Preço máximo (R$)</span><input type="number" min="0" step="0.01" data-c="filtros.preco_maximo"><small>0 = sem limite</small></label>
+      </div>
+      <div style="margin-top:14px">
+        <span style="font-weight:600;font-size:14px">Palavras bloqueadas em todos os grupos</span>
+        <div id="pal-geral" style="margin-top:6px"></div>
+        <span class="dica">Ofertas com essas palavras (inteiras) no título são ignoradas. Digite e aperte Enter.</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Lojas e destino</h2>
+      <div class="linha" style="gap:24px">
+        <label class="chave"><input type="checkbox" data-c="fontes.mercadolivre"><span class="trilho"></span> Mercado Livre</label>
+        <label class="chave"><input type="checkbox" data-c="fontes.shopee"><span class="trilho"></span> Shopee</label>
+      </div>
+      <label class="campo" style="margin-top:16px;max-width:360px"><span>Para onde enviar</span>
+        <select data-c="destino">
+          <option value="whatsapp">WhatsApp (grupos de verdade)</option>
+          <option value="console">Só na tela (teste, não envia)</option>
+        </select>
+        <small>Mudar o destino só vale depois de fechar e abrir o bot.</small></label>
+    </div>
+  </section>
+
+  <!-- ── Contas ── -->
+  <section id="aba-contas">
+    <div class="card">
+      <h2>Mercado Livre</h2>
+      <p class="ajuda">Ficam no arquivo <code>.env</code>, só no seu notebook. Campos secretos não aparecem: deixe em branco para manter o valor atual.</p>
+      <div class="grade" id="env-ml"></div>
+    </div>
+    <div class="card">
+      <h2>Shopee Afiliados</h2>
+      <p class="ajuda">Painel de afiliados da Shopee → Open API.</p>
+      <div class="grade" id="env-shopee"></div>
+    </div>
+  </section>
+</main>
+
+<div class="barra" id="barra"><div class="dentro">
+  <span class="msg" id="barra-msg">Alterações não salvas</span>
+  <button class="bt" id="bt-desfazer">Desfazer</button>
+  <button class="bt prim" id="bt-salvar">Salvar</button>
+</div></div>
+
+<dialog id="dlg-cat">
+  <div class="dlg-topo"><h3>Adicionar categoria do Mercado Livre</h3><div class="trilha" id="cat-trilha"></div></div>
+  <div class="dlg-lista" id="cat-lista"></div>
+  <div class="dlg-pe">
+    <input type="text" id="cat-manual" placeholder="ou digite o código (MLB…)" style="max-width:220px">
+    <button class="bt" id="cat-manual-bt">Adicionar código</button>
+    <button class="bt" id="cat-fechar">Fechar</button>
+  </div>
+</dialog>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+const ROTULOS_ENV = {
+  ML_CLIENT_ID: ["App ID (client_id)", "developers.mercadolivre.com.br → seu app"],
+  ML_CLIENT_SECRET: ["Secret Key (client_secret)", ""],
+  ML_ETIQUETA: ["Etiqueta de afiliado", "A 'Etiqueta em uso' do Linkbuilder"],
+  SHOPEE_APP_ID: ["App ID", ""],
+  SHOPEE_APP_SECRET: ["Secret", ""],
+};
+const LOJAS = { mercadolivre: "💛 Mercado Livre", shopee: "🧡 Shopee" };
+let original = null, dados = null, gruposWA = [], grupoDaCategoria = null;
+
+// ── utilidades ──
+const $ = (s, el = document) => el.querySelector(s);
+function el(tag, props = {}, ...filhos) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === "class") e.className = v;
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else if (k === "text") e.textContent = v;
+    else e.setAttribute(k, v);
+  }
+  for (const f of filhos) if (f != null) e.append(f);
+  return e;
+}
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("on"); setTimeout(() => t.classList.remove("on"), 3200); }
+async function api(caminho, opcoes = {}) {
+  const r = await fetch(caminho, opcoes);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok && !j.erros) throw new Error(j.erro || ("HTTP " + r.status));
+  return j;
+}
+const clone = o => JSON.parse(JSON.stringify(o));
+function pegar(caminho) { return caminho.split(".").reduce((o, k) => o[k], dados); }
+function por(caminho, valor) { const p = caminho.split("."); const u = p.pop(); p.reduce((o, k) => o[k], dados)[u] = valor; }
+function slug(t) {
+  return (t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 30) || "grupo";
+}
+
+function mudou() {
+  const sujo = JSON.stringify(dados) !== JSON.stringify(original);
+  $("#barra").classList.toggle("visivel", sujo);
+  $("#barra-msg").textContent = "Alterações não salvas";
+  estimativa();
+}
+
+// ── campo de etiquetas (chips) ──
+function chips(lista, aoMudar, { placeholder = "digite e aperte Enter", lista_dl = null } = {}) {
+  const caixa = el("div", { class: "chips" });
+  const entrada = el("input", { type: "text", placeholder });
+  if (lista_dl) entrada.setAttribute("list", lista_dl);
+  function desenhar() {
+    caixa.replaceChildren();
+    lista.forEach((v, i) => caixa.append(el("span", { class: "chip" }, v,
+      el("button", { type: "button", title: "remover", onclick: () => { lista.splice(i, 1); desenhar(); aoMudar(); } }, "×"))));
+    caixa.append(entrada);
+  }
+  function adicionar() {
+    for (const v of entrada.value.split(/[,;\n]/).map(s => s.trim()).filter(Boolean))
+      if (!lista.includes(v)) lista.push(v);
+    entrada.value = ""; desenhar(); aoMudar(); entrada.focus();
+  }
+  entrada.addEventListener("keydown", e => {
+    if (e.key === "Enter" || e.key === ",") { e.preventDefault(); adicionar(); }
+    else if (e.key === "Backspace" && !entrada.value && lista.length) { lista.pop(); desenhar(); aoMudar(); entrada.focus(); }
+  });
+  entrada.addEventListener("change", () => { if (lista_dl && entrada.value.trim()) adicionar(); });
+  entrada.addEventListener("blur", () => { if (entrada.value.trim()) adicionar(); });
+  caixa.addEventListener("click", e => { if (e.target === caixa) entrada.focus(); });
+  desenhar();
+  return caixa;
+}
+
+// ── campos simples (data-c) ──
+function ligarCampos() {
+  document.querySelectorAll("[data-c]").forEach(inp => {
+    const c = inp.dataset.c;
+    if (inp.type === "checkbox") inp.checked = !!pegar(c);
+    else inp.value = pegar(c);
+    inp.oninput = inp.onchange = () => {
+      let v = inp.type === "checkbox" ? inp.checked : inp.value;
+      if (inp.type === "number") v = inp.step && inp.step !== "1" ? parseFloat(v || 0) : parseInt(v || 0, 10);
+      por(c, v); mudou();
+    };
+  });
+  const h = dados.geral.horario_ativo;
+  const [ini, fim] = h ? h.split("-") : ["08:00", "23:00"];
+  $("#h-24").checked = !h; $("#h-ini").value = ini; $("#h-fim").value = fim;
+  const horario = () => {
+    $("#h-faixa").style.opacity = $("#h-24").checked ? .4 : 1;
+    dados.geral.horario_ativo = $("#h-24").checked ? "" : `${$("#h-ini").value}-${$("#h-fim").value}`;
+    mudou();
+  };
+  $("#h-24").onchange = $("#h-ini").onchange = $("#h-fim").onchange = horario;
+  $("#h-faixa").style.opacity = $("#h-24").checked ? .4 : 1;
+  $("#pal-geral").replaceChildren(chips(dados.filtros.palavras_bloqueadas, mudou));
+}
+
+function estimativa() {
+  const g = dados.geral;
+  let horas = 24;
+  if (g.horario_ativo) {
+    const [a, b] = g.horario_ativo.split("-").map(t => { const [h, m] = t.split(":").map(Number); return h * 60 + m; });
+    horas = ((b - a + 1440) % 1440 || 1440) / 60;
+  }
+  const porDia = Math.floor(horas * 60 / Math.max(1, g.intervalo_minutos)) * g.max_posts_por_ciclo;
+  const ativos = dados.grupos.filter(x => x.ativo);
+  const msgs = ativos.reduce((s, x) => s + Math.max(1, x.whatsapp.length), 0) * porDia;
+  $("#estimativa").textContent = `≈ ${porDia} ofertas por dia em cada grupo · ≈ ${msgs} mensagens por dia no total (${ativos.length} grupo(s) ativo(s)).` +
+    (g.intervalo_minutos < 10 ? " ⚠️ Abaixo de 10 minutos aumenta o risco de bloqueio do número." : "");
+}
+
+// ── grupos ──
+function desenharGrupos(abrir = null) {
+  const lista = $("#lista-grupos");
+  const abertos = new Set([...lista.querySelectorAll("details[open]")].map(d => d.dataset.idx));
+  lista.replaceChildren();
+  dados.grupos.forEach((g, i) => lista.append(cartaoGrupo(g, i, abertos.has(String(i)) || abrir === i)));
+  if (!dados.grupos.length) lista.append(el("div", { class: "card vazio", text: "Nenhum grupo. Clique em “+ Novo grupo”." }));
+}
+
+function cartaoGrupo(g, i, aberto) {
+  const det = el("details", { class: "grupo" }); det.dataset.idx = i; if (aberto) det.open = true;
+  const ativo = el("input", { type: "checkbox" }); ativo.checked = g.ativo;
+  ativo.onchange = () => { g.ativo = ativo.checked; mudou(); resumo(); };
+  const tituloNome = el("span", { class: "nome", text: g.nome || "(sem nome)" });
+  const info = el("span", { class: "badge" });
+  function resumo() {
+    tituloNome.textContent = g.nome || "(sem nome)";
+    info.textContent = g.ativo ? `${g.categorias.length} categ. · ${g.shopee.length} palavras · ${g.whatsapp.length} grupo(s) WA` : "desligado";
+    info.className = "badge" + (g.ativo ? "" : " bad");
+  }
+  resumo();
+  const sum = el("summary", {}, el("span", { class: "seta", text: "▶" }), tituloNome, info,
+    el("label", { class: "chave", onclick: e => e.stopPropagation() }, ativo, el("span", { class: "trilho" }), "Ativo"));
+  det.append(sum);
+
+  const nome = el("input", { type: "text", value: g.nome });
+  nome.oninput = () => { g.nome = nome.value; if (g._novo) { g.chave = slug(nome.value); chave.value = g.chave; } resumo(); mudou(); };
+  const chave = el("input", { type: "text", value: g.chave });
+  if (!g._novo) chave.readOnly = true;
+  chave.oninput = () => { g.chave = chave.value; mudou(); };
+  const convite = el("input", { type: "url", value: g.convite, placeholder: "https://chat.whatsapp.com/..." });
+  convite.oninput = () => { g.convite = convite.value.trim(); mudou(); };
+
+  const cats = el("div", { class: "chips" });
+  function desenharCats() {
+    cats.replaceChildren();
+    g.categorias.forEach((c, k) => cats.append(el("span", { class: "chip" }, el("b", { text: c.id }), " " + c.nome,
+      el("button", { type: "button", title: "remover", onclick: () => { g.categorias.splice(k, 1); desenharCats(); resumo(); mudou(); } }, "×"))));
+    cats.append(el("button", { type: "button", class: "bt peq", onclick: () => abrirCategorias(g, () => { desenharCats(); resumo(); }) }, "+ Adicionar categoria"));
+  }
+  desenharCats();
+
+  const shopee = el("textarea", { placeholder: "uma palavra-chave por linha" });
+  shopee.value = g.shopee.join("\n");
+  const contShopee = el("span", { class: "dica" });
+  const contar = () => contShopee.textContent = `${g.shopee.length} palavra(s) · uma por linha · buscadas em rodízio`;
+  shopee.oninput = () => { g.shopee = shopee.value.split("\n").map(s => s.trim()).filter(Boolean); contar(); resumo(); mudou(); };
+  contar();
+
+  const excluir = el("button", { type: "button", class: "bt perigo", onclick: () => {
+    if (confirm(`Excluir o grupo “${g.nome}” do bot? (o grupo no WhatsApp não é apagado)`)) { dados.grupos.splice(i, 1); desenharGrupos(); mudou(); }
+  } }, "Excluir grupo");
+
+  const campo = (rotulo, ...filhos) => el("label", { class: "campo" }, el("span", { text: rotulo }), ...filhos);
+  det.append(el("div", { class: "corpo" },
+    el("div", { class: "grade" },
+      campo("Nome (aparece no log)", nome),
+      campo("Código interno", chave, el("small", { text: g._novo ? "Gerado pelo nome. Não dá para mudar depois." : "Guarda o histórico de envios: não muda." }))),
+    el("div", {}, el("span", { style: "font-weight:600;font-size:14px", text: "Grupos do WhatsApp" }),
+      el("div", { style: "margin-top:6px" }, chips(g.whatsapp, () => { resumo(); mudou(); }, { placeholder: "nome exato do grupo", lista_dl: "dl-wa" })),
+      el("span", { class: "dica", text: "Nome exato, com emoji. Vários grupos recebem as mesmas ofertas. Use “Carregar grupos do WhatsApp” para escolher da lista." })),
+    campo("Link de convite (vai no fim de cada oferta)", convite),
+    el("div", {}, el("span", { style: "font-weight:600;font-size:14px", text: "Categorias do Mercado Livre" }),
+      el("div", { style: "margin-top:6px" }, cats)),
+    el("div", {}, el("span", { style: "font-weight:600;font-size:14px", text: "Palavras-chave da Shopee" }),
+      el("div", { style: "margin-top:6px" }, shopee), contShopee),
+    el("div", {}, el("span", { style: "font-weight:600;font-size:14px", text: "Palavras bloqueadas só neste grupo" }),
+      el("div", { style: "margin-top:6px" }, chips(g.bloquear, mudou)),
+      el("span", { class: "dica", text: "Somadas às palavras bloqueadas de todos os grupos (aba Envio e filtros)." })),
+    el("div", { class: "linha", style: "justify-content:flex-end" }, excluir)));
+  return det;
+}
+
+$("#bt-novo").onclick = () => {
+  let n = 1; while (dados.grupos.some(g => g.chave === "novo_grupo" + (n > 1 ? n : ""))) n++;
+  dados.grupos.push({ chave: "novo_grupo" + (n > 1 ? n : ""), ativo: true, nome: "Novo grupo", whatsapp: [], convite: "",
+                      categorias: [], shopee: [], bloquear: [], _novo: true });
+  desenharGrupos(dados.grupos.length - 1); mudou();
+  setTimeout(() => $("#lista-grupos details:last-child")?.scrollIntoView({ behavior: "smooth" }), 50);
+};
+
+$("#bt-wa").onclick = async () => {
+  try {
+    const r = await api("/api/whatsapp");
+    gruposWA = r.grupos;
+    $("#dl-wa").replaceChildren(...gruposWA.map(n => el("option", { value: n })));
+    toast(`${gruposWA.length} grupo(s) do WhatsApp carregados: clique no campo “Grupos do WhatsApp” para escolher.`);
+  } catch (e) { toast("Não consegui listar: " + e.message); }
+};
+
+// ── categorias (janela) ──
+async function abrirCategorias(grupo, depois) {
+  grupoDaCategoria = { grupo, depois };
+  $("#dlg-cat").showModal();
+  await navegar("");
+}
+async function navegar(id) {
+  const lista = $("#cat-lista"), trilha = $("#cat-trilha");
+  lista.replaceChildren(el("div", { class: "vazio", text: "Carregando…" }));
+  try {
+    const r = await api("/api/categorias?id=" + encodeURIComponent(id));
+    trilha.replaceChildren(el("a", { onclick: () => navegar(""), text: "Todas" }),
+      ...r.caminho.flatMap(p => [" › ", el("a", { onclick: () => navegar(p.id), text: p.nome })]));
+    lista.replaceChildren();
+    if (r.id) lista.append(itemCategoria({ id: r.id, nome: r.nome + " (inteira)" }, false));
+    if (!r.filhas.length) lista.append(el("div", { class: "vazio", text: "Sem subcategorias." }));
+    r.filhas.forEach(f => lista.append(itemCategoria(f, true)));
+  } catch (e) {
+    lista.replaceChildren(el("div", { class: "vazio", text: "Não consegui buscar as categorias: " + e.message }));
+  }
+}
+function itemCategoria(c, podeAbrir) {
+  const { grupo } = grupoDaCategoria;
+  const ja = grupo.categorias.some(x => x.id === c.id);
+  const qtd = typeof c.total === "number" ? c.total.toLocaleString("pt-BR") + " anúncios · " : "";
+  return el("div", { class: "dlg-item" },
+    el("div", { class: "n" }, c.nome, el("small", { text: qtd + c.id })),
+    podeAbrir ? el("button", { type: "button", class: "bt peq", onclick: () => navegar(c.id) }, "Subcategorias ›") : null,
+    el("button", { type: "button", class: "bt peq" + (ja ? "" : " prim"), onclick: ev => {
+      if (grupo.categorias.some(x => x.id === c.id)) return;
+      grupo.categorias.push({ id: c.id, nome: c.nome.replace(/ \(inteira\)$/, "") });
+      ev.target.textContent = "✓ Adicionada"; ev.target.classList.remove("prim");
+      grupoDaCategoria.depois(); mudou();
+    } }, ja ? "✓ Adicionada" : "+ Adicionar"));
+}
+$("#cat-fechar").onclick = () => $("#dlg-cat").close();
+$("#cat-manual-bt").onclick = () => {
+  const id = $("#cat-manual").value.trim().toUpperCase();
+  if (!/^MLB\d+$/.test(id)) { toast("Código inválido: use o formato MLB123456"); return; }
+  const { grupo, depois } = grupoDaCategoria;
+  if (!grupo.categorias.some(x => x.id === id)) { grupo.categorias.push({ id, nome: id }); depois(); mudou(); }
+  $("#cat-manual").value = ""; toast(id + " adicionada");
+};
+
+// ── contas (.env) ──
+function desenharContas() {
+  const bloco = (ids, alvo) => $(alvo).replaceChildren(...ids.map(k => {
+    const info = dados.env[k], [rot, dica] = ROTULOS_ENV[k];
+    const inp = el("input", { type: info.secreto ? "password" : "text", autocomplete: "off",
+      placeholder: info.secreto ? (info.definido ? "•••••• (definido — deixe em branco para manter)" : "não definido") : "" });
+    if (!info.secreto) inp.value = info.valor;
+    inp.oninput = () => {
+      dados.envNovo = dados.envNovo || {};
+      if (inp.value.trim() && inp.value.trim() !== info.valor) dados.envNovo[k] = inp.value.trim(); else delete dados.envNovo[k];
+      if (!Object.keys(dados.envNovo).length) delete dados.envNovo;
+      mudou();
+    };
+    return el("label", { class: "campo" }, el("span", {}, rot + " ", el("span", { class: "badge" + (info.definido ? " ok" : " bad"), text: info.definido ? "✓ definido" : "vazio" })),
+      inp, dica ? el("small", { text: dica }) : null);
+  }));
+  bloco(["ML_CLIENT_ID", "ML_CLIENT_SECRET", "ML_ETIQUETA"], "#env-ml");
+  bloco(["SHOPEE_APP_ID", "SHOPEE_APP_SECRET"], "#env-shopee");
+}
+
+// ── salvar ──
+$("#bt-salvar").onclick = async () => {
+  const corpo = clone(dados);
+  corpo.env = corpo.envNovo || {}; delete corpo.envNovo;
+  corpo.grupos.forEach(g => delete g._novo);
+  $("#bt-salvar").disabled = true;
+  try {
+    const r = await api("/api/config", { method: "POST", headers: { "Content-Type": "application/json", "X-Painel": "1" }, body: JSON.stringify(corpo) });
+    if (!r.ok) { mostrarAviso("bad", "Não salvei — corrija:", r.erros); return; }
+    mostrarAviso("ok", r.rodando ? "✅ Salvo! O bot em execução aplica as mudanças em até 10 segundos." : "✅ Salvo! As mudanças valem quando o bot for iniciado.");
+    await carregar();
+  } catch (e) { mostrarAviso("bad", "Erro ao salvar: " + e.message); }
+  finally { $("#bt-salvar").disabled = false; }
+};
+$("#bt-desfazer").onclick = () => { dados = clone(original); desenharTudo(); mudou(); };
+
+function mostrarAviso(tipo, texto, itens = []) {
+  const a = el("div", { class: "aviso " + tipo }, el("div", { text: texto }));
+  if (itens.length) a.append(el("ul", {}, ...itens.map(i => el("li", { text: i }))));
+  $("#aviso").replaceChildren(a);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  if (tipo === "ok") setTimeout(() => a.remove(), 8000);
+}
+
+// ── início / status ──
+async function atualizarStatus() {
+  try {
+    const s = await api("/api/status");
+    const b = $("#st-bot");
+    b.textContent = s.rodando ? "● Bot rodando" : "● Bot parado";
+    b.className = "badge " + (s.rodando ? "ok" : "bad");
+    const nomes = Object.fromEntries((original?.grupos || []).map(g => [g.chave, g.nome]));
+    const chaves = (original?.grupos || []).filter(g => g.ativo).map(g => g.chave);
+    $("#hoje").replaceChildren(...chaves.map(k => el("div", { class: "numero" },
+      el("div", { class: "v", text: String(s.hoje[k] || 0) }), el("div", { class: "r", text: nomes[k] || k }))));
+    $("#envios").replaceChildren(...(s.envios.length ? s.envios.map(e => el("tr", {},
+      el("td", { text: (e.em || "").replace("T", " ").slice(5, 16) }), el("td", { text: nomes[e.grupo] || e.grupo }),
+      el("td", { text: LOJAS[e.plataforma] || e.plataforma }), el("td", { text: e.titulo }))) :
+      [el("tr", {}, el("td", { colspan: "4", class: "vazio", text: "Nenhum envio ainda." }))]));
+  } catch (e) { $("#st-bot").textContent = "painel sem conexão"; }
+}
+
+// ── abas ──
+$("#abas").addEventListener("click", e => {
+  const b = e.target.closest("button[data-aba]"); if (!b) return;
+  document.querySelectorAll("#abas button").forEach(x => x.classList.toggle("ativo", x === b));
+  document.querySelectorAll("main section").forEach(s => s.classList.toggle("ativo", s.id === "aba-" + b.dataset.aba));
+});
+
+function desenharTudo() { ligarCampos(); desenharGrupos(); desenharContas(); estimativa(); }
+async function carregar() {
+  original = await api("/api/config");
+  dados = clone(original);
+  desenharTudo(); mudou(); atualizarStatus();
+}
+window.addEventListener("beforeunload", e => { if (JSON.stringify(dados) !== JSON.stringify(original)) { e.preventDefault(); e.returnValue = ""; } });
+carregar().catch(e => mostrarAviso("bad", "Não consegui ler a configuração: " + e.message));
+setInterval(atualizarStatus, 30000);
+</script>
+</body>
+</html>

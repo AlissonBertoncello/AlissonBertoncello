@@ -19,7 +19,8 @@ O destino é escolhido no `config.yaml`: **`console`** (testes: mostra no termin
 1. Preencha o `.env` (veja abaixo).
 2. Dê **dois cliques em `BUSCAR_OFERTAS.bat`**: instala o que falta (na primeira vez) e mostra as ofertas encontradas.
 3. Para o link de afiliado: **dois cliques em `LOGIN_MERCADOLIVRE.bat`** (uma vez só).
-4. Para deixar rodando sozinho: **dois cliques em `INICIAR_BOT.bat`**. Para o bot abrir sozinho ao ligar o notebook e sempre que a internet conectar: **`ATIVAR_INICIO_AUTOMATICO.bat`** (uma vez).
+4. Para configurar grupos, categorias, intervalo, filtros e credenciais sem editar arquivos: **dois cliques em `CONFIGURAR.bat`** (abre um painel no navegador; as mudanças valem no bot em execução em até 10 s).
+5. Para deixar rodando sozinho: **dois cliques em `INICIAR_BOT.bat`**. Para o bot abrir sozinho ao ligar o notebook e sempre que a internet conectar: **`ATIVAR_INICIO_AUTOMATICO.bat`** (uma vez).
    O bot roda **todos os grupos** do `config.yaml` numa janela só. A cada ciclo (1 minuto na fase de testes), **cada grupo recebe 1 oferta**, alternando as categorias do grupo.
 
 ## 📲 WhatsApp (Evolution API)
@@ -79,6 +80,7 @@ uv run python -m ofertas run                # roda todos os grupos em loop, a ca
 uv run python -m ofertas run --grupo bebe   # só um grupo (chave do config.yaml)
 uv run python -m ofertas whatsapp-login     # conecta o número do bot (QR Code) e lista os grupos
 uv run python -m ofertas whatsapp-grupos    # lista os grupos do WhatsApp do bot
+uv run python -m ofertas painel             # painel de configuração no navegador (CONFIGURAR.bat)
 uv run python -m ofertas categorias MLB1276 # subcategorias do ML com os códigos (VER_CATEGORIAS.bat)
 uv run pytest                               # testes
 ```

@@ -141,6 +141,11 @@ def cmd_categorias(args):
         print("Para abrir uma subcategoria: uv run python -m ofertas categorias <código>")
 
 
+def cmd_painel(args):
+    from .painel import PORTA, abrir
+    abrir(args.porta or PORTA, navegador=not args.sem_navegador)
+
+
 def cmd_converter(args):
     from .formatter import montar_mensagem
     from .sources import mercadolivre
@@ -244,9 +249,28 @@ def travar_instancia(porta: int = PORTA_TRAVA):
     return s
 
 
+def _recarregar(args, grupos, destino, log):
+    """Aplica o config.yaml/.env novos; se algo estiver errado, segue com o anterior."""
+    from .config import config, recarregar
+    try:
+        recarregar()
+        novos = _grupos(args)
+        if hasattr(destino, "preparar"):
+            destino.preparar(novos)
+    except (Exception, SystemExit) as e:
+        log.error("Grupos novos não aplicados (%s) — o bot segue com os grupos anteriores", e)
+        return grupos, destino
+    log.info("Configuração atualizada — %d oferta(s) por grupo a cada %d min",
+             config.max_posts_por_ciclo, config.intervalo_minutos)
+    if config.destino != destino.nome:
+        log.warning("O destino mudou para '%s': feche e abra o bot para valer", config.destino)
+    _mostrar_grupos(novos)
+    return novos, destino
+
+
 def cmd_run(args):
     from . import pipeline
-    from .config import config
+    from .config import arquivos_de_config, config
     travar_instancia()
     grupos = _grupos(args)
     _mostrar_grupos(grupos)
@@ -254,14 +278,20 @@ def cmd_run(args):
     log = logging.getLogger("ofertas")
     log.info("Bot iniciado — %d oferta(s) por grupo a cada %d min, destino %s",
              config.max_posts_por_ciclo, config.intervalo_minutos, destino.nome)
+    versao = arquivos_de_config()
     while True:
         inicio = time.monotonic()
         try:
             pipeline.executar_ciclo(destino, grupos)
         except Exception:
             log.exception("Erro no ciclo")
-        # o intervalo conta a partir do início do ciclo (a busca leva alguns segundos)
-        time.sleep(max(5, config.intervalo_minutos * 60 - (time.monotonic() - inicio)))
+        # o intervalo conta a partir do início do ciclo (a busca leva alguns segundos);
+        # durante a espera, mudanças no config.yaml/.env (ex: pelo painel) já valem
+        while (falta := inicio + max(5, config.intervalo_minutos * 60) - time.monotonic()) > 0:
+            time.sleep(min(10.0, falta))
+            if arquivos_de_config() != versao:
+                versao = arquivos_de_config()
+                grupos, destino = _recarregar(args, grupos, destino, log)
 
 
 def main():
@@ -290,6 +320,11 @@ def main():
     pk.add_argument("--niveis", type=int, choices=(1, 2), default=1,
                     help="2 = mostra também as subcategorias das subcategorias")
     pk.set_defaults(fn=cmd_categorias)
+
+    pp = sub.add_parser("painel", help="abre o painel de configuração no navegador")
+    pp.add_argument("--porta", type=int, default=0, help="porta local (padrão 8765)")
+    pp.add_argument("--sem-navegador", action="store_true", help="não abre o navegador sozinho")
+    pp.set_defaults(fn=cmd_painel)
 
     pc = sub.add_parser("converter", help="gera o link de afiliado de um produto e mostra a mensagem")
     pc.add_argument("url")

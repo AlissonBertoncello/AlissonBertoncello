@@ -84,6 +84,8 @@ def ler_grupos(dados: dict) -> list[Grupo]:
     grupos = []
     for chave, g in dados.items():
         g = g or {}
+        if g.get("ativo") is False:  # grupo desligado (fica no config, mas não recebe ofertas)
+            continue
         cats = g.get("categorias") or []
         if isinstance(cats, dict):
             cats = {str(k): str(v) for k, v in cats.items()}
@@ -99,6 +101,18 @@ def ler_grupos(dados: dict) -> list[Grupo]:
 
 
 config = Config()
+
+
+def recarregar() -> None:
+    """Relê o .env e o config.yaml no mesmo objeto `config` (usado pelo bot em execução)."""
+    load_dotenv(BASE_DIR / ".env", override=True)
+    config.__init__()
+
+
+def arquivos_de_config() -> tuple[float, float]:
+    """Datas de modificação do config.yaml e do .env (para notar mudanças)."""
+    return tuple((BASE_DIR / n).stat().st_mtime if (BASE_DIR / n).exists() else 0.0
+                 for n in ("config.yaml", ".env"))
 
 
 def dentro_do_horario(agora: datetime | None = None) -> bool:

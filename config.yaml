@@ -16,8 +16,7 @@ filtros:
   preco_maximo: 0              # 0 = sem limite
   # itens masculinos que aparecem em Beleza (barbear) e Moda Íntima/Praia
   # vale para TODOS os grupos (palavras inteiras); para um grupo só, use "bloquear:" no grupo
-  palavras_bloqueadas: [masculino, masculina, barbeador, barbear, barba, aparador, acabamento, kemei, cueca, sunga,
-                        cachorro, cão, gato, pet, óculos, lente, câmera, club 6]
+  palavras_bloqueadas: [masculino, masculina, barbeador, barbear, barba, aparador, acabamento, kemei, cueca, sunga, cachorro, cão, gato, pet, óculos, lente, câmera, club 6]
 
 fontes:
   mercadolivre:
@@ -173,55 +172,55 @@ grupos:
 #   MLB27250 Macacão     MLB270215 Moda Fitness   MLB430391 Moda Praia
 #   MLB108786 Moda Íntima e Lingerie   MLB1457 Malas e Bolsas   MLB5366 Roupas para Bebês
 
-  # ── Grupo Fitness (desligado) ─────────────────────────────────────────────
-  # Para ligar: crie o grupo no WhatsApp, adicione o número do bot como admin,
-  # tire o "# " do começo das linhas abaixo e coloque o nome exato e o convite.
+  # ── Grupo Fitness ──────────────────────────────────────────────────────────
+  # Desligado (ativo: false). Para ligar: crie o grupo no WhatsApp, adicione o número
+  # do bot como admin, coloque o nome exato e o convite e mude para ativo: true.
   # Categorias: MLB1276 é ampla (tem pesca, ciclismo, camping...). Abra o
-  # VER_CATEGORIAS.bat, digite MLB1276 e troque pelas subcategorias de fitness.
-  # fitness:
-  #   nome: Achadinhos Fitness 💪
-  #   categorias:
-  #     MLB1276: Esportes e Fitness
-  #     MLB278018: Leggings
-  #   whatsapp:
-  #     - "Achadinhos Fitness 💪"
-  #   convite: "[link de convite do grupo fitness]"
-  #   bloquear: [pesca, molinete, anzol, isca, bicicleta, bike, ciclismo, camping,
-  #              barraca, airsoft, paintball, caça]   # só neste grupo (+ a lista geral)
-  #   shopee:
-  #     # roupas
-  #     - legging fitness
-  #     - top fitness
-  #     - conjunto fitness feminino
-  #     - shorts fitness
-  #     - macaquinho fitness
-  #     - meia esportiva
-  #     - tênis de corrida
-  #     - bolsa academia
-  #     # treino em casa
-  #     - tapete de yoga
-  #     - mini band elástico
-  #     - faixa elástica exercício
-  #     - elástico extensor
-  #     - halter
-  #     - caneleira peso
-  #     - corda de pular
-  #     - roda abdominal
-  #     - bola suíça
-  #     - colchonete
-  #     - rolo de massagem
-  #     - luva academia
-  #     # suplementos e acessórios
-  #     - whey protein
-  #     - creatina
-  #     - pré-treino
-  #     - coqueteleira
-  #     - garrafa térmica
-  #     - garrafa de água 2 litros
-  #     - balança de bioimpedância
-  #     - smartwatch
-  #     - fone bluetooth esportivo
-  #     - cinta modeladora
+  # VER_CATEGORIAS.bat (ou o painel), veja MLB1276 e troque pelas subcategorias de fitness.
+  fitness:
+    ativo: false
+    nome: Achadinhos Fitness 💪
+    categorias:
+      MLB1276: Esportes e Fitness
+      MLB278018: Leggings
+    whatsapp:
+      - "Achadinhos Fitness 💪"
+    convite: "[link de convite do grupo fitness]"
+    bloquear: [pesca, molinete, anzol, isca, bicicleta, bike, ciclismo, camping, barraca, airsoft, paintball, caça] # só neste grupo (+ a lista geral)
+    shopee:
+      # roupas
+      - legging fitness
+      - top fitness
+      - conjunto fitness feminino
+      - shorts fitness
+      - macaquinho fitness
+      - meia esportiva
+      - tênis de corrida
+      - bolsa academia
+      # treino em casa
+      - tapete de yoga
+      - mini band elástico
+      - faixa elástica exercício
+      - elástico extensor
+      - halter
+      - caneleira peso
+      - corda de pular
+      - roda abdominal
+      - bola suíça
+      - colchonete
+      - rolo de massagem
+      - luva academia
+      # suplementos e acessórios
+      - whey protein
+      - creatina
+      - pré-treino
+      - coqueteleira
+      - garrafa térmica
+      - garrafa de água 2 litros
+      - balança de bioimpedância
+      - smartwatch
+      - fone bluetooth esportivo
+      - cinta modeladora
 
 # Para onde as ofertas vão:
 #   console  = só mostra no terminal e salva em data/saida.jsonl (testes)
