@@ -16,7 +16,7 @@ RAIZ = Path(__file__).resolve().parent.parent
 
 @pytest.fixture
 def arquivos(tmp_path, monkeypatch):
-    shutil.copy(RAIZ / "config.yaml", tmp_path / "config.yaml")
+    shutil.copy(RAIZ / "config.exemplo.yaml", tmp_path / "config.yaml")
     (tmp_path / ".env").write_text("# segredos\nML_CLIENT_ID=123\nML_CLIENT_SECRET=segredo\nOUTRA=x\n",
                                    encoding="utf-8")
     monkeypatch.setattr(painel, "ARQ_CONFIG", tmp_path / "config.yaml")
@@ -209,3 +209,39 @@ def test_categorias_desiste_depois_das_tentativas(monkeypatch):
     monkeypatch.setattr(painel.time, "sleep", lambda s: None)
     with pytest.raises(RuntimeError, match="fora do ar"):
         painel.categorias("MLB1")
+
+
+# ── config.yaml não vem no projeto: é criado e nunca substituído ──────────────
+
+def _cfg_em(tmp_path, monkeypatch):
+    (tmp_path / "data").mkdir()
+    (tmp_path / "config.exemplo.yaml").write_text("exemplo: 1\n", encoding="utf-8")
+    monkeypatch.setattr(cfg, "ARQ_CONFIG", tmp_path / "config.yaml")
+    monkeypatch.setattr(cfg, "ARQ_EXEMPLO", tmp_path / "config.exemplo.yaml")
+    monkeypatch.setattr(cfg, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(cfg, "BASE_DIR", tmp_path)
+
+
+def test_instalacao_nova_cria_config_do_exemplo(tmp_path, monkeypatch):
+    _cfg_em(tmp_path, monkeypatch)
+    cfg.garantir_config()
+    assert (tmp_path / "config.yaml").read_text(encoding="utf-8") == "exemplo: 1\n"
+
+
+def test_config_sumido_volta_da_copia_do_painel(tmp_path, monkeypatch):
+    _cfg_em(tmp_path, monkeypatch)
+    (tmp_path / "data" / "meu_config.yaml").write_text("meu: 1\n", encoding="utf-8")
+    cfg.garantir_config()
+    assert (tmp_path / "config.yaml").read_text(encoding="utf-8") == "meu: 1\n"
+
+
+def test_config_existente_nunca_e_trocado(tmp_path, monkeypatch):
+    _cfg_em(tmp_path, monkeypatch)
+    (tmp_path / "config.yaml").write_text("seu: 1\n", encoding="utf-8")
+    cfg.garantir_config()
+    assert (tmp_path / "config.yaml").read_text(encoding="utf-8") == "seu: 1\n"
+
+
+def test_exemplo_do_projeto_e_valido():
+    y = yaml.safe_load((RAIZ / "config.exemplo.yaml").read_text(encoding="utf-8"))
+    assert [g.chave for g in cfg.ler_grupos(y["grupos"])] == ["mulher", "bebe"]

@@ -19,8 +19,26 @@ from .categorias import nome as nome_categoria  # noqa: E402
 from .models import Grupo  # noqa: E402
 
 
+ARQ_CONFIG = BASE_DIR / "config.yaml"           # a SUA configuração (não vem no ZIP do GitHub)
+ARQ_EXEMPLO = BASE_DIR / "config.exemplo.yaml"  # modelo que vem com o projeto
+
+
+def garantir_config() -> None:
+    """Cria o config.yaml se ele não existir: a partir da última cópia salva pelo painel
+    (data/meu_config.yaml) ou, numa instalação nova, do config.exemplo.yaml.
+    Assim uma atualização do projeto nunca apaga nem troca a sua configuração."""
+    if ARQ_CONFIG.exists():
+        return
+    import shutil
+    for origem in (DATA_DIR / "meu_config.yaml", ARQ_EXEMPLO):
+        if origem.exists():
+            shutil.copy2(origem, ARQ_CONFIG)
+            print(f"ℹ️  config.yaml criado a partir de {origem.relative_to(BASE_DIR)}")
+            return
+
+
 def _ler_yaml() -> dict:
-    caminho = BASE_DIR / "config.yaml"
+    caminho = ARQ_CONFIG
     if not caminho.exists():
         return {}
     with open(caminho, encoding="utf-8") as f:
@@ -100,6 +118,7 @@ def ler_grupos(dados: dict) -> list[Grupo]:
     return grupos
 
 
+garantir_config()
 config = Config()
 
 

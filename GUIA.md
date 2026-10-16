@@ -120,6 +120,8 @@ Regras: sem aspas, sem espaços, exatamente como aparece. Ex.: `ML_ETIQUETA=minh
 
 ### 4.2 Configurar os grupos no `config.yaml`
 
+> O `config.yaml` é **seu**: ele **não vem no ZIP** do projeto. Na primeira vez que o bot roda, ele é criado sozinho a partir do `config.exemplo.yaml` (o modelo que vem com o projeto). Assim, nenhuma atualização apaga ou troca a sua configuração.
+
 > 🖱️ **Jeito fácil: `CONFIGURAR.bat`** — abre um **painel no navegador** onde dá para configurar tudo desta seção (e das seções 8 e 11) sem mexer no arquivo: grupos, nomes do WhatsApp (escolhendo da lista), categorias do Mercado Livre (navegando pelas subcategorias), palavras da Shopee, palavras bloqueadas, intervalo, horário, filtros e as credenciais do `.env`. Veja a seção [9.1](#91-painel-de-configuração). O que está abaixo é o jeito manual, editando o arquivo.
 ```powershell
 notepad config.yaml
@@ -291,11 +293,12 @@ Dois cliques em **`CONFIGURAR.bat`**: o painel abre no navegador (endereço `htt
 
 ## 10. Atualizar o projeto
 
-1. **Antes**, copie o seu `config.yaml` para outro lugar (ex.: `config-backup.yaml` na Área de Trabalho) — a atualização **substitui** esse arquivo. (Se você usa o painel, ele já guarda essa cópia em `data\meu_config.yaml`.)
-2. Baixe o ZIP de novo (**Code → Download ZIP**) e extraia **por cima** da pasta.
-3. Copie o seu backup (ou `data\meu_config.yaml`) por cima do `config.yaml` novo, renomeando para `config.yaml`. Depois abra o `CONFIGURAR.bat` e confira se está tudo certo.
+1. Baixe o ZIP de novo (**Code → Download ZIP**) e extraia **por cima** da pasta.
+2. Pronto. O seu `config.yaml`, o `.env` e a pasta `data\` **não** fazem parte do ZIP, então ficam como estão.
 
-O `.env` e a pasta `data\` **não** são afetados (não fazem parte do ZIP).
+- Novidades de configuração aparecem no `config.exemplo.yaml` (e no painel) — compare se quiser usar alguma.
+- Se o `config.yaml` sumir por algum motivo, o bot recria sozinho a partir da última cópia salva pelo painel (`data\meu_config.yaml`) ou, se não houver, do `config.exemplo.yaml`.
+- Por segurança, de vez em quando copie o seu `config.yaml` para fora da pasta.
 
 ---
 

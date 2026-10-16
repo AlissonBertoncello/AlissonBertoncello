@@ -86,6 +86,8 @@ uv run pytest                               # testes
 ```
 
 ## Grupos — `config.yaml`
+
+> O `config.yaml` é seu e **não vem no projeto**: o bot cria na primeira vez a partir do `config.exemplo.yaml`. Atualizações nunca o substituem.
 Cada grupo tem um nome e uma lista de categorias do ML (a lista de ids está comentada no próprio arquivo). Exemplo:
 ```yaml
 grupos:
