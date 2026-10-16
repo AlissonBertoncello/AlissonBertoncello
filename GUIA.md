@@ -269,7 +269,7 @@ Dois cliques em **`CONFIGURAR.bat`**: o painel abre no navegador (endereço `htt
 | Aba | O que dá para fazer |
 |---|---|
 | **Início** | ver se o bot está rodando, quantas ofertas cada grupo recebeu hoje e os últimos envios |
-| **Grupos** | ligar/desligar grupos, criar e excluir, trocar nome, grupos do WhatsApp (o botão **Carregar grupos do WhatsApp** traz os nomes exatos, com emoji — precisa do Docker aberto), link de convite, **categorias do Mercado Livre** (botão *+ Adicionar categoria* navega pelas categorias e subcategorias com o nº de anúncios), palavras da Shopee e palavras bloqueadas do grupo |
+| **Grupos** | ligar/desligar grupos, criar e excluir, trocar nome, grupos do WhatsApp (o botão **Carregar grupos do WhatsApp** traz os nomes exatos, com emoji — precisa do Docker aberto), link de convite, **categorias do Mercado Livre** — uma por linha, no formato `MLB188063 Limpeza Automotiva` (dá para colar várias de uma vez; apague a linha para remover). O botão *🔎 Procurar categorias no Mercado Livre* abre a lista de categorias e subcategorias com o nº de anúncios: marque quantas quiser (pode entrar e sair das subcategorias) e clique em *Adicionar marcadas*. Se o Mercado Livre não responder, aparece *Tentar de novo*, palavras da Shopee e palavras bloqueadas do grupo |
 | **Envio e filtros** | intervalo, ofertas por vez, pausa entre mensagens, dias sem repetir, horário de envio (mostra a estimativa de mensagens por dia), desconto/preço mínimo e máximo, palavras bloqueadas de todos os grupos, lojas ligadas e destino |
 | **Contas** | ML_CLIENT_ID/SECRET, ML_ETIQUETA, SHOPEE_APP_ID/SECRET. Campos secretos nunca aparecem na tela: deixe em branco para manter |
 

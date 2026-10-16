@@ -181,3 +181,31 @@ def test_bot_segue_com_grupos_antigos_se_o_novo_falhar(monkeypatch):
     destino = _Destino(falha="Grupo 'Não existe' não encontrado")
     grupos, _ = main._recarregar(argparse.Namespace(grupo=None), ["antigos"], destino, logging.getLogger())
     assert grupos == ["antigos"]
+
+
+# ── janela de categorias: tenta de novo e guarda o que já abriu ───────────────
+
+def test_categorias_tenta_de_novo_e_guarda(monkeypatch):
+    chamadas = []
+
+    def buscar(cid):
+        chamadas.append(cid)
+        if len(chamadas) == 1:
+            raise RuntimeError("GET /categories/MLB2227 respondeu HTTP 500")
+        return {"id": cid, "nome": "X", "caminho": [], "filhas": []}
+    monkeypatch.setattr(painel, "_buscar_categorias", buscar)
+    monkeypatch.setattr(painel, "_cache_categorias", {})
+    monkeypatch.setattr(painel.time, "sleep", lambda s: None)
+    assert painel.categorias("mlb2227")["id"] == "MLB2227"
+    assert painel.categorias("MLB2227")["id"] == "MLB2227"  # segunda vez vem guardada
+    assert chamadas == ["MLB2227", "MLB2227"]
+
+
+def test_categorias_desiste_depois_das_tentativas(monkeypatch):
+    def falha(cid):
+        raise RuntimeError("fora do ar")
+    monkeypatch.setattr(painel, "_buscar_categorias", falha)
+    monkeypatch.setattr(painel, "_cache_categorias", {})
+    monkeypatch.setattr(painel.time, "sleep", lambda s: None)
+    with pytest.raises(RuntimeError, match="fora do ar"):
+        painel.categorias("MLB1")

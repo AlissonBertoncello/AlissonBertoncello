@@ -13,6 +13,7 @@ import shutil
 import socket
 import sqlite3
 import threading
+import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from io import StringIO
@@ -335,13 +336,36 @@ def status() -> dict:
     return {"rodando": bot_rodando(), "envios": envios, "hoje": hoje}
 
 
-def categorias(cid: str) -> dict:
+_cache_categorias: dict[str, dict] = {}
+_trava_ml = threading.Lock()  # uma consulta ao ML por vez (o cliente não é usado em paralelo)
+
+
+def categorias(cid: str, tentativas: int = 3) -> dict:
+    """Categorias principais (cid vazio) ou a categoria cid com as subcategorias.
+    Guarda o que já foi aberto e tenta de novo se o Mercado Livre falhar."""
+    cid = cid.strip().upper()
+    if cid in _cache_categorias:
+        return _cache_categorias[cid]
+    for n in range(1, tentativas + 1):
+        try:
+            with _trava_ml:
+                dados = _buscar_categorias(cid)
+            _cache_categorias[cid] = dados
+            return dados
+        except Exception as e:
+            log.warning("Painel: categorias %s, tentativa %d/%d: %s", cid or "principais", n, tentativas, e)
+            if n == tentativas:
+                raise
+            time.sleep(1.5 * n)
+
+
+def _buscar_categorias(cid: str) -> dict:
     from .sources.mercadolivre import cliente_padrao
     c = cliente_padrao()
     if not cid:
         raiz = sorted(c.categorias_raiz(), key=lambda x: x["name"])
         return {"id": "", "caminho": [], "filhas": [{"id": x["id"], "nome": x["name"]} for x in raiz]}
-    cat = c.categoria(cid.upper())
+    cat = c.categoria(cid)
     filhas = sorted(cat.get("children_categories") or [],
                     key=lambda x: -(x.get("total_items_in_this_category") or 0))
     return {"id": cat["id"], "nome": cat.get("name"),

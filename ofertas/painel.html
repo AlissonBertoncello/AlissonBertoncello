@@ -103,6 +103,10 @@
   .dlg-item .n { flex: 1; } .dlg-item .n small { color: var(--muted); display: block; font-size: 12px; }
   .dlg-pe { padding: 12px 18px; display: flex; justify-content: flex-end; gap: 8px; }
   .vazio { color: var(--muted); padding: 18px; text-align: center; }
+  .dlg-item input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--accent); flex: none; cursor: pointer; }
+  .dlg-item label.n { cursor: pointer; }
+  .alerta { color: var(--bad); font-size: 13px; margin-top: 4px; display: block; }
+  textarea.cats { min-height: 120px; font-family: ui-monospace, Consolas, monospace; font-size: 14px; }
   .toast { position: fixed; top: 16px; right: 16px; z-index: 20; background: var(--ink); color: var(--bg);
            padding: 10px 16px; border-radius: 10px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 360px; }
   .toast.on { opacity: 1; }
@@ -230,12 +234,14 @@
 </div></div>
 
 <dialog id="dlg-cat">
-  <div class="dlg-topo"><h3>Adicionar categoria do Mercado Livre</h3><div class="trilha" id="cat-trilha"></div></div>
+  <div class="dlg-topo"><h3>Procurar categorias do Mercado Livre</h3>
+    <div class="trilha" id="cat-trilha"></div>
+    <div class="dica">Marque quantas quiser (pode entrar e sair das subcategorias) e clique em “Adicionar marcadas”.</div></div>
   <div class="dlg-lista" id="cat-lista"></div>
   <div class="dlg-pe">
-    <input type="text" id="cat-manual" placeholder="ou digite o código (MLB…)" style="max-width:220px">
-    <button class="bt" id="cat-manual-bt">Adicionar código</button>
+    <span class="dica" id="cat-cont" style="flex:1;align-self:center"></span>
     <button class="bt" id="cat-fechar">Fechar</button>
+    <button class="bt prim" id="cat-add">Adicionar marcadas</button>
   </div>
 </dialog>
 
@@ -252,6 +258,7 @@ const ROTULOS_ENV = {
 };
 const LOJAS = { mercadolivre: "💛 Mercado Livre", shopee: "🧡 Shopee" };
 let original = null, dados = null, gruposWA = [], grupoDaCategoria = null;
+const marcadas = new Map();  // categorias marcadas na janela: id -> nome
 
 // ── utilidades ──
 const $ = (s, el = document) => el.querySelector(s);
@@ -387,14 +394,25 @@ function cartaoGrupo(g, i, aberto) {
   const convite = el("input", { type: "url", value: g.convite, placeholder: "https://chat.whatsapp.com/..." });
   convite.oninput = () => { g.convite = convite.value.trim(); mudou(); };
 
-  const cats = el("div", { class: "chips" });
-  function desenharCats() {
-    cats.replaceChildren();
-    g.categorias.forEach((c, k) => cats.append(el("span", { class: "chip" }, el("b", { text: c.id }), " " + c.nome,
-      el("button", { type: "button", title: "remover", onclick: () => { g.categorias.splice(k, 1); desenharCats(); resumo(); mudou(); } }, "×"))));
-    cats.append(el("button", { type: "button", class: "bt peq", onclick: () => abrirCategorias(g, () => { desenharCats(); resumo(); }) }, "+ Adicionar categoria"));
+  // categorias: lista de texto, uma por linha ("MLB1234 Nome"); a janela só ajuda a achar os códigos
+  const cats = el("textarea", { class: "cats", placeholder: "uma por linha, ex.:\nMLB188063 Limpeza Automotiva\nMLB2227 Ferramentas para Veículos" });
+  const avisoCats = el("span", { class: "alerta" });
+  const contCats = el("span", { class: "dica" });
+  const textoCats = () => g.categorias.map(c => `${c.id} ${c.nome}`).join("\n");
+  function lerCats() {
+    const r = lerCategorias(cats.value);
+    g.categorias = r.categorias;
+    avisoCats.textContent = r.invalidas.length
+      ? `⚠️ ${r.invalidas.length} linha(s) sem código MLB válido serão ignoradas: ${r.invalidas.slice(0, 3).join(" | ")}` : "";
+    contCats.textContent = `${g.categorias.length} categoria(s) · uma por linha · em rodízio`;
   }
-  desenharCats();
+  cats.value = textoCats();
+  cats.rows = Math.min(20, Math.max(5, g.categorias.length + 1));
+  lerCats();
+  cats.oninput = () => { lerCats(); resumo(); mudou(); };
+  const procurar = el("button", { type: "button", class: "bt peq", onclick: () => abrirCategorias(g, () => {
+    cats.value = textoCats(); lerCats(); resumo(); mudou();
+  }) }, "🔎 Procurar categorias no Mercado Livre");
 
   const shopee = el("textarea", { placeholder: "uma palavra-chave por linha" });
   shopee.value = g.shopee.join("\n");
@@ -416,8 +434,9 @@ function cartaoGrupo(g, i, aberto) {
       el("div", { style: "margin-top:6px" }, chips(g.whatsapp, () => { resumo(); mudou(); }, { placeholder: "nome exato do grupo", lista_dl: "dl-wa" })),
       el("span", { class: "dica", text: "Nome exato, com emoji. Vários grupos recebem as mesmas ofertas. Use “Carregar grupos do WhatsApp” para escolher da lista." })),
     campo("Link de convite (vai no fim de cada oferta)", convite),
-    el("div", {}, el("span", { style: "font-weight:600;font-size:14px", text: "Categorias do Mercado Livre" }),
-      el("div", { style: "margin-top:6px" }, cats)),
+    el("div", {}, el("div", { class: "linha", style: "justify-content:space-between" },
+        el("span", { style: "font-weight:600;font-size:14px", text: "Categorias do Mercado Livre" }), procurar),
+      el("div", { style: "margin-top:6px" }, cats), contCats, avisoCats),
     el("div", {}, el("span", { style: "font-weight:600;font-size:14px", text: "Palavras-chave da Shopee" }),
       el("div", { style: "margin-top:6px" }, shopee), contShopee),
     el("div", {}, el("span", { style: "font-weight:600;font-size:14px", text: "Palavras bloqueadas só neste grupo" }),
@@ -445,10 +464,28 @@ $("#bt-wa").onclick = async () => {
 };
 
 // ── categorias (janela) ──
+function lerCategorias(texto) {
+  // "MLB1234 Nome", "MLB1234: Nome", "MLB1234 - Nome" ou só "MLB1234"; ignora repetidas
+  const categorias = [], invalidas = [], vistas = new Set();
+  for (const linha of texto.split("\n").map(l => l.trim()).filter(Boolean)) {
+    const m = linha.match(/^(MLB\d{1,10})\b\s*[:\-–]?\s*(.*)$/i);
+    if (!m) { invalidas.push(linha.slice(0, 30)); continue; }
+    const id = m[1].toUpperCase();
+    if (vistas.has(id)) continue;
+    vistas.add(id);
+    categorias.push({ id, nome: m[2].trim() || id });
+  }
+  return { categorias, invalidas };
+}
 async function abrirCategorias(grupo, depois) {
   grupoDaCategoria = { grupo, depois };
+  marcadas.clear(); contarMarcadas();
   $("#dlg-cat").showModal();
   await navegar("");
+}
+function contarMarcadas() {
+  $("#cat-cont").textContent = marcadas.size ? `${marcadas.size} marcada(s)` : "";
+  $("#cat-add").disabled = !marcadas.size;
 }
 async function navegar(id) {
   const lista = $("#cat-lista"), trilha = $("#cat-trilha");
@@ -458,34 +495,38 @@ async function navegar(id) {
     trilha.replaceChildren(el("a", { onclick: () => navegar(""), text: "Todas" }),
       ...r.caminho.flatMap(p => [" › ", el("a", { onclick: () => navegar(p.id), text: p.nome })]));
     lista.replaceChildren();
-    if (r.id) lista.append(itemCategoria({ id: r.id, nome: r.nome + " (inteira)" }, false));
+    if (r.id) lista.append(itemCategoria({ id: r.id, nome: r.nome, inteira: true }, false));
     if (!r.filhas.length) lista.append(el("div", { class: "vazio", text: "Sem subcategorias." }));
     r.filhas.forEach(f => lista.append(itemCategoria(f, true)));
   } catch (e) {
-    lista.replaceChildren(el("div", { class: "vazio", text: "Não consegui buscar as categorias: " + e.message }));
+    lista.replaceChildren(el("div", { class: "vazio" },
+      el("div", { text: "Não consegui buscar as categorias no Mercado Livre: " + e.message }),
+      el("button", { type: "button", class: "bt", style: "margin-top:10px", onclick: () => navegar(id) }, "Tentar de novo")));
   }
 }
 function itemCategoria(c, podeAbrir) {
   const { grupo } = grupoDaCategoria;
   const ja = grupo.categorias.some(x => x.id === c.id);
   const qtd = typeof c.total === "number" ? c.total.toLocaleString("pt-BR") + " anúncios · " : "";
-  return el("div", { class: "dlg-item" },
-    el("div", { class: "n" }, c.nome, el("small", { text: qtd + c.id })),
-    podeAbrir ? el("button", { type: "button", class: "bt peq", onclick: () => navegar(c.id) }, "Subcategorias ›") : null,
-    el("button", { type: "button", class: "bt peq" + (ja ? "" : " prim"), onclick: ev => {
-      if (grupo.categorias.some(x => x.id === c.id)) return;
-      grupo.categorias.push({ id: c.id, nome: c.nome.replace(/ \(inteira\)$/, "") });
-      ev.target.textContent = "✓ Adicionada"; ev.target.classList.remove("prim");
-      grupoDaCategoria.depois(); mudou();
-    } }, ja ? "✓ Adicionada" : "+ Adicionar"));
+  const caixa = el("input", { type: "checkbox", id: "cat-" + c.id });
+  caixa.checked = ja || marcadas.has(c.id);
+  caixa.disabled = ja;
+  caixa.onchange = () => { if (caixa.checked) marcadas.set(c.id, c.nome); else marcadas.delete(c.id); contarMarcadas(); };
+  return el("div", { class: "dlg-item" }, caixa,
+    el("label", { class: "n", for: "cat-" + c.id }, c.nome + (c.inteira ? " (inteira)" : ""),
+      el("small", { text: qtd + c.id + (ja ? " · já está no grupo" : "") })),
+    podeAbrir ? el("button", { type: "button", class: "bt peq", onclick: () => navegar(c.id) }, "Subcategorias ›") : null);
 }
 $("#cat-fechar").onclick = () => $("#dlg-cat").close();
-$("#cat-manual-bt").onclick = () => {
-  const id = $("#cat-manual").value.trim().toUpperCase();
-  if (!/^MLB\d+$/.test(id)) { toast("Código inválido: use o formato MLB123456"); return; }
+$("#cat-add").onclick = () => {
   const { grupo, depois } = grupoDaCategoria;
-  if (!grupo.categorias.some(x => x.id === id)) { grupo.categorias.push({ id, nome: id }); depois(); mudou(); }
-  $("#cat-manual").value = ""; toast(id + " adicionada");
+  let n = 0;
+  for (const [id, nome] of marcadas)
+    if (!grupo.categorias.some(x => x.id === id)) { grupo.categorias.push({ id, nome }); n++; }
+  marcadas.clear(); contarMarcadas();
+  depois();
+  $("#dlg-cat").close();
+  toast(`${n} categoria(s) adicionada(s) à lista. Clique em Salvar para gravar.`);
 };
 
 // ── contas (.env) ──
