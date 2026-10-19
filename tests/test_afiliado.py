@@ -67,7 +67,7 @@ def test_pipeline_falha_linkbuilder_nao_envia(monkeypatch):
 def _ciclo(monkeypatch, ofertas_por_cat, gerar):
     """Prepara executar_ciclo com coleta e Linkbuilder falsos; devolve a lista de envios."""
     monkeypatch.setattr(pipeline, "coletar", lambda cats: list(ofertas_por_cat[next(iter(cats))]))
-    monkeypatch.setattr(pipeline, "filtrar", lambda o, grupo, bloquear=(): o)
+    monkeypatch.setattr(pipeline, "filtrar", lambda o, *a, **k: o)
     monkeypatch.setattr(pipeline.config, "max_posts_por_ciclo", 1)
     monkeypatch.setattr(pipeline, "dentro_do_horario", lambda: True)
     monkeypatch.setattr(pipeline.afiliado_ml, "gerar_links_afiliado", gerar)

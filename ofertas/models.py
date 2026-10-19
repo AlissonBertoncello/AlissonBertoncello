@@ -43,3 +43,7 @@ class Grupo:
     convite: str = ""          # link de convite do grupo, no fim de cada mensagem
     shopee: list[str] = field(default_factory=list)  # palavras-chave buscadas na Shopee
     bloquear: list[str] = field(default_factory=list)  # palavras proibidas só neste grupo
+    ganchos: list[str] = field(default_factory=list)   # frases de abertura, em rodízio
+    chamada: str = ""          # texto antes do link de convite ("Manda pro parceiro...")
+    peso_ml: int = 1           # proporção das lojas: a cada peso_ml ciclos do ML,
+    peso_shopee: int = 1       # peso_shopee ciclos da Shopee

@@ -150,6 +150,15 @@ grupos:
       - "Achadinhos da Gabi 💄 2"
   ```
   Dica: use no `convite:` um link do Bitly e troque para onde ele aponta quando um grupo lotar.
+- **Mensagem do grupo** (também pelo painel):
+  ```yaml
+    chamada: "🤝 Manda pro parceiro que tá precisando!"   # texto antes do link de convite
+    ganchos:                                              # frase de abertura, em rodízio
+      - "SUA NAVE MERECE ESSE CUIDADO 🚗"
+      - "PREÇO DE OFICINA? AQUI NÃO! 🔧"
+    proporcao: {mercadolivre: 3, shopee: 1}               # 3 ofertas do ML para 1 da Shopee (padrão 1 : 1)
+  ```
+  A oferta sai assim: gancho em negrito → nome curto do produto (até ~8 palavras) → "De ~R$ 98~ por *R$ 59* 🔻40%" (sem centavos quando o valor é redondo) → economia → link → chamada + convite.
 - **Ligar/desligar um grupo:** `ativo: false` desliga o grupo sem apagar a configuração (apague a linha, ou use `true`, para ligar). O **grupo Fitness** já está pronto no `config.yaml`, desligado: crie o grupo no WhatsApp, adicione o número do bot como admin e ligue (no painel é só a chave *Ativo*).
 - O `convite:` é o **link de convite do grupo** (no WhatsApp: grupo → *Convidar via link*). Ele vai no fim de cada oferta, com o texto *"💬 Envie essa oferta para uma amiga!"*. Substitua o texto entre colchetes pelo link, **entre aspas**: `convite: "https://chat.whatsapp.com/XXXX"`. Enquanto estiver o texto entre colchetes, essas duas linhas não aparecem na mensagem.
 
@@ -271,7 +280,7 @@ Dois cliques em **`CONFIGURAR.bat`**: o painel abre no navegador (endereço `htt
 | Aba | O que dá para fazer |
 |---|---|
 | **Início** | ver se o bot está rodando, quantas ofertas cada grupo recebeu hoje e os últimos envios |
-| **Grupos** | ligar/desligar grupos, criar e excluir, trocar nome, grupos do WhatsApp (o botão **Carregar grupos do WhatsApp** traz os nomes exatos, com emoji — precisa do Docker aberto), link de convite, **categorias do Mercado Livre** — uma por linha, no formato `MLB188063 Limpeza Automotiva` (dá para colar várias de uma vez; apague a linha para remover). O botão *🔎 Procurar categorias no Mercado Livre* abre a lista de categorias e subcategorias com o nº de anúncios: marque quantas quiser (pode entrar e sair das subcategorias) e clique em *Adicionar marcadas*. Se o Mercado Livre não responder, aparece *Tentar de novo*, palavras da Shopee e palavras bloqueadas do grupo |
+| **Grupos** | ligar/desligar grupos, criar e excluir, trocar nome, grupos do WhatsApp (o botão **Carregar grupos do WhatsApp** traz os nomes exatos, com emoji — precisa do Docker aberto), link de convite, **categorias do Mercado Livre** — uma por linha, no formato `MLB188063 Limpeza Automotiva` (dá para colar várias de uma vez; apague a linha para remover). O botão *🔎 Procurar categorias no Mercado Livre* abre a lista de categorias e subcategorias com o nº de anúncios: marque quantas quiser (pode entrar e sair das subcategorias) e clique em *Adicionar marcadas*. Se o Mercado Livre não responder, aparece *Tentar de novo*, palavras da Shopee, palavras bloqueadas do grupo, **ganchos** (frases de abertura em caixa alta, em rodízio — há sugestões prontas para Feminino, Mamãe e Bebê e Carro), **chamada para compartilhar** (o texto antes do link de convite, ex.: "🤝 Manda pro parceiro que tá precisando!"), **proporção das lojas** (ex.: 3 ofertas do Mercado Livre para 1 da Shopee) e uma **prévia da mensagem** |
 | **Envio e filtros** | intervalo, ofertas por vez, pausa entre mensagens, dias sem repetir, horário de envio (mostra a estimativa de mensagens por dia), desconto/preço mínimo e máximo, palavras bloqueadas de todos os grupos, lojas ligadas e destino |
 | **Contas** | ML_CLIENT_ID/SECRET, ML_ETIQUETA, SHOPEE_APP_ID/SECRET. Campos secretos nunca aparecem na tela: deixe em branco para manter |
 

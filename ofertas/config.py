@@ -97,6 +97,14 @@ def _lista(valor) -> list[str]:
     return [str(v).strip() for v in itens if v is not None and str(v).strip()]
 
 
+def _peso(g: dict, loja: str) -> int:
+    """proporcao: {mercadolivre: 3, shopee: 1} -> peso da loja (padrão 1; 0 = não usa)."""
+    try:
+        return max(0, int((g.get("proporcao") or {}).get(loja, 1)))
+    except (TypeError, ValueError, AttributeError):
+        return 1
+
+
 def ler_grupos(dados: dict) -> list[Grupo]:
     """grupos do config.yaml -> [Grupo]. categorias: lista de ids ou {id: nome}."""
     grupos = []
@@ -114,7 +122,9 @@ def ler_grupos(dados: dict) -> list[Grupo]:
             grupos.append(Grupo(chave=str(chave), nome=str(g.get("nome") or chave), categorias=cats,
                                 whatsapp=_lista(g.get("whatsapp")),
                                 convite=_convite(g.get("convite")), shopee=shopee,
-                                bloquear=_lista(g.get("bloquear"))))
+                                bloquear=_lista(g.get("bloquear")), ganchos=_lista(g.get("ganchos")),
+                                chamada=str(g.get("chamada") or "").strip(),
+                                peso_ml=_peso(g, "mercadolivre"), peso_shopee=_peso(g, "shopee")))
     return grupos
 
 

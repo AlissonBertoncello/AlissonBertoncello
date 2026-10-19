@@ -100,7 +100,7 @@ def ciclo(monkeypatch, credenciais):
     monkeypatch.setattr(pipeline.config, "fonte_ml", {"ativa": True})
     monkeypatch.setattr(pipeline.config, "max_posts_por_ciclo", 1)
     monkeypatch.setattr(pipeline, "dentro_do_horario", lambda: True)
-    monkeypatch.setattr(pipeline, "filtrar", lambda o, grupo, bloquear=(): o)
+    monkeypatch.setattr(pipeline, "filtrar", lambda o, *a, **k: o)
     gerados = []
 
     def gerar(lista):
@@ -128,7 +128,7 @@ def test_alterna_mercado_livre_e_shopee(monkeypatch, ciclo):
         pipeline.executar_ciclo(destino, [g], registrar=False)
     assert [(p, i) for p, i, _ in envios] == [("mercadolivre", "C1"), ("shopee", "fralda"),
                                               ("mercadolivre", "C2"), ("shopee", "body bebê")]
-    assert "🧡 Shopee" in envios[1][2]
+    assert "🛒 https://s.shopee/fralda" in envios[1][2]
     # o Linkbuilder do ML nunca recebe produto da Shopee
     assert all(set(lote) == {"mercadolivre"} for lote in gerados)
 
@@ -173,3 +173,13 @@ def test_grupo_so_com_shopee_e_valido():
     from ofertas import config as cfg
     [g] = cfg.ler_grupos({"x": {"shopee": ["fralda", " "]}})
     assert g.categorias == {} and g.shopee == ["fralda"]
+
+
+def test_proporcao_3_ml_para_1_shopee(monkeypatch, ciclo):
+    destino, envios, _ = ciclo
+    monkeypatch.setattr(pipeline, "coletar", lambda cats: [_of("mercadolivre", next(iter(cats)))])
+    monkeypatch.setattr(pipeline.shopee, "buscar", lambda termo: [_of("shopee", termo)])
+    g = Grupo("g", "G", {"C1": "1", "C2": "2", "C3": "3", "C4": "4"}, shopee=["fralda"], peso_ml=3, peso_shopee=1)
+    for _ in range(8):
+        pipeline.executar_ciclo(destino, [g], registrar=False)
+    assert [p for p, _, _ in envios] == ["mercadolivre"] * 3 + ["shopee"] + ["mercadolivre"] * 3 + ["shopee"]

@@ -115,6 +115,10 @@ def ler_tudo() -> dict:
             "categorias": [{"id": str(k), "nome": str(v)} for k, v in cats.items()],
             "shopee": _lista(g.get("shopee")),
             "bloquear": _lista(g.get("bloquear")),
+            "ganchos": _lista(g.get("ganchos")),
+            "chamada": str(g.get("chamada") or ""),
+            "peso_ml": _peso(g, "mercadolivre"),
+            "peso_shopee": _peso(g, "shopee"),
         })
     env = ler_env()
     return {
@@ -140,6 +144,13 @@ def ler_tudo() -> dict:
         "env": {k: {"secreto": s, "definido": bool(env.get(k)), "valor": "" if s else env.get(k, "")}
                 for k, s in CAMPOS_ENV.items()},
     }
+
+
+def _peso(g: dict, loja: str) -> int:
+    try:
+        return max(0, int((g.get("proporcao") or {}).get(loja, 1)))
+    except (TypeError, ValueError, AttributeError):
+        return 1
 
 
 # ── tela -> config.yaml ──────────────────────────────────────────────
@@ -186,6 +197,13 @@ def validar(d: dict) -> list[str]:
         conv = (gr.get("convite") or "").strip()
         if conv and not conv.startswith(("https://", "http://")):
             erros.append(f"{nome}: o convite precisa ser um link (https://...)")
+        pesos = [gr.get("peso_ml", 1), gr.get("peso_shopee", 1)]
+        if not all(isinstance(v, int) and not isinstance(v, bool) and 0 <= v <= 10 for v in pesos):
+            erros.append(f"{nome}: a proporção das lojas precisa ser de 0 a 10")
+        elif gr.get("ativo") and sum(pesos) == 0:
+            erros.append(f"{nome}: a proporção das lojas não pode ser 0 nas duas")
+        if any("\n" in str(x) for x in [gr.get("chamada", ""), *(gr.get("ganchos") or [])]):
+            erros.append(f"{nome}: ganchos e chamada precisam ter uma linha cada")
     if not any(gr.get("ativo") for gr in d.get("grupos") or []):
         erros.append("Deixe pelo menos um grupo ativo")
     for k, v in (d.get("env") or {}).items():
@@ -244,6 +262,18 @@ def _aplicar_grupo(m: CommentedMap, gr: dict) -> None:
     if bl or "bloquear" in m:
         if bl != _lista(m.get("bloquear")):
             m["bloquear"] = _flow(bl)
+    ga = [t.strip() for t in gr.get("ganchos") or [] if t.strip()]
+    if ga != _lista(m.get("ganchos")):
+        if ga:
+            m["ganchos"] = _bloco(ga)
+        elif "ganchos" in m:
+            del m["ganchos"]
+    ch = (gr.get("chamada") or "").strip()
+    if ch or "chamada" in m:
+        _set(m, "chamada", ch)
+    pesos = {"mercadolivre": int(gr.get("peso_ml", 1)), "shopee": int(gr.get("peso_shopee", 1))}
+    if pesos != {"mercadolivre": 1, "shopee": 1} or "proporcao" in m:
+        _set(m, "proporcao", pesos)
     sh = [t.strip() for t in gr.get("shopee") or [] if t.strip()]
     if sh != _lista(m.get("shopee")):
         m["shopee"] = _bloco(sh)

@@ -1,6 +1,7 @@
 import logging
 import re
 import time
+from collections import Counter
 
 from . import afiliado_ml, db
 from .config import config, dentro_do_horario
@@ -31,24 +32,43 @@ def tem_palavra_bloqueada(titulo: str, extras: list[str] = ()) -> bool:
                for p in [*config.palavras_bloqueadas, *extras] if p)
 
 
-def filtrar(ofertas: list[Oferta], grupo: str, bloquear: list[str] = ()) -> list[Oferta]:
+def motivo_descarte(o: Oferta, grupo: str, bloquear: list[str] = ()) -> str | None:
+    """Por que a oferta não serve para o grupo (None = serve)."""
+    if not o.titulo:
+        return "sem título"
+    if db.ja_enviada(o.uid, config.nao_repetir_dias, grupo, o.titulo):
+        return "já enviadas"
+    if config.desconto_minimo and (o.desconto or 0) < config.desconto_minimo:
+        return f"desconto < {config.desconto_minimo}%"
+    if o.preco is not None:
+        if config.preco_minimo and o.preco < config.preco_minimo:
+            return "preço baixo"
+        if config.preco_maximo and o.preco > config.preco_maximo:
+            return "preço alto"
+    if tem_palavra_bloqueada(o.titulo, bloquear):
+        return "palavra bloqueada"
+    return None
+
+
+def filtrar(ofertas: list[Oferta], grupo: str, bloquear: list[str] = (),
+            motivos: Counter | None = None) -> list[Oferta]:
+    """Ofertas que passam nos filtros; em `motivos` conta por que as outras saíram."""
     aprovadas = []
     for o in ofertas:
-        if not o.titulo:
-            continue
-        if db.ja_enviada(o.uid, config.nao_repetir_dias, grupo, o.titulo):
-            continue
-        if config.desconto_minimo and (o.desconto or 0) < config.desconto_minimo:
-            continue
-        if o.preco is not None:
-            if config.preco_minimo and o.preco < config.preco_minimo:
-                continue
-            if config.preco_maximo and o.preco > config.preco_maximo:
-                continue
-        if tem_palavra_bloqueada(o.titulo, bloquear):
-            continue
-        aprovadas.append(o)
+        motivo = motivo_descarte(o, grupo, bloquear)
+        if motivo is None:
+            aprovadas.append(o)
+        elif motivos is not None:
+            motivos[motivo] += 1
     return aprovadas
+
+
+def _resumo(brutas: list, boas: list, motivos: Counter) -> str:
+    """'65 coletadas, 33 novas nos filtros (fora: 20 já enviadas, 12 desconto < 10%)'."""
+    texto = f"{len(brutas)} coletadas, {len(boas)} novas nos filtros"
+    if motivos:
+        texto += " (fora: " + ", ".join(f"{n} {m}" for m, n in motivos.most_common()) + ")"
+    return texto
 
 
 def _chave_similar(titulo: str) -> str:
@@ -90,7 +110,7 @@ def com_link_afiliado(ofertas: list[Oferta]) -> list[Oferta]:
 # rodízios (vivem enquanto o bot roda), por grupo:
 _proxima: dict[str, int] = {}          # próxima categoria do Mercado Livre
 _proxima_shopee: dict[str, int] = {}   # próxima palavra-chave da Shopee
-_loja_da_vez: dict[str, int] = {}      # alterna as lojas a cada ciclo (meio a meio)
+_loja_da_vez: dict[str, int] = {}      # posição na sequência de lojas (proporção do grupo)
 _avisou_shopee: set[str] = set()       # avisa só uma vez que a Shopee está fora
 TENTATIVAS_SHOPEE = 3                  # palavras tentadas por ciclo antes de desistir
 
@@ -105,8 +125,9 @@ def _candidatas_ml(grupo: Grupo, n: int) -> list[Oferta]:
         idx = (inicio + passo) % len(cats)
         cid, nome = cats[idx]
         brutas = coletar({cid: nome})
-        boas = filtrar(brutas, grupo.chave, grupo.bloquear)
-        log.info("[%s] %s: %d coletadas, %d novas nos filtros", grupo.nome, nome, len(brutas), len(boas))
+        motivos = Counter()
+        boas = filtrar(brutas, grupo.chave, grupo.bloquear, motivos)
+        log.info("[%s] %s: %s", grupo.nome, nome, _resumo(brutas, boas, motivos))
         # reservas: se uma ficar sem link de afiliado, a próxima melhor entra no lugar
         candidatas = escolher(boas, n * 3)
         if candidatas:
@@ -142,9 +163,9 @@ def _candidatas_shopee(grupo: Grupo, n: int) -> list[Oferta]:
             log.error("[%s] Shopee '%s': %s", grupo.nome, termos[idx], e)
             _proxima_shopee[grupo.chave] = idx + 1
             return []
-        boas = filtrar(brutas, grupo.chave, grupo.bloquear)
-        log.info("[%s] Shopee '%s': %d coletadas, %d novas nos filtros",
-                 grupo.nome, termos[idx], len(brutas), len(boas))
+        motivos = Counter()
+        boas = filtrar(brutas, grupo.chave, grupo.bloquear, motivos)
+        log.info("[%s] Shopee '%s': %s", grupo.nome, termos[idx], _resumo(brutas, boas, motivos))
         candidatas = escolher(boas, n * 3)
         if candidatas:
             _proxima_shopee[grupo.chave] = idx + 1
@@ -153,13 +174,31 @@ def _candidatas_shopee(grupo: Grupo, n: int) -> list[Oferta]:
     return []
 
 
+def sequencia_lojas(grupo: Grupo) -> list[str]:
+    """Ordem das lojas nos ciclos do grupo, intercalada pela proporção.
+    Ex.: 3 ML : 1 Shopee -> [ml, ml, ml, shopee]; 2 : 2 -> [ml, shopee, ml, shopee]."""
+    ml, sh = grupo.peso_ml, grupo.peso_shopee
+    if ml + sh == 0:
+        ml = sh = 1
+    seq, a, b = [], 0, 0
+    while a < ml or b < sh:  # espalha a loja menor entre as da maior
+        if b < sh and (a >= ml or (b + 1) * ml < (a + 1) * sh):
+            seq.append("shopee"); b += 1
+        else:
+            seq.append("ml"); a += 1
+    return seq
+
+
 def candidatas_do_grupo(grupo: Grupo, n: int) -> list[Oferta]:
-    """Candidatas da vez: alterna as lojas a cada ciclo (Mercado Livre / Shopee);
+    """Candidatas da vez: a loja segue a proporção do grupo (padrão meio a meio);
     se a loja da vez não tiver oferta nova (ou estiver indisponível), usa a outra."""
-    lojas = [_candidatas_ml, _candidatas_shopee]
-    vez = _loja_da_vez.get(grupo.chave, 0) % len(lojas)
+    seq = sequencia_lojas(grupo)
+    vez = _loja_da_vez.get(grupo.chave, 0) % len(seq)
     _loja_da_vez[grupo.chave] = vez + 1
-    for buscar in (lojas[vez], lojas[1 - vez]):
+    ordem = [_candidatas_ml, _candidatas_shopee]
+    if seq[vez] == "shopee":
+        ordem.reverse()
+    for buscar in ordem:
         candidatas = buscar(grupo, n)
         if candidatas:
             return candidatas
