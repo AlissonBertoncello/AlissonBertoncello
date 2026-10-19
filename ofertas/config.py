@@ -124,6 +124,7 @@ def ler_grupos(dados: dict) -> list[Grupo]:
                                 convite=_convite(g.get("convite")), shopee=shopee,
                                 bloquear=_lista(g.get("bloquear")), ganchos=_lista(g.get("ganchos")),
                                 chamada=str(g.get("chamada") or "").strip(),
+                                chamada_compra=str(g.get("chamada_compra") or "").strip(),
                                 peso_ml=_peso(g, "mercadolivre"), peso_shopee=_peso(g, "shopee")))
     return grupos
 

@@ -262,21 +262,29 @@ const ROTULOS_ENV = {
 };
 const LOJAS = { mercadolivre: "💛 Mercado Livre", shopee: "🧡 Shopee" };
 const CHAMADA_PADRAO = "💬 Manda essa oferta pra alguém que vai gostar!";
+const COMPRA_PADRAO = "🛒 Compre aqui";
+function textoCompra(t, loja = "no Mercado Livre") {
+  t = t || COMPRA_PADRAO;
+  return t.includes("{loja}") ? t.replaceAll("{loja}", loja) : t.replace(/[\s:]+$/, "") + " " + loja + ":";
+}
 // sugestões prontas por nicho: ganchos (frases de abertura) + chamada para compartilhar
 const SUGESTOES = {
-  feminino: { nome: "Feminino 💄", chamada: "💬 Manda pra aquela amiga que ama um achadinho!", ganchos: [
+  feminino: { nome: "Feminino 💄", chamada: "💬 Manda pra aquela amiga que ama um achadinho!",
+    compra: "🛍️ Garanta o seu", ganchos: [
     "ACHADINHO QUE VAI DIRETO PRO CARRINHO 💄", "AMIGA, CORRE QUE TÁ BARATINHO!", "ESSE AQUI EU NÃO DEIXARIA PASSAR 👀",
     "PRA FICAR LINDA SEM GASTAR MUITO ✨", "O PREÇO TÁ UM ESCÂNDALO!", "QUEM VIU, JÁ COLOCOU NO CARRINHO",
     "AUTOESTIMA EM DIA, BOLSO TAMBÉM 💅", "ESSE VAI ESGOTAR, VIU?", "PRESENTE PRA VOCÊ MESMA, PODE! 🎁",
     "BELEZA DE MILHÕES, PREÇO DE ACHADINHO", "NÃO É SONHO, É PROMOÇÃO MESMO 😍", "O BOLETO AGRADECE, O ESPELHO TAMBÉM",
     "CORRE ANTES QUE O PREÇO VOLTE!", "ESSE TÁ COM CARA DE \"PRECISO\" 🛍️", "ACHEI E VIM CORRENDO TE MOSTRAR!"] },
-  bebe: { nome: "Mamãe e Bebê 🍼", chamada: "💬 Manda pra outra mamãe que vai amar!", ganchos: [
+  bebe: { nome: "Mamãe e Bebê 🍼", chamada: "💬 Manda pra outra mamãe que vai amar!",
+    compra: "🛒 Garanta já", ganchos: [
     "MAMÃE, OLHA ESSE ACHADINHO! 🍼", "PRA FACILITAR A ROTINA COM O BEBÊ", "ECONOMIA QUE TODA MÃE MERECE 💛",
     "PRO BEBÊ TER O MELHOR, SEM PESAR NO BOLSO", "CORRE, MAMÃE, QUE TÁ BARATINHO!", "MÃE QUE É MÃE NÃO PERDE ESSA 😍",
     "O BEBÊ AGRADECE E O BOLSO TAMBÉM", "ACHADINHO PRA DEIXAR O DIA A DIA MAIS LEVE", "ESSE AQUI TODA MAMÃE PRECISA CONHECER",
     "PREÇO DE MÃE PRA MÃE 💕", "PRA CUIDAR DE QUEM A GENTE MAIS AMA 👶", "SALVA ESSA ANTES QUE ACABE!",
     "DICA DE OURO PRAS MAMÃES ✨", "PROMOÇÃO BOA ASSIM NÃO DURA MUITO", "PRA MAMÃE E PRO BEBÊ FICAREM FELIZES"] },
-  carro: { nome: "Carro e oficina 🚗", chamada: "🤝 Manda pro parceiro que tá precisando!", ganchos: [
+  carro: { nome: "Carro e oficina 🚗", chamada: "🤝 Manda pro parceiro que tá precisando!",
+    compra: "🛒 Garante o seu", ganchos: [
     "SUA NAVE MERECE ESSE CUIDADO 🚗", "TODO MOTORISTA DEVERIA TER ESSE AQUI", "PREÇO DE OFICINA? AQUI NÃO! 🔧",
     "QUEM CUIDA DO CARRO NÃO PERDE ESSA", "SEU CARRO VAI AGRADECER", "ACHADO DE RESPEITO PRA GARAGEM",
     "BARATO ASSIM, NEM PRECISA PENSAR MUITO", "PRA DEIXAR A NAVE NO CAPRICHO ✨", "COISA DE QUEM ENTENDE DO ASSUNTO 😎",
@@ -446,6 +454,7 @@ function cartaoGrupo(g, i, aberto) {
   ganchos.rows = Math.min(16, Math.max(4, g.ganchos.length + 1));
   const contGanchos = el("span", { class: "dica" });
   const chamada = el("input", { type: "text", value: g.chamada, placeholder: CHAMADA_PADRAO });
+  const compra = el("input", { type: "text", value: g.chamada_compra || "", placeholder: COMPRA_PADRAO });
   const previa = el("div", { class: "previa" });
   function desenharPrevia() {
     contGanchos.textContent = g.ganchos.length
@@ -455,12 +464,13 @@ function cartaoGrupo(g, i, aberto) {
     if (g.ganchos.length) linhas.push(el("b", { text: g.ganchos[0] }), "\n\n", "Nome curto do produto\n");
     else linhas.push("🔥 ", el("b", { text: "Nome curto do produto" }), "\n");
     linhas.push("De ", el("s", { text: "R$ 129" }), " por ", el("b", { text: "R$ 79" }), " no Pix 🔻39%\n",
-      "💰 Você economiza ", el("b", { text: "R$ 50" }), "\n\n💛 Mercado Livre\n🛒 https://meli.la/…");
+      "💰 Você economiza ", el("b", { text: "R$ 50" }), "\n\n", el("b", { text: textoCompra(g.chamada_compra) }), "\nhttps://meli.la/…");
     if (g.convite) linhas.push("\n\n" + (g.chamada || CHAMADA_PADRAO) + "\n👉 " + g.convite);
     previa.replaceChildren(...linhas);
   }
   ganchos.oninput = () => { g.ganchos = ganchos.value.split("\n").map(t => t.trim()).filter(Boolean); desenharPrevia(); mudou(); };
   chamada.oninput = () => { g.chamada = chamada.value.trim(); desenharPrevia(); mudou(); };
+  compra.oninput = () => { g.chamada_compra = compra.value.trim(); desenharPrevia(); mudou(); };
   convite.addEventListener("input", desenharPrevia);
   const sugestao = el("select", { style: "width:auto" }, el("option", { value: "", text: "Usar sugestões prontas…" }),
     ...Object.entries(SUGESTOES).map(([k, v]) => el("option", { value: k, text: v.nome })));
@@ -468,9 +478,10 @@ function cartaoGrupo(g, i, aberto) {
     const sug = SUGESTOES[sugestao.value];
     sugestao.value = "";
     if (!sug) return;
-    if (g.ganchos.length && !confirm("Trocar os ganchos e a chamada atuais pelas sugestões?")) return;
-    g.ganchos = [...sug.ganchos]; g.chamada = sug.chamada;
-    ganchos.value = g.ganchos.join("\n"); ganchos.rows = g.ganchos.length + 1; chamada.value = g.chamada;
+    if (g.ganchos.length && !confirm("Trocar os ganchos e as chamadas atuais pelas sugestões?")) return;
+    g.ganchos = [...sug.ganchos]; g.chamada = sug.chamada; g.chamada_compra = sug.compra;
+    ganchos.value = g.ganchos.join("\n"); ganchos.rows = g.ganchos.length + 1;
+    chamada.value = g.chamada; compra.value = g.chamada_compra;
     desenharPrevia(); mudou();
   };
   desenharPrevia();
@@ -508,6 +519,9 @@ function cartaoGrupo(g, i, aberto) {
     el("div", {}, el("div", { class: "linha", style: "justify-content:space-between" },
         el("span", { style: "font-weight:600;font-size:14px", text: "Ganchos (frase de abertura de cada oferta)" }), sugestao),
       el("div", { style: "margin-top:6px" }, ganchos), contGanchos),
+    campo("Chamada de compra (antes do link do produto)", compra,
+      el("small", { text: "Ex.: “🛒 Garante o seu” — o bot completa com “no Mercado Livre:” ou “na Shopee:”. "
+        + "Para escolher onde entra a loja, use {loja}: “🛍️ Corre {loja} antes que acabe!”. Vazio = “🛒 Compre aqui”." })),
     campo("Chamada para compartilhar (antes do link de convite)", chamada,
       el("small", { text: "Ex.: “🤝 Manda pro parceiro que tá precisando!”. Vazio = texto padrão." })),
     el("div", {}, el("span", { style: "font-weight:600;font-size:14px", text: "Prévia da mensagem" }),
@@ -527,7 +541,7 @@ function cartaoGrupo(g, i, aberto) {
 $("#bt-novo").onclick = () => {
   let n = 1; while (dados.grupos.some(g => g.chave === "novo_grupo" + (n > 1 ? n : ""))) n++;
   dados.grupos.push({ chave: "novo_grupo" + (n > 1 ? n : ""), ativo: true, nome: "Novo grupo", whatsapp: [], convite: "",
-                      categorias: [], shopee: [], bloquear: [], ganchos: [], chamada: "", peso_ml: 1, peso_shopee: 1,
+                      categorias: [], shopee: [], bloquear: [], ganchos: [], chamada: "", chamada_compra: "", peso_ml: 1, peso_shopee: 1,
                       _novo: true });
   desenharGrupos(dados.grupos.length - 1); mudou();
   setTimeout(() => $("#lista-grupos details:last-child")?.scrollIntoView({ behavior: "smooth" }), 50);

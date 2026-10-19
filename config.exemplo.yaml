@@ -63,8 +63,9 @@ grupos:
     # link de convite que vai no fim de cada oferta ("Envie essa oferta para uma amiga!").
     # Troque o texto entre colchetes pelo link (https://chat.whatsapp.com/...), entre aspas.
     convite: "https://chat.whatsapp.com/IDNfRoNrDxI5rw7ZAlVEVK?mode=gi_t"
-    # mensagem: frase de abertura (em rodízio) e texto antes do link de convite
+    # mensagem: frase de abertura (em rodízio), texto antes do link de convite e antes do link do produto
     chamada: "💬 Manda pra aquela amiga que ama um achadinho!"
+    chamada_compra: "🛍️ Garanta o seu"   # + " no Mercado Livre:" / " na Shopee:" (ou use {loja})
     ganchos:
       - "ACHADINHO QUE VAI DIRETO PRO CARRINHO 💄"
       - "AMIGA, CORRE QUE TÁ BARATINHO!"
@@ -133,8 +134,9 @@ grupos:
       MLB1132: Brinquedos e Hobbies
     whatsapp: "Achadinhos Mamãe e Bebê 🍼"
     convite: "https://chat.whatsapp.com/IzxfbYBYqUdBa8Y2OkhJ5M?mode=gi_t"
-    # mensagem: frase de abertura (em rodízio) e texto antes do link de convite
+    # mensagem: frase de abertura (em rodízio), texto antes do link de convite e antes do link do produto
     chamada: "💬 Manda pra outra mamãe que vai amar!"
+    chamada_compra: "🛒 Garanta já"   # + " no Mercado Livre:" / " na Shopee:" (ou use {loja})
     ganchos:
       - "MAMÃE, OLHA ESSE ACHADINHO! 🍼"
       - "PRA FACILITAR A ROTINA COM O BEBÊ"

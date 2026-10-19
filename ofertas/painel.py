@@ -117,6 +117,7 @@ def ler_tudo() -> dict:
             "bloquear": _lista(g.get("bloquear")),
             "ganchos": _lista(g.get("ganchos")),
             "chamada": str(g.get("chamada") or ""),
+            "chamada_compra": str(g.get("chamada_compra") or ""),
             "peso_ml": _peso(g, "mercadolivre"),
             "peso_shopee": _peso(g, "shopee"),
         })
@@ -202,8 +203,9 @@ def validar(d: dict) -> list[str]:
             erros.append(f"{nome}: a proporção das lojas precisa ser de 0 a 10")
         elif gr.get("ativo") and sum(pesos) == 0:
             erros.append(f"{nome}: a proporção das lojas não pode ser 0 nas duas")
-        if any("\n" in str(x) for x in [gr.get("chamada", ""), *(gr.get("ganchos") or [])]):
-            erros.append(f"{nome}: ganchos e chamada precisam ter uma linha cada")
+        if any("\n" in str(x) for x in [gr.get("chamada", ""), gr.get("chamada_compra", ""),
+                                          *(gr.get("ganchos") or [])]):
+            erros.append(f"{nome}: ganchos e chamadas precisam ter uma linha cada")
     if not any(gr.get("ativo") for gr in d.get("grupos") or []):
         erros.append("Deixe pelo menos um grupo ativo")
     for k, v in (d.get("env") or {}).items():
@@ -268,9 +270,10 @@ def _aplicar_grupo(m: CommentedMap, gr: dict) -> None:
             m["ganchos"] = _bloco(ga)
         elif "ganchos" in m:
             del m["ganchos"]
-    ch = (gr.get("chamada") or "").strip()
-    if ch or "chamada" in m:
-        _set(m, "chamada", ch)
+    for campo in ("chamada", "chamada_compra"):
+        texto = (gr.get(campo) or "").strip()
+        if texto or campo in m:
+            _set(m, campo, texto)
     pesos = {"mercadolivre": int(gr.get("peso_ml", 1)), "shopee": int(gr.get("peso_shopee", 1))}
     if pesos != {"mercadolivre": 1, "shopee": 1} or "proporcao" in m:
         _set(m, "proporcao", pesos)

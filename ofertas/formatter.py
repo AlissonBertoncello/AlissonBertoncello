@@ -7,8 +7,8 @@
     💰 Você economiza *R$ 58*
     🚚 Frete grátis
 
-    💛 Mercado Livre
-    🛒 https://meli.la/...
+    🛒 *Compre aqui no Mercado Livre:*       (chamada de compra do grupo + loja)
+    https://meli.la/...
 
     🤝 Manda pro parceiro que tá precisando!   (chamada do grupo)
     👉 https://chat.whatsapp.com/...
@@ -19,7 +19,8 @@ import re
 from .models import Grupo, Oferta
 
 CHAMADA_PADRAO = "💬 Manda essa oferta pra alguém que vai gostar!"
-_PLATAFORMA = {"mercadolivre": "💛 Mercado Livre", "shopee": "🧡 Shopee"}
+COMPRA_PADRAO = "🛒 Compre aqui"
+_NA_LOJA = {"mercadolivre": "no Mercado Livre", "shopee": "na Shopee"}
 MAX_PALAVRAS_TITULO = 8
 MAX_LETRAS_TITULO = 60
 
@@ -71,6 +72,16 @@ def proximo_gancho(grupo: Grupo | None) -> str:
     return grupo.ganchos[i % len(grupo.ganchos)]
 
 
+def chamada_compra(o: Oferta, grupo: Grupo | None = None) -> str:
+    """"🛒 Compre aqui" -> "🛒 Compre aqui no Mercado Livre:". Use {loja} no texto para
+    escolher onde entra o nome da loja (ex.: "🛍️ Corre {loja} antes que acabe:")."""
+    texto = (grupo.chamada_compra if grupo else "") or COMPRA_PADRAO
+    loja = _NA_LOJA.get(o.plataforma, o.plataforma)
+    if "{loja}" in texto:
+        return texto.replace("{loja}", loja)
+    return f"{texto.rstrip(' :')} {loja}:"
+
+
 def montar_mensagem(o: Oferta, grupo: Grupo | None = None, gancho: str | None = None) -> str:
     if gancho is None:
         gancho = proximo_gancho(grupo)
@@ -90,7 +101,7 @@ def montar_mensagem(o: Oferta, grupo: Grupo | None = None, gancho: str | None = 
     if extras:
         linhas.append(" · ".join(extras))
 
-    linhas += ["", _PLATAFORMA.get(o.plataforma, o.plataforma), f"🛒 {o.link}"]
+    linhas += ["", f"*{chamada_compra(o, grupo)}*", o.link]
     if grupo and grupo.convite:
         linhas += ["", grupo.chamada or CHAMADA_PADRAO, f"👉 {grupo.convite}"]
     return "\n".join(linhas)

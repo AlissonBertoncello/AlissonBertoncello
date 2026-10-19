@@ -16,13 +16,13 @@ def test_mensagem_whatsapp():
     msg = montar_mensagem(_o("1", "Air Fryer", 300.0, 500.0))
     assert msg.startswith("🔥 *Air Fryer*")  # sem gancho: título em destaque
     assert "De ~R$ 500~ por *R$ 300* 🔻40%" in msg
-    assert msg.endswith("🛒 https://ml/1")
+    assert msg.endswith("*🛒 Compre aqui no Mercado Livre:*\nhttps://ml/1")
 
 
 def test_mensagem_prefere_link_afiliado():
     o = _o("1", "Fone", 50.0, 100.0)
     o.url_afiliado = "https://meli.la/xyz"
-    assert montar_mensagem(o).endswith("🛒 https://meli.la/xyz")
+    assert montar_mensagem(o).endswith("\nhttps://meli.la/xyz")
 
 
 def test_filtrar(monkeypatch):
@@ -93,7 +93,7 @@ def test_sem_preco_antigo_nao_mostra_economia_e_sem_convite_nao_mostra_rodape():
     msg = montar_mensagem(_o("1", "Fone", 50.0, None), Grupo("g", "G"))
     assert "economiza" not in msg
     assert "Manda" not in msg
-    assert msg.endswith("🛒 https://ml/1")
+    assert msg.endswith("*🛒 Compre aqui no Mercado Livre:*\nhttps://ml/1")
 
 
 def test_palavra_bloqueada_compara_palavra_inteira(monkeypatch):
@@ -150,5 +150,13 @@ def test_log_mostra_motivo_do_descarte(monkeypatch):
         "5 coletadas, 1 novas nos filtros (fora: 2 desconto < 25%, 1 já enviadas, 1 palavra bloqueada)"
 
 
-def test_mensagem_mostra_a_loja_antes_do_link():
-    assert montar_mensagem(_o("1", "Fone", 50.0, 100.0)).endswith("💛 Mercado Livre\n🛒 https://ml/1")
+def test_chamada_de_compra_por_grupo():
+    from ofertas.models import Grupo
+    o = _o("1", "Fone", 50.0, 100.0)
+    assert montar_mensagem(o).endswith("*🛒 Compre aqui no Mercado Livre:*\nhttps://ml/1")
+    g = Grupo("c", "C", chamada_compra="🛒 Garante o seu")
+    assert "*🛒 Garante o seu no Mercado Livre:*" in montar_mensagem(o, g)
+    sh = Oferta("shopee", "2", "Cera", "https://s.shopee/2", 10.0, 20.0)
+    assert "*🛒 Garante o seu na Shopee:*" in montar_mensagem(sh, g)
+    g.chamada_compra = "🛍️ Corre {loja} antes que acabe!"
+    assert "*🛍️ Corre na Shopee antes que acabe!*" in montar_mensagem(sh, g)
