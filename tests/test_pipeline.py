@@ -148,3 +148,7 @@ def test_log_mostra_motivo_do_descarte(monkeypatch):
     boas = pipeline.filtrar(ofertas, "g", motivos=motivos)
     assert pipeline._resumo(ofertas, boas, motivos) == \
         "5 coletadas, 1 novas nos filtros (fora: 2 desconto < 25%, 1 já enviadas, 1 palavra bloqueada)"
+
+
+def test_mensagem_mostra_a_loja_antes_do_link():
+    assert montar_mensagem(_o("1", "Fone", 50.0, 100.0)).endswith("💛 Mercado Livre\n🛒 https://ml/1")

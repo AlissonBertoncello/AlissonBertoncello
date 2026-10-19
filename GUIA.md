@@ -158,7 +158,7 @@ grupos:
       - "PREÇO DE OFICINA? AQUI NÃO! 🔧"
     proporcao: {mercadolivre: 3, shopee: 1}               # 3 ofertas do ML para 1 da Shopee (padrão 1 : 1)
   ```
-  A oferta sai assim: gancho em negrito → nome curto do produto (até ~8 palavras) → "De ~R$ 98~ por *R$ 59* 🔻40%" (sem centavos quando o valor é redondo) → economia → link → chamada + convite.
+  A oferta sai assim: gancho em negrito → nome curto do produto (até ~8 palavras) → "De ~R$ 98~ por *R$ 59* 🔻40%" (sem centavos quando o valor é redondo) → economia → loja (💛 Mercado Livre / 🧡 Shopee) → link → chamada + convite.
 - **Ligar/desligar um grupo:** `ativo: false` desliga o grupo sem apagar a configuração (apague a linha, ou use `true`, para ligar). O **grupo Fitness** já está pronto no `config.yaml`, desligado: crie o grupo no WhatsApp, adicione o número do bot como admin e ligue (no painel é só a chave *Ativo*).
 - O `convite:` é o **link de convite do grupo** (no WhatsApp: grupo → *Convidar via link*). Ele vai no fim de cada oferta, com o texto *"💬 Envie essa oferta para uma amiga!"*. Substitua o texto entre colchetes pelo link, **entre aspas**: `convite: "https://chat.whatsapp.com/XXXX"`. Enquanto estiver o texto entre colchetes, essas duas linhas não aparecem na mensagem.
 

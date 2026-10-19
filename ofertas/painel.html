@@ -455,7 +455,7 @@ function cartaoGrupo(g, i, aberto) {
     if (g.ganchos.length) linhas.push(el("b", { text: g.ganchos[0] }), "\n\n", "Nome curto do produto\n");
     else linhas.push("🔥 ", el("b", { text: "Nome curto do produto" }), "\n");
     linhas.push("De ", el("s", { text: "R$ 129" }), " por ", el("b", { text: "R$ 79" }), " no Pix 🔻39%\n",
-      "💰 Você economiza ", el("b", { text: "R$ 50" }), "\n\n🛒 https://meli.la/…");
+      "💰 Você economiza ", el("b", { text: "R$ 50" }), "\n\n💛 Mercado Livre\n🛒 https://meli.la/…");
     if (g.convite) linhas.push("\n\n" + (g.chamada || CHAMADA_PADRAO) + "\n👉 " + g.convite);
     previa.replaceChildren(...linhas);
   }

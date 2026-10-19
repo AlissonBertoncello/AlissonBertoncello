@@ -128,7 +128,7 @@ def test_alterna_mercado_livre_e_shopee(monkeypatch, ciclo):
         pipeline.executar_ciclo(destino, [g], registrar=False)
     assert [(p, i) for p, i, _ in envios] == [("mercadolivre", "C1"), ("shopee", "fralda"),
                                               ("mercadolivre", "C2"), ("shopee", "body bebê")]
-    assert "🛒 https://s.shopee/fralda" in envios[1][2]
+    assert "🧡 Shopee\n🛒 https://s.shopee/fralda" in envios[1][2]
     # o Linkbuilder do ML nunca recebe produto da Shopee
     assert all(set(lote) == {"mercadolivre"} for lote in gerados)
 

@@ -7,6 +7,7 @@
     💰 Você economiza *R$ 58*
     🚚 Frete grátis
 
+    💛 Mercado Livre
     🛒 https://meli.la/...
 
     🤝 Manda pro parceiro que tá precisando!   (chamada do grupo)
@@ -18,6 +19,7 @@ import re
 from .models import Grupo, Oferta
 
 CHAMADA_PADRAO = "💬 Manda essa oferta pra alguém que vai gostar!"
+_PLATAFORMA = {"mercadolivre": "💛 Mercado Livre", "shopee": "🧡 Shopee"}
 MAX_PALAVRAS_TITULO = 8
 MAX_LETRAS_TITULO = 60
 
@@ -88,7 +90,7 @@ def montar_mensagem(o: Oferta, grupo: Grupo | None = None, gancho: str | None = 
     if extras:
         linhas.append(" · ".join(extras))
 
-    linhas += ["", f"🛒 {o.link}"]
+    linhas += ["", _PLATAFORMA.get(o.plataforma, o.plataforma), f"🛒 {o.link}"]
     if grupo and grupo.convite:
         linhas += ["", grupo.chamada or CHAMADA_PADRAO, f"👉 {grupo.convite}"]
     return "\n".join(linhas)
