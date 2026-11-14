@@ -134,15 +134,22 @@ def _html_navegador(urls: list[str]) -> dict[str, str]:
     return htmls
 
 
+def _titulo(html: str | None) -> str:
+    if not html:
+        return ""
+    t = BeautifulSoup(html, "lxml").title
+    return t.get_text(strip=True)[:80] if t else ""
+
+
+def _e_verificacao(html: str | None) -> bool:
+    """Página "Segurança — Mercado Livre": o ML pediu para provar que não é robô."""
+    return _titulo(html).lower().startswith(("segurança", "seguranca", "security"))
+
+
 def _salvar_debug(url: str, html: str | None) -> None:
     """Guarda a página que veio sem produtos, para descobrir o motivo."""
-    from bs4 import BeautifulSoup as _BS
-
     from ..config import DATA_DIR
-    titulo = ""
-    if html:
-        t = _BS(html, "lxml").title
-        titulo = t.get_text(strip=True)[:80] if t else ""
+    titulo = _titulo(html)
     try:
         (DATA_DIR / "ml_ofertas_debug.html").write_text(html or "", encoding="utf-8")
     except OSError:
@@ -156,6 +163,24 @@ def _salvar_debug(url: str, html: str | None) -> None:
 RETESTAR_DIRETO_A_CADA = 20
 _pular_direto = 0
 
+# Quando o ML responde com a verificação de segurança, a página de ofertas fica pausada
+# por algumas horas: cada tentativa só gastaria ~16 s e o produto continua vindo pela API.
+PAUSA_VERIFICACAO_HORAS = 6
+_pausada_ate = 0.0
+
+
+def pausada() -> bool:
+    return time.time() < _pausada_ate
+
+
+def _pausar_por_verificacao() -> None:
+    global _pausada_ate
+    _pausada_ate = time.time() + PAUSA_VERIFICACAO_HORAS * 3600
+    log.warning("Mercado Livre pediu verificação de segurança na página de ofertas — ela fica "
+                "pausada por %d h (os produtos continuam vindo pela API). Para liberar antes: feche "
+                "o bot, rode o LOGIN_MERCADOLIVRE.bat, abra mercadolivre.com.br/ofertas nessa "
+                "janela e resolva a verificação.", PAUSA_VERIFICACAO_HORAS)
+
 
 def buscar_ofertas(categorias: dict[str, str], paginas: int = 1, inicio: int = 1,
                    navegador: str = "auto") -> list[Oferta]:
@@ -164,6 +189,8 @@ def buscar_ofertas(categorias: dict[str, str], paginas: int = 1, inicio: int = 1
     navegador: "auto" = tenta o acesso direto e, se vier sem produtos, abre no Chrome;
     "sempre" = só pelo Chrome; "nunca" = só acesso direto.
     """
+    if pausada():
+        return []
     s = requests.Session()
     s.headers.update({"User-Agent": USER_AGENT, "Accept-Language": "pt-BR,pt;q=0.9"})
     alvos = [(nome, _url(cat_id, pagina))
@@ -194,7 +221,12 @@ def buscar_ofertas(categorias: dict[str, str], paginas: int = 1, inicio: int = 1
             htmls = {}
         for url in faltando:
             achadas_por_url[url] = parse_pagina(htmls[url]) if htmls.get(url) else []
-            if not achadas_por_url[url]:
+            if achadas_por_url[url]:
+                continue
+            if _e_verificacao(htmls.get(url)):
+                if not pausada():
+                    _pausar_por_verificacao()
+            else:
                 _salvar_debug(url, htmls.get(url))
 
     ofertas: dict[str, Oferta] = {}

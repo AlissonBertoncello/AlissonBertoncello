@@ -243,16 +243,31 @@ def gerar_links_afiliado(ofertas: list[Oferta]) -> int:
         raise ErroAfiliado("Sessão do ML não encontrada — rode: uv run python -m ofertas ml-login")
 
     with pagina_chrome() as page:
-        page.goto(URL_LINKBUILDER, wait_until="domcontentloaded")
-        if "login" in page.url or "registration" in page.url:
-            raise SessaoExpirada("Sessão do ML expirou — rode de novo: "
-                                 "uv run python -m ofertas ml-login")
-        page.wait_for_timeout(1500)  # deixa os scripts de sessão da página rodarem
+        _abrir_linkbuilder(page)
         for i in range(0, len(pendentes), TAMANHO_LOTE):
-            _gerar_lote(page, pendentes[i:i + TAMANHO_LOTE])
+            lote = pendentes[i:i + TAMANHO_LOTE]
+            try:
+                _gerar_lote(page, lote)
+            except ErroAfiliado:
+                raise
+            except Exception as e:
+                # a página navegou no meio da chamada (ex: "Execution context was destroyed"):
+                # recarrega o Linkbuilder e tenta o mesmo lote mais uma vez
+                log.warning("Linkbuilder interrompido (%s) — recarregando a página e tentando de novo",
+                            str(e).splitlines()[0][:150])
+                _abrir_linkbuilder(page)
+                _gerar_lote(page, [o for o in lote if not o.url_afiliado])
     gerados = sum(1 for o in pendentes if o.url_afiliado)
     log.info("Mercado Livre: %d links de afiliado gerados", gerados)
     return gerados
+
+
+def _abrir_linkbuilder(page) -> None:
+    page.goto(URL_LINKBUILDER, wait_until="domcontentloaded")
+    if "login" in page.url or "registration" in page.url:
+        raise SessaoExpirada("Sessão do ML expirou — rode de novo: "
+                             "uv run python -m ofertas ml-login")
+    page.wait_for_timeout(1500)  # deixa os scripts de sessão da página rodarem
 
 
 def _gerar_lote(page, lote: list[Oferta]) -> None:

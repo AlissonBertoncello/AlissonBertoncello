@@ -223,13 +223,17 @@ def cmd_ciclo(args):
     from . import pipeline
     grupos = _grupos(args)
     _mostrar_grupos(grupos)
-    pipeline.executar_ciclo(_destino_pronto(grupos), grupos)
+    try:
+        pipeline.executar_ciclo(_destino_pronto(grupos), grupos)
+    except pipeline.SemInternet:
+        raise SystemExit("❌ Sem internet — confira a conexão do notebook e tente de novo.")
 
 
 # Só um bot por vez: com início automático (ao conectar na internet) e o .bat aberto
 # na mão, dois bots mandariam ofertas em dobro. A trava é uma porta local ocupada
 # enquanto o bot roda; o Windows/Linux libera sozinho quando o processo termina.
 PORTA_TRAVA = 47831
+ESPERA_SEM_INTERNET = 120  # segundos até tentar de novo quando a internet cai
 JA_RODANDO = 3  # código de saída que o INICIAR_BOT.bat entende como "já está rodando"
 _trava = None
 
@@ -279,15 +283,25 @@ def cmd_run(args):
     log.info("Bot iniciado — %d oferta(s) por grupo a cada %d min, destino %s",
              config.max_posts_por_ciclo, config.intervalo_minutos, destino.nome)
     versao = arquivos_de_config()
+    sem_internet = False
     while True:
         inicio = time.monotonic()
         try:
             pipeline.executar_ciclo(destino, grupos)
+            if sem_internet:
+                log.info("Internet de volta — ciclos normais de novo")
+            sem_internet = False
+        except pipeline.SemInternet:
+            if not sem_internet:
+                log.warning("Sem internet (o notebook dormiu ou a rede caiu) — tentando de novo a "
+                            "cada %d min", ESPERA_SEM_INTERNET // 60)
+            sem_internet = True
         except Exception:
             log.exception("Erro no ciclo")
         # o intervalo conta a partir do início do ciclo (a busca leva alguns segundos);
         # durante a espera, mudanças no config.yaml/.env (ex: pelo painel) já valem
-        while (falta := inicio + max(5, config.intervalo_minutos * 60) - time.monotonic()) > 0:
+        while (falta := inicio + (ESPERA_SEM_INTERNET if sem_internet else
+                                  max(5, config.intervalo_minutos * 60)) - time.monotonic()) > 0:
             time.sleep(min(10.0, falta))
             if arquivos_de_config() != versao:
                 versao = arquivos_de_config()

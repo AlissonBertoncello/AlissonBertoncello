@@ -153,7 +153,8 @@ def test_shopee_sem_oferta_cai_para_mercado_livre(monkeypatch, ciclo):
     pipeline.executar_ciclo(destino, [g], registrar=False)  # vez do ML
     pipeline.executar_ciclo(destino, [g], registrar=False)  # vez da Shopee: vazia -> ML
     assert [p for p, _, _ in envios] == ["mercadolivre", "mercadolivre"]
-    assert buscas == ["a", "b", "c"]  # tenta no máximo 3 palavras por ciclo
+    # tenta no máximo 3 palavras por ciclo, no rodízio espalhado (metades intercaladas)
+    assert buscas == ["a", "d", "b"]
 
 
 def test_erro_na_shopee_nao_derruba_o_ciclo(monkeypatch, ciclo):

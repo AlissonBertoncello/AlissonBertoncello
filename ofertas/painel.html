@@ -41,7 +41,7 @@
   label.campo { display: block; }
   label.campo > span { display: block; font-weight: 600; font-size: 14px; margin-bottom: 4px; }
   label.campo > small, .dica { display: block; color: var(--muted); font-size: 13px; margin-top: 4px; }
-  input[type=text], input[type=number], input[type=password], input[type=time], input[type=url], textarea, select {
+  input[type=text], input[type=number], input[type=password], input[type=time], input[type=url], input[type=date], textarea, select {
     width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px;
     background: var(--bg); color: var(--ink); font: inherit; }
   input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
@@ -111,6 +111,12 @@
   .previa b { font-weight: 700; } .previa s { color: var(--muted); }
   input.peso { width: 70px; }
   textarea.cats { min-height: 120px; font-family: ui-monospace, Consolas, monospace; font-size: 14px; }
+  .cupom { border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-bottom: 12px; display: grid; gap: 10px; }
+  .cupom .topo-cupom { display: flex; gap: 8px; align-items: center; }
+  .cupom .topo-cupom b { flex: 1; }
+  .marcas { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+  .marcas label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; font-size: 14px; }
+  .marcas input { width: 18px; height: 18px; accent-color: var(--accent); }
   .toast { position: fixed; top: 16px; right: 16px; z-index: 20; background: var(--ink); color: var(--bg);
            padding: 10px 16px; border-radius: 10px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 360px; }
   .toast.on { opacity: 1; }
@@ -127,6 +133,7 @@
     <button data-aba="inicio" class="ativo">Início</button>
     <button data-aba="grupos">Grupos</button>
     <button data-aba="envio">Envio e filtros</button>
+    <button data-aba="cupons">Cupons</button>
     <button data-aba="contas">Contas</button>
   </nav>
 </header>
@@ -213,6 +220,31 @@
           <option value="console">Só na tela (teste, não envia)</option>
         </select>
         <small>Mudar o destino só vale depois de fechar e abrir o bot.</small></label>
+    </div>
+  </section>
+
+  <!-- ── Cupons ── -->
+  <section id="aba-cupons">
+    <div class="card">
+      <h2>Quando postar cupons</h2>
+      <p class="ajuda">Em cada horário, cada grupo recebe um post de cupom (além das ofertas normais): primeiro os seus cupons abaixo, em rodízio; se não houver nenhum válido, uma campanha da Shopee (se ligada).</p>
+      <span style="font-weight:600;font-size:14px">Horários</span>
+      <div id="cup-horarios" style="margin-top:6px"></div>
+      <span class="dica">Ex.: 10:00, 15:00, 20:00. Só vale dentro do horário de envio (aba Envio e filtros).</span>
+      <div style="margin-top:16px">
+        <label class="chave"><input type="checkbox" id="cup-shopee"><span class="trilho"></span> Buscar campanhas e cupons da Shopee sozinho</label>
+        <span class="dica">Usa a Open API da Shopee (precisa do App ID e Secret na aba Contas). O link já vem como seu link de afiliado.</span>
+        <div id="cup-grupos-camp" class="marcas" style="margin-top:8px"></div>
+        <span class="dica">Grupos que recebem as campanhas da Shopee (nenhum marcado = todos).</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="linha" style="justify-content:space-between">
+        <h2>Seus cupons</h2>
+        <button class="bt prim" id="bt-cupom">+ Novo cupom</button>
+      </div>
+      <p class="ajuda">Cole o link da página do cupom. Use de preferência o link de afiliado (meli.la/… ou s.shopee.com.br/…), gerado no painel de afiliados da loja: se o bot não conseguir transformar o link em link de afiliado, o cupom não é postado. Cupom vencido para de sair sozinho.</p>
+      <div id="lista-cupons"></div>
     </div>
   </section>
 
@@ -622,6 +654,82 @@ $("#cat-add").onclick = () => {
   toast(`${n} categoria(s) adicionada(s) à lista. Clique em Salvar para gravar.`);
 };
 
+// ── cupons ──
+const NA_LOJA = { mercadolivre: "no Mercado Livre", shopee: "na Shopee" };
+function lojaDoLink(link) {
+  if (/mercadolivre\.com|mercadolibre\.com|meli\.la/i.test(link)) return "mercadolivre";
+  if (/shopee|shope\.ee/i.test(link)) return "shopee";
+  return "";
+}
+function marcasGrupos(lista, aoMudar) {
+  return el("div", { class: "marcas" }, ...dados.grupos.map(g => {
+    const cx = el("input", { type: "checkbox" }); cx.checked = lista.includes(g.chave);
+    cx.onchange = () => {
+      const i = lista.indexOf(g.chave);
+      if (cx.checked && i < 0) lista.push(g.chave); else if (!cx.checked && i >= 0) lista.splice(i, 1);
+      aoMudar();
+    };
+    return el("label", {}, cx, g.nome || g.chave);
+  }));
+}
+function cartaoCupom(c, i) {
+  const hoje = new Date().toISOString().slice(0, 10);
+  const titulo = el("b", { text: c.descricao || "(novo cupom)" });
+  const estado = el("span", { class: "badge" });
+  const previa = el("div", { class: "previa" });
+  function atualizar() {
+    titulo.textContent = c.descricao || "(novo cupom)";
+    const vencido = c.validade && c.validade < hoje, loja = lojaDoLink(c.link);
+    estado.textContent = vencido ? "vencido" : !loja ? "link inválido" : "ativo";
+    estado.className = "badge " + (vencido || !loja ? "bad" : "ok");
+    const naLoja = NA_LOJA[loja] || "na loja";
+    const linhas = [el("b", { text: "🎟️ CUPOM LIBERADO " + naLoja.toUpperCase() }), "\n\n" + (c.descricao || "Descrição do cupom")];
+    if (c.codigo) linhas.push("\n🏷️ Código: ", el("b", { text: c.codigo }));
+    if (c.validade) linhas.push("\n⏰ Válido até " + c.validade.slice(8, 10) + "/" + c.validade.slice(5, 7));
+    linhas.push("\n\n", el("b", { text: "🛒 Use aqui " + naLoja + ":" }), "\n" + (c.link || "https://…"));
+    previa.replaceChildren(...linhas);
+  }
+  const campo = (rotulo, chave, props = {}, dica = "") => {
+    const inp = el("input", { type: "text", ...props }); inp.value = c[chave] || "";
+    inp.oninput = () => { c[chave] = inp.value.trim(); atualizar(); mudou(); };
+    return el("label", { class: "campo" }, el("span", { text: rotulo }), inp, dica ? el("small", { text: dica }) : null);
+  };
+  const remover = el("button", { type: "button", class: "bt peq perigo", onclick: () => {
+    if (!confirm("Remover este cupom?")) return;
+    dados.cupons.lista.splice(i, 1); desenharCupons(); mudou();
+  } }, "Remover");
+  atualizar();
+  return el("div", { class: "cupom" },
+    el("div", { class: "topo-cupom" }, titulo, estado, remover),
+    el("div", { class: "grade" },
+      campo("Descrição", "descricao", { placeholder: "R$ 20 OFF acima de R$ 99" }),
+      campo("Código (se tiver)", "codigo", { placeholder: "APROVEITA" }),
+      campo("Válido até", "validade", { type: "date" }, "Em branco = sem data")),
+    campo("Link do cupom", "link", { type: "url", placeholder: "https://meli.la/… ou https://s.shopee.com.br/…" }),
+    el("div", {}, el("span", { style: "font-weight:600;font-size:14px", text: "Grupos" }),
+      marcasGrupos(c.grupos, mudou), el("span", { class: "dica", text: "Nenhum marcado = todos os grupos." })),
+    el("details", {}, el("summary", { class: "dica", style: "cursor:pointer", text: "Ver prévia da mensagem" }), previa));
+}
+function desenharCupons() {
+  const cc = dados.cupons;
+  $("#cup-horarios").replaceChildren(chips(cc.horarios, () => {
+    const ruins = cc.horarios.filter(h => !/^([01]\d|2[0-3]):[0-5]\d$/.test(h));
+    if (ruins.length) toast("Horário inválido: " + ruins.join(", ") + " (use 10:00)");
+    mudou();
+  }, { placeholder: "ex.: 10:00 e aperte Enter" }));
+  $("#cup-shopee").checked = cc.shopee_campanhas;
+  $("#cup-shopee").onchange = () => { cc.shopee_campanhas = $("#cup-shopee").checked; mudou(); };
+  $("#cup-grupos-camp").replaceChildren(marcasGrupos(cc.grupos_campanhas, mudou));
+  const lista = $("#lista-cupons");
+  lista.replaceChildren(...cc.lista.map((c, i) => cartaoCupom(c, i)));
+  if (!cc.lista.length) lista.append(el("div", { class: "vazio", text: "Nenhum cupom cadastrado. Clique em “+ Novo cupom”." }));
+}
+$("#bt-cupom").onclick = () => {
+  dados.cupons.lista.unshift({ descricao: "", codigo: "", link: "", validade: "", grupos: [] });
+  desenharCupons(); mudou();
+  $("#lista-cupons input")?.focus();
+};
+
 // ── contas (.env) ──
 function desenharContas() {
   const bloco = (ids, alvo) => $(alvo).replaceChildren(...ids.map(k => {
@@ -691,7 +799,7 @@ $("#abas").addEventListener("click", e => {
   document.querySelectorAll("main section").forEach(s => s.classList.toggle("ativo", s.id === "aba-" + b.dataset.aba));
 });
 
-function desenharTudo() { ligarCampos(); desenharGrupos(); desenharContas(); estimativa(); }
+function desenharTudo() { ligarCampos(); desenharGrupos(); desenharCupons(); desenharContas(); estimativa(); }
 async function carregar() {
   original = await api("/api/config");
   dados = clone(original);

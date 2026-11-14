@@ -16,7 +16,7 @@ os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", str(DATA_DIR / "pw-browsers"))
 load_dotenv(BASE_DIR / ".env")
 
 from .categorias import nome as nome_categoria  # noqa: E402
-from .models import Grupo  # noqa: E402
+from .models import ConfigCupons, Cupom, Grupo  # noqa: E402
 
 
 ARQ_CONFIG = BASE_DIR / "config.yaml"           # a SUA configuração (não vem no ZIP do GitHub)
@@ -82,6 +82,7 @@ class Config:
 
         self.destino: str = str(y.get("destino") or "console").strip().lower()
         self.grupos: list[Grupo] = ler_grupos(y.get("grupos") or {})
+        self.cupons: ConfigCupons = ler_cupons(y.get("cupons") or {})
 
 
 def _convite(valor) -> str:
@@ -127,6 +128,35 @@ def ler_grupos(dados: dict) -> list[Grupo]:
                                 chamada_compra=str(g.get("chamada_compra") or "").strip(),
                                 peso_ml=_peso(g, "mercadolivre"), peso_shopee=_peso(g, "shopee")))
     return grupos
+
+
+def hora_texto(valor) -> str:
+    """"10:00" -> "10:00"; 600 (o YAML lê 10:00 sem aspas como minutos) -> "10:00"."""
+    texto = str(valor).strip()
+    if texto.isdigit():
+        minutos = int(texto)
+        return f"{minutos // 60:02d}:{minutos % 60:02d}"
+    return texto
+
+
+def ler_cupons(dados: dict) -> ConfigCupons:
+    """cupons do config.yaml -> ConfigCupons (horários, campanhas da Shopee e a lista do painel)."""
+    if not isinstance(dados, dict):
+        return ConfigCupons()
+    lista = []
+    for c in dados.get("lista") or []:
+        if not isinstance(c, dict):
+            continue
+        link = str(c.get("link") or "").strip()
+        descricao = str(c.get("descricao") or "").strip()
+        if link.startswith(("https://", "http://")) and descricao:
+            lista.append(Cupom(descricao=descricao, link=link, codigo=str(c.get("codigo") or "").strip(),
+                               validade=str(c.get("validade") or "").strip(), grupos=_lista(c.get("grupos"))))
+    horarios = dados.get("horarios")
+    return ConfigCupons(horarios=sorted(hora_texto(h) for h in _lista(horarios))
+                        if horarios is not None else ConfigCupons().horarios,
+                        shopee_campanhas=bool(dados.get("shopee_campanhas", False)),
+                        grupos_campanhas=_lista(dados.get("grupos_campanhas")), lista=lista)
 
 
 garantir_config()

@@ -1,6 +1,16 @@
-# Melhorias em análise (não implementadas)
+# Melhorias em análise
 
-Ideias levantadas a partir de grupos concorrentes. **Nada aqui foi implementado** — cada item depende de aprovação.
+Ideias levantadas a partir de grupos concorrentes. Cada item depende de aprovação.
+
+## Implementado em 14/11/2026
+| Item | O que faz |
+|---|---|
+| R1 | Sem internet (notebook dormiu): o ciclo para na hora e o bot tenta de novo a cada 2 min |
+| R2 | Verificação de segurança do ML na página de ofertas: a página fica pausada por 6 h (a API continua) |
+| R3 | Linkbuilder interrompido por navegação: recarrega e tenta o lote de novo |
+| R4 | Shopee com "System Error 10000": tenta de novo 2x, passa para a próxima palavra, guarda a vez da Shopee e mostra o resumo do dia |
+| Anti-repetição | Não manda produto parecido com os 4 últimos do grupo nem o mesmo modelo em outro anúncio; rodízio de categorias/palavras intercalando as metades da lista |
+| 11 (C2 + C3) | Cupons: lista no painel (aba Cupons) e campanhas automáticas da Shopee, nos horários escolhidos |
 
 ---
 

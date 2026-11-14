@@ -245,3 +245,48 @@ def test_config_existente_nunca_e_trocado(tmp_path, monkeypatch):
 def test_exemplo_do_projeto_e_valido():
     y = yaml.safe_load((RAIZ / "config.exemplo.yaml").read_text(encoding="utf-8"))
     assert [g.chave for g in cfg.ler_grupos(y["grupos"])] == ["mulher", "bebe"]
+
+
+def test_salvar_cupons(arquivos):
+    d = painel.ler_tudo()
+    d["env"] = {}
+    assert d["cupons"] == {"horarios": ["10:00", "15:00", "20:00"], "shopee_campanhas": False,
+                           "grupos_campanhas": [], "lista": []}
+    d["cupons"]["shopee_campanhas"] = True
+    d["cupons"]["horarios"] = ["20:00", "11:00"]
+    d["cupons"]["lista"].append({"descricao": "R$ 20 OFF", "codigo": "APROVEITA", "link": "https://meli.la/x",
+                                 "validade": "2026-11-30", "grupos": ["mulher"]})
+    assert painel.salvar(d) == []
+    texto = (arquivos / "config.yaml").read_text(encoding="utf-8")
+    c = cfg.ler_cupons(yaml.safe_load(texto)["cupons"])
+    assert c.horarios == ["11:00", "20:00"] and c.shopee_campanhas
+    assert [(x.descricao, x.codigo, x.validade, x.grupos) for x in c.lista] == \
+        [("R$ 20 OFF", "APROVEITA", "2026-11-30", ["mulher"])]
+    assert "# Cupons (aba Cupons do painel)" in texto  # comentário da seção mantido
+    assert painel.ler_tudo()["cupons"]["lista"][0]["link"] == "https://meli.la/x"
+
+
+def test_validacao_dos_cupons(arquivos):
+    d = painel.ler_tudo()
+    d["env"] = {}
+    d["cupons"]["horarios"] = ["25:00"]
+    d["cupons"]["lista"] = [{"descricao": "", "codigo": "", "link": "https://amazon.com.br/x", "validade": "30/11",
+                             "grupos": ["nao_existe"]}]
+    erros = painel.salvar(d)
+    assert any("horário '25:00'" in e for e in erros)
+    assert any("falta a descrição" in e for e in erros)
+    assert any("Mercado Livre ou da Shopee" in e for e in erros)
+    assert any("validade inválida" in e for e in erros)
+    assert any("'nao_existe' não existe" in e for e in erros)
+
+
+def test_config_antigo_sem_cupons_continua_igual(arquivos):
+    texto = (arquivos / "config.yaml").read_text(encoding="utf-8")
+    inicio = texto.index("# Cupons (aba Cupons do painel)")
+    fim = texto.index("\ndestino: ")
+    (arquivos / "config.yaml").write_text(texto[:inicio] + texto[fim + 1:], encoding="utf-8")
+    antes = (arquivos / "config.yaml").read_text(encoding="utf-8")
+    d = painel.ler_tudo()
+    d["env"] = {}
+    assert painel.salvar(d) == []
+    assert (arquivos / "config.yaml").read_text(encoding="utf-8") == antes

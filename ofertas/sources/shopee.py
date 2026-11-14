@@ -23,7 +23,10 @@ CAMPOS = ("itemId productName priceMin priceMax priceDiscountRate imageUrl "
 
 
 class ErroShopee(RuntimeError):
-    pass
+    def __init__(self, msg: str, passageiro: bool = False, rede: bool = False):
+        super().__init__(msg)
+        self.passageiro = passageiro  # erro do servidor da Shopee: vale tentar de novo
+        self.rede = rede              # nem chegou na Shopee (sem internet?)
 
 
 def tem_credenciais() -> bool:
@@ -36,7 +39,25 @@ def assinar(app_id: str, secret: str, payload: str, ts: str) -> str:
     return f"SHA256 Credential={app_id}, Timestamp={ts}, Signature={assinatura}"
 
 
+# "System Error" (código 10000) e HTTP 5xx são falhas passageiras do servidor da Shopee:
+# espera um pouco e tenta de novo antes de desistir
+ESPERAS_NOVA_TENTATIVA = (2, 4)
+
+
 def chamar(query: str, sessao: requests.Session | None = None) -> dict:
+    """Consulta a Open API; tenta de novo (até 2 vezes) quando a Shopee falha do lado dela."""
+    for espera in ESPERAS_NOVA_TENTATIVA:
+        try:
+            return _chamar_uma_vez(query, sessao)
+        except ErroShopee as e:
+            if not e.passageiro:
+                raise
+            log.debug("Shopee falhou (%s) — tentando de novo em %d s", e, espera)
+            time.sleep(espera)
+    return _chamar_uma_vez(query, sessao)
+
+
+def _chamar_uma_vez(query: str, sessao: requests.Session | None = None) -> dict:
     if not tem_credenciais():
         raise ErroShopee("Sem credenciais: preencha SHOPEE_APP_ID e SHOPEE_APP_SECRET no .env "
                          "(painel de afiliados da Shopee > Open API)")
@@ -47,12 +68,14 @@ def chamar(query: str, sessao: requests.Session | None = None) -> dict:
     try:
         r = (sessao or requests).post(ENDPOINT, data=payload, headers=headers, timeout=30)
     except requests.RequestException as e:
-        raise ErroShopee(f"Shopee fora do ar: {e}")
+        raise ErroShopee(f"Shopee fora do ar: {e}", rede=True)
     if r.status_code != 200:
-        raise ErroShopee(f"Shopee respondeu HTTP {r.status_code}: {r.text[:300]}")
+        raise ErroShopee(f"Shopee respondeu HTTP {r.status_code}: {r.text[:300]}",
+                         passageiro=r.status_code >= 500)
     dados = r.json()
     if dados.get("errors"):
-        raise ErroShopee(f"Shopee API: {str(dados['errors'])[:300]}")
+        codigos = {(e.get("extensions") or {}).get("code") for e in dados["errors"] if isinstance(e, dict)}
+        raise ErroShopee(f"Shopee API: {str(dados['errors'])[:300]}", passageiro=10000 in codigos)
     return dados.get("data") or {}
 
 
@@ -104,3 +127,42 @@ def buscar(termo: str, limite: int | None = None, sessao: requests.Session | Non
     ofertas = [o for o in (node_para_oferta(n) for n in nodes) if o]
     log.info("Shopee '%s': %d ofertas", termo, len(ofertas))
     return ofertas
+
+
+# ── cupons: campanhas da Shopee e link curto de afiliado ─────────────
+
+CAMPOS_CAMPANHA = "offerName offerLink imageUrl periodStartTime periodEndTime"
+
+
+def campanhas(termo: str = "", limite: int = 20) -> list[dict]:
+    """Campanhas ativas da Shopee (páginas de ofertas/cupons), já com o link de afiliado.
+    Cada item: {"nome", "link", "imagem", "fim" (timestamp ou None)}."""
+    filtro = f"keyword:{json.dumps(termo, ensure_ascii=False)}," if termo else ""
+    query = (f"{{shopeeOfferV2({filtro}sortType:1,page:1,limit:{max(1, min(limite, 50))})"
+             f"{{nodes{{{CAMPOS_CAMPANHA}}}}}}}")
+    nodes = (chamar(query).get("shopeeOfferV2") or {}).get("nodes") or []
+    agora = time.time()
+    achadas = []
+    for n in nodes:
+        if not (n.get("offerName") and n.get("offerLink")):
+            continue
+        try:
+            fim = int(n.get("periodEndTime") or 0) or None
+            inicio = int(n.get("periodStartTime") or 0) or None
+        except (TypeError, ValueError):
+            fim = inicio = None
+        if (fim and fim < agora) or (inicio and inicio > agora):
+            continue  # vencida ou ainda não começou
+        achadas.append({"nome": str(n["offerName"]).strip(), "link": n["offerLink"],
+                        "imagem": n.get("imageUrl") or None, "fim": fim})
+    return achadas
+
+
+def link_afiliado(url: str) -> str:
+    """Link curto de afiliado (s.shopee.com.br/...) para qualquer página da Shopee."""
+    mutacao = (f"mutation{{generateShortLink(input:{{originUrl:{json.dumps(url)},"
+               f'subIds:["cupom"]}}){{shortLink}}}}')
+    link = (chamar(mutacao).get("generateShortLink") or {}).get("shortLink") or ""
+    if not link:
+        raise ErroShopee("a Shopee não devolveu o link curto de afiliado")
+    return link

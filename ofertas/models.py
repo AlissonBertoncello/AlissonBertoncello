@@ -1,3 +1,5 @@
+import datetime as dt
+import hashlib
 from dataclasses import dataclass, field
 
 
@@ -48,3 +50,43 @@ class Grupo:
     chamada_compra: str = ""   # texto antes do link do produto ("🛒 Compre aqui" + " no Mercado Livre:")
     peso_ml: int = 1           # proporção das lojas: a cada peso_ml ciclos do ML,
     peso_shopee: int = 1       # peso_shopee ciclos da Shopee
+
+
+@dataclass
+class Cupom:
+    """Cupom cadastrado no painel (aba Cupons), postado nos horários de cupom."""
+    descricao: str
+    link: str
+    codigo: str = ""
+    validade: str = ""          # "AAAA-MM-DD": vale até o fim desse dia; vazio = sem data
+    grupos: list[str] = field(default_factory=list)  # chaves dos grupos; vazio = todos
+
+    @property
+    def ident(self) -> str:
+        return "cupom:" + hashlib.sha1(f"{self.link}|{self.codigo}".encode()).hexdigest()[:12]
+
+    def vale_em(self, dia: dt.date) -> bool:
+        if not self.validade:
+            return True
+        try:
+            return dia <= dt.date.fromisoformat(self.validade)
+        except ValueError:
+            return False
+
+    def para(self, grupo: str) -> bool:
+        return not self.grupos or grupo in self.grupos
+
+
+HORARIOS_CUPOM_PADRAO = ["10:00", "15:00", "20:00"]
+
+
+@dataclass
+class ConfigCupons:
+    horarios: list[str] = field(default_factory=lambda: list(HORARIOS_CUPOM_PADRAO))
+    shopee_campanhas: bool = False  # busca sozinho as campanhas/cupons da Shopee
+    grupos_campanhas: list[str] = field(default_factory=list)  # quem recebe campanhas; vazio = todos
+    lista: list[Cupom] = field(default_factory=list)
+
+    @property
+    def ligado(self) -> bool:
+        return bool(self.horarios and (self.lista or self.shopee_campanhas))

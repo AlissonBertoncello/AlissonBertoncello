@@ -266,4 +266,21 @@ grupos:
 # Para onde as ofertas vão:
 #   console  = só mostra no terminal e salva em data/saida.jsonl (testes)
 #   whatsapp = envia foto + legenda para os grupos (Evolution API no Docker)
+# Cupons (aba Cupons do painel): nos horários abaixo, cada grupo recebe um post de cupom,
+# além das ofertas. Primeiro os cupons da lista (em rodízio, até vencerem); se não houver
+# nenhum válido, uma campanha da Shopee (se shopee_campanhas: true).
+# O link sempre vira link de afiliado; se não der, o cupom não é postado.
+cupons:
+  horarios: ["10:00", "15:00", "20:00"]
+  shopee_campanhas: false      # true = busca sozinho as campanhas/cupons da Shopee (Open API)
+  grupos_campanhas: []         # grupos que recebem as campanhas; [] = todos
+  lista: []
+  # exemplo de cupom:
+  # lista:
+  #   - descricao: R$ 20 OFF acima de R$ 99
+  #     codigo: APROVEITA
+  #     link: https://meli.la/xxxxxxx
+  #     validade: "2026-11-30"   # vale até o fim desse dia; sem validade = até remover
+  #     grupos: []               # chaves dos grupos; [] = todos
+
 destino: whatsapp

@@ -22,6 +22,7 @@ from urllib.parse import parse_qs, urlparse
 
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
+from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 
 from .config import BASE_DIR, DATA_DIR
 
@@ -142,9 +143,31 @@ def ler_tudo() -> dict:
         },
         "destino": str(y.get("destino") or "console"),
         "grupos": grupos,
+        "cupons": _ler_cupons(y.get("cupons")),
         "env": {k: {"secreto": s, "definido": bool(env.get(k)), "valor": "" if s else env.get(k, "")}
                 for k, s in CAMPOS_ENV.items()},
     }
+
+
+def _horarios(valor) -> list[str]:
+    from .config import hora_texto
+    return [hora_texto(h) for h in _lista(valor)] if valor is not None else []
+
+
+def _ler_cupons(c) -> dict:
+    from .models import HORARIOS_CUPOM_PADRAO
+    c = c if isinstance(c, dict) else {}
+    lista = []
+    for x in c.get("lista") or []:
+        if isinstance(x, dict):
+            lista.append({"descricao": str(x.get("descricao") or ""), "codigo": str(x.get("codigo") or ""),
+                          "link": str(x.get("link") or ""), "validade": str(x.get("validade") or ""),
+                          "grupos": _lista(x.get("grupos"))})
+    horarios = c.get("horarios")
+    return {"horarios": _horarios(horarios) if horarios is not None else list(HORARIOS_CUPOM_PADRAO),
+            "shopee_campanhas": bool(c.get("shopee_campanhas", False)),
+            "grupos_campanhas": _lista(c.get("grupos_campanhas")),
+            "lista": lista}
 
 
 def _peso(g: dict, loja: str) -> int:
@@ -208,11 +231,42 @@ def validar(d: dict) -> list[str]:
             erros.append(f"{nome}: ganchos e chamadas precisam ter uma linha cada")
     if not any(gr.get("ativo") for gr in d.get("grupos") or []):
         erros.append("Deixe pelo menos um grupo ativo")
+    erros += _validar_cupons(d.get("cupons"), chaves)
     for k, v in (d.get("env") or {}).items():
         if k not in CAMPOS_ENV:
             erros.append(f"Credencial desconhecida: {k}")
         elif not isinstance(v, str) or any(c in v for c in "\r\n"):
             erros.append(f"{k}: valor inválido")
+    return erros
+
+
+def _validar_cupons(c, chaves: set[str]) -> list[str]:
+    if c is None:
+        return []
+    erros = []
+    for h in c.get("horarios") or []:
+        if not _RE_HORA.match(str(h)):
+            erros.append(f"Cupons: horário '{h}' inválido (use 10:00)")
+    for k in c.get("grupos_campanhas") or []:
+        if k not in chaves:
+            erros.append(f"Cupons: grupo '{k}' não existe")
+    for i, x in enumerate(c.get("lista") or [], 1):
+        nome = (x.get("descricao") or "").strip() or f"cupom {i}"
+        if not (x.get("descricao") or "").strip():
+            erros.append(f"Cupom {i}: falta a descrição (ex.: R$ 20 OFF acima de R$ 99)")
+        link = (x.get("link") or "").strip()
+        if not link.startswith(("https://", "http://")):
+            erros.append(f"Cupom '{nome}': o link precisa começar com https://")
+        elif not re.search(r"mercadolivre\.com|mercadolibre\.com|meli\.la|shopee|shope\.ee", link):
+            erros.append(f"Cupom '{nome}': o link precisa ser do Mercado Livre ou da Shopee")
+        val = (x.get("validade") or "").strip()
+        if val and not re.match(r"^\d{4}-\d{2}-\d{2}$", val):
+            erros.append(f"Cupom '{nome}': validade inválida")
+        if any("\n" in str(x.get(k) or "") for k in ("descricao", "codigo", "link")):
+            erros.append(f"Cupom '{nome}': cada campo precisa ter uma linha só")
+        for k in x.get("grupos") or []:
+            if k not in chaves:
+                erros.append(f"Cupom '{nome}': grupo '{k}' não existe")
     return erros
 
 
@@ -307,7 +361,38 @@ def aplicar(y: CommentedMap, d: dict) -> CommentedMap:
         if not isinstance(grupos.get(chave), CommentedMap):
             grupos[chave] = CommentedMap()
         _aplicar_grupo(grupos[chave], gr)
+    _aplicar_cupons(y, d.get("cupons"))
     return y
+
+
+def _aplicar_cupons(y: CommentedMap, c) -> None:
+    """Grava a seção cupons: só se ela já existe ou se algo mudou em relação ao padrão."""
+    if c is None or (c == _ler_cupons(None) and "cupons" not in y):
+        return
+    m = y.get("cupons")
+    if not isinstance(m, CommentedMap):
+        m = y["cupons"] = CommentedMap()
+    horarios = sorted(h.strip() for h in c.get("horarios") or [] if h.strip())
+    if horarios != _horarios(m.get("horarios")) or "horarios" not in m:
+        # entre aspas: sem elas, o YAML lê 11:00 como o número 660
+        m["horarios"] = _flow([DoubleQuotedScalarString(h) for h in horarios])
+    _set(m, "shopee_campanhas", bool(c.get("shopee_campanhas")))
+    gc = [k for k in c.get("grupos_campanhas") or [] if k]
+    if gc != _lista(m.get("grupos_campanhas")) or "grupos_campanhas" not in m:
+        m["grupos_campanhas"] = _flow(gc)
+    lista = CommentedSeq()
+    for x in c.get("lista") or []:
+        item = CommentedMap()
+        item["descricao"] = x["descricao"].strip()
+        if (x.get("codigo") or "").strip():
+            item["codigo"] = x["codigo"].strip()
+        item["link"] = x["link"].strip()
+        if (x.get("validade") or "").strip():
+            item["validade"] = x["validade"].strip()
+        item["grupos"] = _flow([k for k in x.get("grupos") or [] if k])
+        lista.append(item)
+    if _ler_cupons(m)["lista"] != _ler_cupons({"lista": lista})["lista"] or "lista" not in m:
+        m["lista"] = lista
 
 
 def salvar(d: dict) -> list[str]:

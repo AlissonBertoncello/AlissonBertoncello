@@ -283,12 +283,35 @@ Dois cliques em **`CONFIGURAR.bat`**: o painel abre no navegador (endereço `htt
 | **Início** | ver se o bot está rodando, quantas ofertas cada grupo recebeu hoje e os últimos envios |
 | **Grupos** | ligar/desligar grupos, criar e excluir, trocar nome, grupos do WhatsApp (o botão **Carregar grupos do WhatsApp** traz os nomes exatos, com emoji — precisa do Docker aberto), link de convite, **categorias do Mercado Livre** — uma por linha, no formato `MLB188063 Limpeza Automotiva` (dá para colar várias de uma vez; apague a linha para remover). O botão *🔎 Procurar categorias no Mercado Livre* abre a lista de categorias e subcategorias com o nº de anúncios: marque quantas quiser (pode entrar e sair das subcategorias) e clique em *Adicionar marcadas*. Se o Mercado Livre não responder, aparece *Tentar de novo*, palavras da Shopee, palavras bloqueadas do grupo, **ganchos** (frases de abertura em caixa alta, em rodízio — há sugestões prontas para Feminino, Mamãe e Bebê e Carro), **chamada de compra** (o texto antes do link do produto; o bot completa com "no Mercado Livre:" / "na Shopee:"), **chamada para compartilhar** (o texto antes do link de convite, ex.: "🤝 Manda pro parceiro que tá precisando!"), **proporção das lojas** (ex.: 3 ofertas do Mercado Livre para 1 da Shopee) e uma **prévia da mensagem** |
 | **Envio e filtros** | intervalo, ofertas por vez, pausa entre mensagens, dias sem repetir, horário de envio (mostra a estimativa de mensagens por dia), desconto/preço mínimo e máximo, palavras bloqueadas de todos os grupos, lojas ligadas e destino |
+| **Cupons** | horários dos posts de cupom, campanhas automáticas da Shopee (liga/desliga e quais grupos recebem) e a sua lista de cupons: descrição, código, link, validade e grupos — com prévia da mensagem. Veja a seção 9.2 |
 | **Contas** | ML_CLIENT_ID/SECRET, ML_ETIQUETA, SHOPEE_APP_ID/SECRET. Campos secretos nunca aparecem na tela: deixe em branco para manter |
 
 - Mude o que quiser e clique em **Salvar** (a barra aparece embaixo quando há alteração). Se algo estiver errado, o painel mostra o que corrigir e **não grava nada**.
 - **Não precisa reiniciar o bot:** com ele rodando, as mudanças valem em até 10 segundos (o log mostra `Configuração atualizada`). Exceção: trocar o destino (WhatsApp/tela) só vale ao reabrir o bot.
 - Se um grupo novo do WhatsApp não for encontrado, o bot avisa no log e **continua com os grupos anteriores** até você corrigir.
 - O painel mantém os comentários do `config.yaml` e guarda cópias em `data\config_anterior.yaml` (versão antes de salvar) e `data\meu_config.yaml` (a sua versão atual).
+
+### 9.2 Cupons
+
+Nos horários da aba **Cupons** (padrão 10:00, 15:00 e 20:00, sempre dentro do horário de envio), cada grupo recebe **um post de cupom**, além das ofertas normais:
+
+1. **Seus cupons** (cadastrados no painel), em rodízio — o que está há mais tempo sem sair vai primeiro. Cupom vencido para sozinho.
+2. Se não houver nenhum válido para o grupo: uma **campanha da Shopee** (se a chave *Buscar campanhas e cupons da Shopee sozinho* estiver ligada). A mesma campanha não volta ao grupo antes de 2 dias.
+
+```
+*🎟️ CUPOM LIBERADO NO MERCADO LIVRE*
+
+R$ 20 OFF acima de R$ 99
+🏷️ Código: *APROVEITA*
+⏰ Válido até 30/11
+
+*🛒 Use aqui no Mercado Livre:*
+https://meli.la/...
+```
+
+- **O link sempre é de afiliado.** Cole de preferência o link já gerado no painel de afiliados da loja (`meli.la/...` ou `s.shopee.com.br/...`). Se você colar o link comum, o bot tenta convertê-lo; se a loja recusar (o Mercado Livre às vezes recusa páginas que não são de produto), o cupom **não é postado** e o log explica.
+- Se o bot ficar desligado e for ligado depois de um horário, ele posta **um** cupom só para os horários que já passaram.
+- Sem cupom válido e sem campanha, o horário é pulado (`horário de cupom ... nenhum cupom válido agora — pulado`).
 
 **Arquivos úteis**
 | Arquivo | O que é |
@@ -346,6 +369,14 @@ Dois cliques em **`CONFIGURAR.bat`**: o painel abre no navegador (endereço `htt
 | `ativa` | `true` | liga/desliga a Shopee (sem credenciais no `.env`, fica desligada sozinha) |
 | `limite_por_busca` | 20 | produtos pedidos por palavra-chave (máx. 50) |
 | `ordenacao` | 2 | 2 = mais vendidos · 1 = relevância · 5 = maior comissão |
+
+### `cupons`
+| Chave | Padrão | O que faz |
+|---|---|---|
+| `horarios` | `["10:00", "15:00", "20:00"]` | quando postar cupom (entre aspas!) |
+| `shopee_campanhas` | `false` | busca sozinho as campanhas/cupons da Shopee |
+| `grupos_campanhas` | `[]` | grupos que recebem as campanhas; vazio = todos |
+| `lista` | `[]` | seus cupons: `descricao`, `codigo`, `link`, `validade` (`"AAAA-MM-DD"`), `grupos` |
 
 ### `grupos` e `destino`
 Veja o passo [4.2](#42-configurar-os-grupos-no-configyaml). `destino`: `console` (só tela) ou `whatsapp`.
@@ -412,6 +443,8 @@ Procure pela **mensagem que apareceu na tela** (ou parte dela).
 | `Shopee API: ... rate limit / too many requests` | muitas buscas em pouco tempo | temporário; se repetir, aumente o `intervalo_minutos` |
 | `Shopee 'palavra': 0 ofertas` | a palavra não trouxe produtos | troque por uma palavra mais comum na lista `shopee:` do grupo |
 | `Shopee fora do ar` | sem internet ou instabilidade da Shopee | temporário; o ciclo usa o Mercado Livre no lugar |
+| `Shopee 'palavra': Shopee API: ... System Error` (código 10000) | instabilidade do servidor da Shopee | **automático**: o bot tenta de novo 2 vezes e depois passa para a próxima palavra; se a Shopee falhar nas 3, o ciclo vai de Mercado Livre e a vez da Shopee fica guardada para o próximo |
+| `Shopee em 13/11: 14 buscas ok, 45 com erro da Shopee` | resumo do dia (sai no fim do horário de envio) | só informativo |
 
 ### 13.3 Link de afiliado
 
@@ -487,6 +520,10 @@ Em computador de empresa, a BIOS pode estar bloqueada — só o suporte de TI li
 - `busca da API bloqueada (403) ... usando mais vendidos/catálogo` — caminho alternativo automático.
 - `Sem link de afiliado, descartada` — regra de segurança da comissão.
 - `Fora do horário ativo` — respeitando o horário configurado.
+- `Sem internet (o notebook dormiu ou a rede caiu) — tentando de novo a cada 2 min` / `Internet de volta` — o bot espera a rede voltar sozinho. Se aparecer muito, desligue a **suspensão** do Windows com o notebook na tomada (Configurações → Sistema → Energia) e, nas Opções de energia, escolha *Nada a fazer* ao fechar a tampa.
+- `Mercado Livre pediu verificação de segurança na página de ofertas — ela fica pausada por 6 h` — os produtos continuam vindo pela API. Para liberar antes: feche o bot, rode o `LOGIN_MERCADOLIVRE.bat`, abra `mercadolivre.com.br/ofertas` nessa janela, resolva a verificação e inicie o bot.
+- `Linkbuilder interrompido (...) — recarregando a página e tentando de novo` — recuperação automática.
+- `só ofertas parecidas com as últimas enviadas — tentando a próxima` — o bot evita mandar o mesmo tipo de produto em sequência (compara com os 4 últimos envios do grupo) e também não repete o mesmo modelo (ex.: `STX2448`) em outro anúncio dentro do prazo de não repetir. Se tudo for parecido, manda assim mesmo.
 
 ---
 

@@ -105,3 +105,30 @@ def montar_mensagem(o: Oferta, grupo: Grupo | None = None, gancho: str | None = 
     if grupo and grupo.convite:
         linhas += ["", grupo.chamada or CHAMADA_PADRAO, f"👉 {grupo.convite}"]
     return "\n".join(linhas)
+
+
+def montar_mensagem_cupom(o: Oferta, grupo: Grupo | None = None, codigo: str = "",
+                          validade: str = "", campanha: bool = False) -> str:
+    """Post de cupom: o cadastrado no painel (com código) ou uma campanha da Shopee.
+
+        *🎟️ CUPOM LIBERADO NO MERCADO LIVRE*
+
+        R$ 20 OFF acima de R$ 99
+        🏷️ Código: *APROVEITA*
+        ⏰ Válido até 30/11
+
+        *🛒 Use aqui no Mercado Livre:*
+        https://meli.la/...
+    """
+    loja = _NA_LOJA.get(o.plataforma, o.plataforma)
+    topo = "CUPONS LIBERADOS" if campanha else "CUPOM LIBERADO"
+    linhas = [f"*🎟️ {topo} {loja.upper()}*", "", o.titulo]
+    if codigo:
+        linhas.append(f"🏷️ Código: *{codigo}*")
+    if validade:
+        linhas.append(f"⏰ Válido até {validade}")
+    acao = "Pegue os cupons" if campanha else "Use aqui"
+    linhas += ["", f"*🛒 {acao} {loja}:*", o.link]
+    if grupo and grupo.convite:
+        linhas += ["", grupo.chamada or CHAMADA_PADRAO, f"👉 {grupo.convite}"]
+    return "\n".join(linhas)
