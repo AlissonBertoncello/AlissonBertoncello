@@ -268,7 +268,11 @@ def _destaques_de(cliente: ClienteML, site: str, categoria: str, limite: int) ->
     ids_produtos = [c["id"] for c in conteudo if c.get("type") == "PRODUCT"]
     ofertas = [o for o in (item_para_oferta(i) for i in cliente.itens(ids_itens)) if o] \
         if ids_itens else []
-    return ofertas + _ofertas_de_produtos(cliente, ids_produtos)
+    ofertas += _ofertas_de_produtos(cliente, ids_produtos)
+    posicoes = {c["id"]: c.get("position") or n for n, c in enumerate(conteudo, 1)}
+    for o in ofertas:  # posição no ranking de mais vendidos (vale para os "sem desconto")
+        o.posicao = posicoes.get(o.id_produto)
+    return ofertas
 
 
 def _via_catalogo(cliente: ClienteML, site: str, q: str, limite: int) -> list[Oferta]:
@@ -348,7 +352,9 @@ def buscar_ofertas(cliente: ClienteML | None = None,
             ofertas = _buscar_api(cliente or cliente_padrao(), so_categorias)
         except ErroAPI as e:
             log.error("Mercado Livre API: %s", e)
-    if modo in ("auto", "pagina"):
+    # com as ofertas gerais ligadas, a página de ofertas é lida só por elas (poucas visitas):
+    # ler também a de cada categoria faria dezenas de visitas por hora e o ML barraria
+    if modo == "pagina" or (modo == "auto" and not config.usa_ofertas_gerais):
         for o in _via_pagina_ofertas(cats):
             ofertas.setdefault(o.id_produto, o)
     log.info("Mercado Livre: %d ofertas coletadas", len(ofertas))

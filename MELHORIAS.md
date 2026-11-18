@@ -12,6 +12,15 @@ Ideias levantadas a partir de grupos concorrentes. Cada item depende de aprovaç
 | Anti-repetição | Não manda produto parecido com os 4 últimos do grupo nem o mesmo modelo em outro anúncio; rodízio de categorias/palavras intercalando as metades da lista |
 | 11 (C2 + C3) | Cupons: lista no painel (aba Cupons) e campanhas automáticas da Shopee, nos horários escolhidos |
 
+## Implementado em 18/11/2026
+| Item | O que faz |
+|---|---|
+| F1 | Ofertas gerais do ML (todas as categorias): página geral de ofertas, poucas visitas, Chrome com janela fora da tela e perfil próprio; reserva pelo catálogo do ML pelos tipos de produto de cada departamento |
+| V3 | Mais vendido (top 5 do ranking) sem desconto também vale, por grupo |
+| M1 | Link rastreável por grupo: etiqueta do ML por grupo (opcional) e Sub ID da Shopee automático |
+| M5 | "⚠️ Preço e disponibilidade podem variar." embaixo do link |
+| R2b | Página de ofertas vazia (~200 bytes) também conta como bloqueio |
+
 ---
 
 ## 1. Mensagem: aprendizados de um grupo concorrente (15/10/2026)

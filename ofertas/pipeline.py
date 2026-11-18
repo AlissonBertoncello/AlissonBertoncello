@@ -10,7 +10,7 @@ from .config import config, dentro_do_horario
 from .destinos import Destino
 from .formatter import montar_mensagem
 from .models import Grupo, Oferta
-from .sources import mercadolivre, shopee
+from .sources import mercadolivre, ml_geral, shopee
 
 log = logging.getLogger("ofertas.pipeline")
 
@@ -57,14 +57,21 @@ def tem_palavra_bloqueada(titulo: str, extras: list[str] = ()) -> bool:
                for p in [*config.palavras_bloqueadas, *extras] if p)
 
 
-def motivo_descarte(o: Oferta, grupo: str, bloquear: list[str] = ()) -> str | None:
-    """Por que a oferta não serve para o grupo (None = serve)."""
+TOP_SEM_DESCONTO = 5  # "mais vendido sem desconto também vale": só os 5 primeiros do ranking
+
+
+def motivo_descarte(o: Oferta, grupo: str, bloquear: list[str] = (),
+                    sem_desconto: bool = False) -> str | None:
+    """Por que a oferta não serve para o grupo (None = serve).
+    sem_desconto: aceita os primeiros do ranking de mais vendidos sem preço antigo ("Por R$ X")."""
     if not o.titulo:
         return "sem título"
     if db.ja_enviada(o.uid, config.nao_repetir_dias, grupo, o.titulo):
         return "já enviadas"
     if config.desconto_minimo and (o.desconto or 0) < config.desconto_minimo:
-        return f"desconto < {config.desconto_minimo}%"
+        campeao = sem_desconto and o.desconto is None and o.posicao and o.posicao <= TOP_SEM_DESCONTO
+        if not campeao:
+            return f"desconto < {config.desconto_minimo}%"
     if o.preco is not None:
         if config.preco_minimo and o.preco < config.preco_minimo:
             return "preço baixo"
@@ -116,7 +123,7 @@ def modelos(titulo: str) -> set[str]:
 
 
 def filtrar(ofertas: list[Oferta], grupo: str, bloquear: list[str] = (),
-            motivos: Counter | None = None) -> list[Oferta]:
+            motivos: Counter | None = None, sem_desconto: bool = False) -> list[Oferta]:
     """Ofertas que passam nos filtros; em `motivos` conta por que as outras saíram."""
     aprovadas = []
     enviados = set()  # modelos já enviados ao grupo no prazo de não repetir
@@ -124,7 +131,7 @@ def filtrar(ofertas: list[Oferta], grupo: str, bloquear: list[str] = (),
         for t in db.titulos_desde(grupo, config.nao_repetir_dias):
             enviados |= modelos(t)
     for o in ofertas:
-        motivo = motivo_descarte(o, grupo, bloquear)
+        motivo = motivo_descarte(o, grupo, bloquear, sem_desconto)
         if motivo is None and enviados & modelos(o.titulo):
             motivo = "já enviadas"  # mesmo modelo em outro anúncio
         if motivo is None:
@@ -162,14 +169,17 @@ def escolher(ofertas: list[Oferta], n: int) -> list[Oferta]:
     return escolhidas
 
 
-def com_link_afiliado(ofertas: list[Oferta]) -> list[Oferta]:
+def com_link_afiliado(ofertas: list[Oferta], etiqueta: str = "") -> list[Oferta]:
     """Gera os links de afiliado (só das candidatas: o Linkbuilder é caro) e
     descarta as que ficaram sem link: oferta sem link de afiliado nunca é enviada.
     A Shopee já devolve o link de afiliado pronto; o Linkbuilder é só do Mercado Livre."""
     do_ml = [o for o in ofertas if o.plataforma == "mercadolivre"]
     if do_ml:
         try:
-            afiliado_ml.gerar_links_afiliado(do_ml)
+            if etiqueta:  # etiqueta só do grupo: link rastreável por grupo
+                afiliado_ml.gerar_links_afiliado(do_ml, etiqueta)
+            else:
+                afiliado_ml.gerar_links_afiliado(do_ml)
         except Exception as e:
             _checar_rede()
             log.error("Linkbuilder ML falhou (link de afiliado não gerado): %s", e)
@@ -228,38 +238,78 @@ def resumo_shopee() -> None:
         e["resumido"] = True
 
 
-def _candidatas_ml(grupo: Grupo, n: int) -> list[Oferta]:
-    """Começa na categoria do rodízio; se ela não tiver oferta nova (ou só tiver produto
-    parecido com os últimos enviados), tenta a seguinte."""
-    cats = list(grupo.categorias.items())
-    if not cats or not config.fonte_ml.get("ativa"):
-        return []
-    ordem = ordem_espalhada(len(cats))
-    inicio = _proxima.get(grupo.chave, 0) % len(cats)
-    reserva: tuple[int, list[Oferta]] | None = None  # parecidas: só se não houver outra
-    for passo in range(len(cats)):
-        pos = (inicio + passo) % len(cats)
-        cid, nome = cats[ordem[pos]]
-        brutas = coletar({cid: nome})
-        if not brutas:
-            _checar_rede()  # nada veio: se for falta de internet, para o ciclo aqui
-        motivos = Counter()
-        boas = filtrar(brutas, grupo.chave, grupo.bloquear, motivos)
-        log.info("[%s] %s: %s", grupo.nome, nome, _resumo(brutas, boas, motivos))
-        # reservas: se uma ficar sem link de afiliado, a próxima melhor entra no lugar
-        candidatas = escolher(boas, n * 3)
-        if not candidatas:
+def _melhores(grupo: Grupo, brutas: list[Oferta], rotulo: str, n: int) -> tuple[list[Oferta], list[Oferta]]:
+    """Filtra e escolhe as candidatas de uma fonte: (para enviar, só parecidas com as últimas)."""
+    motivos = Counter()
+    boas = filtrar(brutas, grupo.chave, grupo.bloquear, motivos, grupo.sem_desconto)
+    log.info("[%s] %s: %s", grupo.nome, rotulo, _resumo(brutas, boas, motivos))
+    # reservas: se uma ficar sem link de afiliado, a próxima melhor entra no lugar
+    candidatas = escolher(boas, n * 3)
+    if not candidatas:
+        return [], []
+    diferentes, parecidas = _separar_parecidas(grupo, candidatas, rotulo)
+    return (diferentes + parecidas if diferentes else []), parecidas
+
+
+def _do_catalogo(grupo: Grupo, n: int) -> tuple[list[Oferta], list[Oferta]]:
+    """Reserva das ofertas gerais: catálogo do ML pelos nomes das subcategorias, em rodízio."""
+    cliente = mercadolivre.cliente_padrao()
+    try:
+        termos = ml_geral.termos_da_vez(grupo, cliente)
+    except Exception as e:
+        _checar_rede()
+        log.warning("[%s] catálogo do ML: %s", grupo.nome, e)
+        return [], []
+    reserva: list[Oferta] = []
+    for termo in termos:
+        try:
+            brutas = ml_geral.catalogo(termo, cliente)
+        except Exception as e:
+            _checar_rede()
+            log.warning("[%s] catálogo do ML '%s': %s", grupo.nome, termo, e)
             continue
-        diferentes, parecidas = _separar_parecidas(grupo, candidatas, nome)
-        if diferentes:
-            _proxima[grupo.chave] = pos + 1
-            return diferentes + parecidas
-        reserva = reserva or (pos, parecidas)
-    if reserva:
-        _proxima[grupo.chave] = reserva[0] + 1
-        return reserva[1]
-    _proxima[grupo.chave] = inicio + 1
-    return []
+        achadas, parecidas = _melhores(grupo, brutas, f"Catálogo do ML '{termo}'", n)
+        if achadas:
+            return achadas, []
+        reserva = reserva or parecidas
+    return [], reserva
+
+
+def _candidatas_ml(grupo: Grupo, n: int) -> list[Oferta]:
+    """Ofertas gerais (se o grupo usa) -> categorias do grupo, a partir da do rodízio ->
+    catálogo do ML (reserva das ofertas gerais). Pula a fonte que não tiver oferta nova (ou
+    só tiver produto parecido com os últimos enviados) e tenta a seguinte."""
+    if not config.fonte_ml.get("ativa"):
+        return []
+    reserva: list[Oferta] = []  # parecidas com as últimas: só se não houver outra
+    if grupo.ofertas_gerais:
+        achadas, reserva = _melhores(grupo, ml_geral.ofertas_para(grupo), "Ofertas gerais do ML", n)
+        if achadas:
+            return achadas
+    cats = list(grupo.categorias.items())
+    if cats:
+        ordem = ordem_espalhada(len(cats))
+        inicio = _proxima.get(grupo.chave, 0) % len(cats)
+        pos_reserva = None
+        for passo in range(len(cats)):
+            pos = (inicio + passo) % len(cats)
+            cid, nome = cats[ordem[pos]]
+            brutas = coletar({cid: nome})
+            if not brutas:
+                _checar_rede()  # nada veio: se for falta de internet, para o ciclo aqui
+            achadas, parecidas = _melhores(grupo, brutas, nome, n)
+            if achadas:
+                _proxima[grupo.chave] = pos + 1
+                return achadas
+            if parecidas and not reserva:
+                reserva, pos_reserva = parecidas, pos
+        _proxima[grupo.chave] = (inicio if pos_reserva is None else pos_reserva) + 1
+    if grupo.ofertas_gerais:
+        achadas, parecidas = _do_catalogo(grupo, n)
+        if achadas:
+            return achadas
+        reserva = reserva or parecidas
+    return reserva
 
 
 def _shopee_disponivel(grupo: Grupo) -> bool:
@@ -298,7 +348,7 @@ def _candidatas_shopee(grupo: Grupo, n: int) -> list[Oferta]:
             continue
         _contar_shopee(True)
         motivos = Counter()
-        boas = filtrar(brutas, grupo.chave, grupo.bloquear, motivos)
+        boas = filtrar(brutas, grupo.chave, grupo.bloquear, motivos, grupo.sem_desconto)
         log.info("[%s] Shopee '%s': %s", grupo.nome, termo, _resumo(brutas, boas, motivos))
         candidatas = escolher(boas, n * 3)
         if not candidatas:
@@ -360,6 +410,17 @@ def _pausar(destino: Destino, estado: dict) -> None:
         time.sleep(max(0.0, config.espacamento_segundos - (time.monotonic() - estado["ultimo"])))
 
 
+def _link_shopee_do_grupo(o: Oferta, g: Grupo) -> None:
+    """Link da Shopee com o grupo como Sub ID (o relatório da Shopee mostra de qual grupo veio
+    cada clique/venda). Se a Shopee não gerar, fica o link de afiliado normal."""
+    if not o.url_produto or o.url_produto == o.url_afiliado:
+        return
+    try:
+        o.url_afiliado = shopee.link_afiliado(o.url_produto, sub_id=g.chave)
+    except Exception as e:
+        log.debug("[%s] link da Shopee por grupo não gerado (%s) — usando o normal", g.nome, e)
+
+
 def _enviar(destino: Destino, grupos: list[Grupo], por_grupo: dict[str, list[Oferta]],
             n: int, registrar: bool, estado: dict) -> None:
     for g in grupos:
@@ -369,6 +430,8 @@ def _enviar(destino: Destino, grupos: list[Grupo], por_grupo: dict[str, list[Ofe
             log.error("[%s] nenhuma oferta enviada: não foi possível gerar link de afiliado "
                       "(motivo na linha 'Linkbuilder ML falhou' acima)", g.nome)
         for o in escolhidas:
+            if o.plataforma == "shopee":
+                _link_shopee_do_grupo(o, g)
             _pausar(destino, estado)
             try:
                 destino.enviar(o, montar_mensagem(o, g), g)
@@ -408,14 +471,23 @@ def executar_ciclo(destino: Destino, grupos: list[Grupo], registrar: bool = True
 
     n = config.max_posts_por_ciclo
     estado = {"enviadas": 0, "cupons": 0, "ultimo": 0.0}
+    if config.fonte_ml.get("ativa"):
+        try:  # antes do Chrome do ciclo: a página geral usa um Chrome (e perfil) próprio
+            ml_geral.atualizar(grupos)
+        except Exception as e:
+            log.error("Ofertas gerais do ML: %s", e)
     # um Chrome só no ciclo inteiro (páginas de ofertas + Linkbuilder), aberto só se precisar;
     # ele fecha depois dos envios, porque fechar o Chrome pode demorar
     with afiliado_ml.chrome_compartilhado():
         por_grupo = {g.chave: candidatas_do_grupo(g, n) for g in grupos}
-        todas = [o for lista in por_grupo.values() for o in lista]
-        if todas:
-            # link de afiliado é obrigatório: um único lote no Linkbuilder para todos os grupos
-            com_link_afiliado(todas)
+        # link de afiliado é obrigatório: um lote no Linkbuilder para todos os grupos
+        # (um por etiqueta, quando um grupo tem etiqueta própria)
+        por_etiqueta: dict[str, list[Oferta]] = {}
+        for g in grupos:
+            por_etiqueta.setdefault(g.etiqueta_ml, []).extend(por_grupo[g.chave])
+        for etiqueta, lista in por_etiqueta.items():
+            if lista:
+                com_link_afiliado(lista, etiqueta)
         _enviar(destino, grupos, por_grupo, n, registrar, estado)
         try:
             posts = cupons.da_vez(grupos, registrar=registrar)

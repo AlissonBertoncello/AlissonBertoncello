@@ -9,6 +9,7 @@ geral:
   espacamento_segundos: 15     # pausa entre um envio e outro no WhatsApp (mesmo de grupos diferentes)
   nao_repetir_dias: 7          # não reenviar o mesmo produto ao mesmo grupo dentro desse prazo
   horario_ativo: "08:00-23:00" # só envia nesse intervalo; "" = 24h
+  aviso_preco: true            # "⚠️ Preço e disponibilidade podem variar." embaixo do link
 
 filtros:
   desconto_minimo: 10          # % mínimo de desconto
@@ -33,6 +34,15 @@ fontes:
     # página de ofertas: auto = acesso direto e, se vier sem produtos, abre no Google Chrome
     #                    sempre = só pelo Chrome | nunca = só acesso direto
     pagina_navegador: auto
+    # grupos com "ofertas_gerais: true": tudo o que está em oferta no ML, de qualquer categoria.
+    # Lê poucas páginas por ciclo num Chrome com perfil próprio (data\ml_ofertas_profile, sem
+    # login), com a janela fora da tela. Com isso ligado, a página de ofertas de cada
+    # categoria deixa de ser lida (eram dezenas de visitas por hora: o ML barrava).
+    ofertas_gerais:
+      paginas_por_ciclo: 2     # páginas lidas por ciclo, somando todos os grupos
+      atualizar_minutos: 30    # cada página (geral ou de um departamento) é relida no máximo nesse intervalo
+      paginas_max: 10          # rodízio: página 1 até esta e recomeça
+      janela: visivel          # visivel = Chrome de verdade fora da tela (o ML desconfia menos) | oculta
   shopee:
     # Open API de afiliados (SHOPEE_APP_ID/SHOPEE_APP_SECRET no .env). Sem as credenciais,
     # o bot usa só o Mercado Livre. As palavras buscadas ficam em "shopee:" de cada grupo.
@@ -46,6 +56,12 @@ fontes:
 # (Mercado Livre / Shopee, meio a meio) e, dentro de cada loja, as categorias ou as
 # palavras-chave (rodízio). Para criar um grupo, copie um bloco e ajuste.
 # categorias: lista de ids [MLB1246, ...] ou "id: nome" (o nome aparece no log).
+# Opcionais por grupo:
+#   ofertas_gerais: true   -> recebe as ofertas gerais do ML (todas as categorias; se a página
+#                             for barrada, usa o catálogo do ML pelos tipos de produto)
+#   departamentos: {MLB1246: Beleza e Cuidado Pessoal}  -> só esses departamentos (vazio = todos)
+#   sem_desconto: true     -> aceita os 5 primeiros do ranking de mais vendidos sem desconto ("Por R$ X")
+#   etiqueta_ml: minha_tag -> etiqueta do Linkbuilder só deste grupo (para ver as vendas por grupo)
 grupos:
   mulher:
     nome: Achadinhos da Gabi 💄

@@ -281,9 +281,9 @@ Dois cliques em **`CONFIGURAR.bat`**: o painel abre no navegador (endereço `htt
 | Aba | O que dá para fazer |
 |---|---|
 | **Início** | ver se o bot está rodando, quantas ofertas cada grupo recebeu hoje e os últimos envios |
-| **Grupos** | ligar/desligar grupos, criar e excluir, trocar nome, grupos do WhatsApp (o botão **Carregar grupos do WhatsApp** traz os nomes exatos, com emoji — precisa do Docker aberto), link de convite, **categorias do Mercado Livre** — uma por linha, no formato `MLB188063 Limpeza Automotiva` (dá para colar várias de uma vez; apague a linha para remover). O botão *🔎 Procurar categorias no Mercado Livre* abre a lista de categorias e subcategorias com o nº de anúncios: marque quantas quiser (pode entrar e sair das subcategorias) e clique em *Adicionar marcadas*. Se o Mercado Livre não responder, aparece *Tentar de novo*, palavras da Shopee, palavras bloqueadas do grupo, **ganchos** (frases de abertura em caixa alta, em rodízio — há sugestões prontas para Feminino, Mamãe e Bebê e Carro), **chamada de compra** (o texto antes do link do produto; o bot completa com "no Mercado Livre:" / "na Shopee:"), **chamada para compartilhar** (o texto antes do link de convite, ex.: "🤝 Manda pro parceiro que tá precisando!"), **proporção das lojas** (ex.: 3 ofertas do Mercado Livre para 1 da Shopee) e uma **prévia da mensagem** |
+| **Grupos** | ligar/desligar grupos, criar e excluir, **ofertas gerais do Mercado Livre** (todas as categorias — seção 9.2), aceitar mais vendidos sem desconto, etiqueta do ML por grupo, trocar nome, grupos do WhatsApp (o botão **Carregar grupos do WhatsApp** traz os nomes exatos, com emoji — precisa do Docker aberto), link de convite, **categorias do Mercado Livre** — uma por linha, no formato `MLB188063 Limpeza Automotiva` (dá para colar várias de uma vez; apague a linha para remover). O botão *🔎 Procurar categorias no Mercado Livre* abre a lista de categorias e subcategorias com o nº de anúncios: marque quantas quiser (pode entrar e sair das subcategorias) e clique em *Adicionar marcadas*. Se o Mercado Livre não responder, aparece *Tentar de novo*, palavras da Shopee, palavras bloqueadas do grupo, **ganchos** (frases de abertura em caixa alta, em rodízio — há sugestões prontas para Feminino, Mamãe e Bebê e Carro), **chamada de compra** (o texto antes do link do produto; o bot completa com "no Mercado Livre:" / "na Shopee:"), **chamada para compartilhar** (o texto antes do link de convite, ex.: "🤝 Manda pro parceiro que tá precisando!"), **proporção das lojas** (ex.: 3 ofertas do Mercado Livre para 1 da Shopee) e uma **prévia da mensagem** |
 | **Envio e filtros** | intervalo, ofertas por vez, pausa entre mensagens, dias sem repetir, horário de envio (mostra a estimativa de mensagens por dia), desconto/preço mínimo e máximo, palavras bloqueadas de todos os grupos, lojas ligadas e destino |
-| **Cupons** | horários dos posts de cupom, campanhas automáticas da Shopee (liga/desliga e quais grupos recebem) e a sua lista de cupons: descrição, código, link, validade e grupos — com prévia da mensagem. Veja a seção 9.2 |
+| **Cupons** | horários dos posts de cupom, campanhas automáticas da Shopee (liga/desliga e quais grupos recebem) e a sua lista de cupons: descrição, código, link, validade e grupos — com prévia da mensagem. Veja a seção 9.3 |
 | **Contas** | ML_CLIENT_ID/SECRET, ML_ETIQUETA, SHOPEE_APP_ID/SECRET. Campos secretos nunca aparecem na tela: deixe em branco para manter |
 
 - Mude o que quiser e clique em **Salvar** (a barra aparece embaixo quando há alteração). Se algo estiver errado, o painel mostra o que corrigir e **não grava nada**.
@@ -291,7 +291,19 @@ Dois cliques em **`CONFIGURAR.bat`**: o painel abre no navegador (endereço `htt
 - Se um grupo novo do WhatsApp não for encontrado, o bot avisa no log e **continua com os grupos anteriores** até você corrigir.
 - O painel mantém os comentários do `config.yaml` e guarda cópias em `data\config_anterior.yaml` (versão antes de salvar) e `data\meu_config.yaml` (a sua versão atual).
 
-### 9.2 Cupons
+### 9.2 Ofertas gerais do Mercado Livre (todas as categorias)
+
+Na aba **Grupos**, a chave **Ofertas gerais do Mercado Livre** faz o grupo receber **o que está em oferta no ML agora, de qualquer categoria**, como os grupos de "promoções". Não precisa de lista de categorias nem de marcas.
+
+- **De onde vem:** da página geral de ofertas do ML (`mercadolivre.com.br/ofertas`). O bot lê **poucas páginas por ciclo** (padrão 2), num Chrome de verdade com a janela **fora da tela** e um **perfil próprio, sem login** (`data\ml_ofertas_profile`): se o ML barrar essa navegação, o login de afiliado que gera os links não é afetado. Uma leitura abastece todos os grupos.
+- **Se o ML barrar a página** (log `Ofertas gerais: o Mercado Livre barrou a página de ofertas — pausada por 3 h`): o grupo continua recebendo pelo **catálogo do ML**, buscando pelos **tipos de produto** que o próprio ML lista em cada departamento (tênis, polos, mochilas, relógios, ferramentas…), em rodízio e de qualquer marca. A lista é lida do ML e guardada em `data\ml_termos_catalogo.json` (renovada toda semana).
+- **Só alguns departamentos:** para um grupo de nicho, preencha *Só estes departamentos* (botão *🔎 Escolher no Mercado Livre*), ex.: `MLB1246 Beleza e Cuidado Pessoal`. Vazio = tudo.
+- Com as ofertas gerais ligadas em algum grupo, o bot **para de ler a página de ofertas de cada categoria** (eram dezenas de visitas por hora, o motivo dos bloqueios). As categorias do grupo continuam valendo pelo ranking de mais vendidos.
+- **Aceitar os mais vendidos sem desconto (“Por R$ X”):** os 5 primeiros do ranking de mais vendidos passam mesmo sem preço antigo (os com desconto continuam precisando do desconto mínimo).
+- **Etiqueta do ML só deste grupo:** se a sua conta de afiliados permitir criar mais de uma etiqueta, crie uma por grupo e cole no campo: o painel de afiliados do ML passa a mostrar as vendas de cada grupo. **Na Shopee o bot já faz isso sozinho:** o link sai com o grupo como *Sub ID* (veja no relatório da Shopee por Sub ID).
+- Na aba **Envio e filtros**, a chave do aviso *“⚠️ Preço e disponibilidade podem variar.”* coloca essa linha embaixo do link de cada oferta (ligada por padrão).
+
+### 9.3 Cupons
 
 Nos horários da aba **Cupons** (padrão 10:00, 15:00 e 20:00, sempre dentro do horário de envio), cada grupo recebe **um post de cupom**, além das ofertas normais:
 

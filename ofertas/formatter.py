@@ -9,6 +9,7 @@
 
     🛒 *Compre aqui no Mercado Livre:*       (chamada de compra do grupo + loja)
     https://meli.la/...
+    ⚠️ Preço e disponibilidade podem variar.   (geral.aviso_preco)
 
     🤝 Manda pro parceiro que tá precisando!   (chamada do grupo)
     👉 https://chat.whatsapp.com/...
@@ -16,10 +17,12 @@
 import random
 import re
 
+from .config import config
 from .models import Grupo, Oferta
 
 CHAMADA_PADRAO = "💬 Manda essa oferta pra alguém que vai gostar!"
 COMPRA_PADRAO = "🛒 Compre aqui"
+AVISO_PRECO = "⚠️ Preço e disponibilidade podem variar."
 _NA_LOJA = {"mercadolivre": "no Mercado Livre", "shopee": "na Shopee"}
 MAX_PALAVRAS_TITULO = 8
 MAX_LETRAS_TITULO = 60
@@ -102,6 +105,8 @@ def montar_mensagem(o: Oferta, grupo: Grupo | None = None, gancho: str | None = 
         linhas.append(" · ".join(extras))
 
     linhas += ["", f"*{chamada_compra(o, grupo)}*", o.link]
+    if config.aviso_preco:
+        linhas.append(AVISO_PRECO)
     if grupo and grupo.convite:
         linhas += ["", grupo.chamada or CHAMADA_PADRAO, f"👉 {grupo.convite}"]
     return "\n".join(linhas)

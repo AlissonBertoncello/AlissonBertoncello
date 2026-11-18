@@ -68,6 +68,7 @@ class Config:
         self.espacamento_segundos: int = int(geral.get("espacamento_segundos", 60))
         self.nao_repetir_dias: int = int(geral.get("nao_repetir_dias", 7))
         self.horario_ativo: str = str(geral.get("horario_ativo") or "").strip()  # "08:00-23:00"; vazio = 24h
+        self.aviso_preco: bool = bool(geral.get("aviso_preco", True))  # "⚠️ Preço e disponibilidade podem variar."
 
         self.desconto_minimo: int = int(filtros.get("desconto_minimo", 0))
         self.preco_minimo: float = float(filtros.get("preco_minimo", 0))
@@ -82,6 +83,7 @@ class Config:
 
         self.destino: str = str(y.get("destino") or "console").strip().lower()
         self.grupos: list[Grupo] = ler_grupos(y.get("grupos") or {})
+        self.usa_ofertas_gerais: bool = any(g.ofertas_gerais for g in self.grupos)
         self.cupons: ConfigCupons = ler_cupons(y.get("cupons") or {})
 
 
@@ -119,14 +121,23 @@ def ler_grupos(dados: dict) -> list[Grupo]:
         else:
             cats = {str(c).strip().upper(): nome_categoria(str(c).strip().upper()) for c in cats}
         shopee = [str(t).strip() for t in (g.get("shopee") or []) if str(t).strip()]
-        if cats or shopee:
+        deps = g.get("departamentos") or {}
+        if isinstance(deps, dict):
+            deps = {str(k).strip().upper(): str(v) for k, v in deps.items()}
+        else:
+            deps = {str(c).strip().upper(): nome_categoria(str(c).strip().upper()) for c in deps}
+        gerais = bool(g.get("ofertas_gerais", False))
+        if cats or shopee or gerais:
             grupos.append(Grupo(chave=str(chave), nome=str(g.get("nome") or chave), categorias=cats,
                                 whatsapp=_lista(g.get("whatsapp")),
                                 convite=_convite(g.get("convite")), shopee=shopee,
                                 bloquear=_lista(g.get("bloquear")), ganchos=_lista(g.get("ganchos")),
                                 chamada=str(g.get("chamada") or "").strip(),
                                 chamada_compra=str(g.get("chamada_compra") or "").strip(),
-                                peso_ml=_peso(g, "mercadolivre"), peso_shopee=_peso(g, "shopee")))
+                                peso_ml=_peso(g, "mercadolivre"), peso_shopee=_peso(g, "shopee"),
+                                ofertas_gerais=gerais, departamentos=deps,
+                                sem_desconto=bool(g.get("sem_desconto", False)),
+                                etiqueta_ml=str(g.get("etiqueta_ml") or "").strip()))
     return grupos
 
 

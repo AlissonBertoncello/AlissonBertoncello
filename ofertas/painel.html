@@ -191,6 +191,7 @@
         </div>
       </div>
       <p class="dica" id="estimativa" style="margin-top:12px"></p>
+      <label class="chave" style="margin-top:8px"><input type="checkbox" data-c="geral.aviso_preco"><span class="trilho"></span> Aviso “⚠️ Preço e disponibilidade podem variar.” embaixo do link</label>
     </div>
 
     <div class="card">
@@ -444,7 +445,7 @@ function cartaoGrupo(g, i, aberto) {
   const info = el("span", { class: "badge" });
   function resumo() {
     tituloNome.textContent = g.nome || "(sem nome)";
-    info.textContent = g.ativo ? `${g.categorias.length} categ. · ${g.shopee.length} palavras · ${g.whatsapp.length} grupo(s) WA` : "desligado";
+    info.textContent = g.ativo ? `${g.ofertas_gerais ? "ofertas gerais · " : ""}${g.categorias.length} categ. · ${g.shopee.length} palavras · ${g.whatsapp.length} grupo(s) WA` : "desligado";
     info.className = "badge" + (g.ativo ? "" : " bad");
   }
   resumo();
@@ -480,6 +481,28 @@ function cartaoGrupo(g, i, aberto) {
     cats.value = textoCats(); lerCats(); resumo(); mudou();
   }) }, "🔎 Procurar categorias no Mercado Livre");
 
+  // ofertas gerais do ML (todas as categorias) + departamentos + "sem desconto" + etiqueta
+  const chave_ = (rotulo, campo, aoMudar = () => {}) => {
+    const cx = el("input", { type: "checkbox" }); cx.checked = !!g[campo];
+    cx.onchange = () => { g[campo] = cx.checked; aoMudar(); resumo(); mudou(); };
+    return el("label", { class: "chave" }, cx, el("span", { class: "trilho" }), rotulo);
+  };
+  const deps = el("textarea", { class: "cats", rows: "3", placeholder: "vazio = todos os departamentos\nex.: MLB1246 Beleza e Cuidado Pessoal" });
+  const textoDeps = () => g.departamentos.map(c => `${c.id} ${c.nome}`).join("\n");
+  deps.value = textoDeps();
+  deps.oninput = () => { g.departamentos = lerCategorias(deps.value).categorias; mudou(); };
+  const blocoDeps = el("div", { style: "margin-top:10px" },
+    el("div", { class: "linha", style: "justify-content:space-between" },
+      el("span", { style: "font-weight:600;font-size:14px", text: "Só estes departamentos (opcional)" }),
+      el("button", { type: "button", class: "bt peq", onclick: () => abrirCategorias(g, () => { deps.value = textoDeps(); mudou(); }, "departamentos") },
+        "🔎 Escolher no Mercado Livre")),
+    el("div", { style: "margin-top:6px" }, deps),
+    el("span", { class: "dica", text: "Vazio = tudo (grupo geral, como o do seu amigo). Para um grupo de nicho, escolha os departamentos dele (ex.: Beleza, Bebês)." }));
+  const mostrarDeps = () => { blocoDeps.style.display = g.ofertas_gerais ? "" : "none"; };
+  mostrarDeps();
+  const etiqueta = el("input", { type: "text", value: g.etiqueta_ml || "", placeholder: "vazio = a etiqueta da aba Contas" });
+  etiqueta.oninput = () => { g.etiqueta_ml = etiqueta.value.trim(); mudou(); };
+
   // mensagem: ganchos (abertura), chamada para compartilhar e prévia
   const ganchos = el("textarea", { placeholder: "uma frase por linha, ex.:\nSUA NAVE MERECE ESSE CUIDADO 🚗" });
   ganchos.value = g.ganchos.join("\n");
@@ -497,6 +520,7 @@ function cartaoGrupo(g, i, aberto) {
     else linhas.push("🔥 ", el("b", { text: "Nome curto do produto" }), "\n");
     linhas.push("De ", el("s", { text: "R$ 129" }), " por ", el("b", { text: "R$ 79" }), " no Pix 🔻39%\n",
       "💰 Você economiza ", el("b", { text: "R$ 50" }), "\n\n", el("b", { text: textoCompra(g.chamada_compra) }), "\nhttps://meli.la/…");
+    if (dados.geral.aviso_preco) linhas.push("\n⚠️ Preço e disponibilidade podem variar.");
     if (g.convite) linhas.push("\n\n" + (g.chamada || CHAMADA_PADRAO) + "\n👉 " + g.convite);
     previa.replaceChildren(...linhas);
   }
@@ -545,6 +569,13 @@ function cartaoGrupo(g, i, aberto) {
       el("div", { style: "margin-top:6px" }, chips(g.whatsapp, () => { resumo(); mudou(); }, { placeholder: "nome exato do grupo", lista_dl: "dl-wa" })),
       el("span", { class: "dica", text: "Nome exato, com emoji. Vários grupos recebem as mesmas ofertas. Use “Carregar grupos do WhatsApp” para escolher da lista." })),
     campo("Link de convite (vai no fim de cada oferta)", convite),
+    el("div", {}, chave_("Ofertas gerais do Mercado Livre (todas as categorias)", "ofertas_gerais", mostrarDeps),
+      el("span", { class: "dica", text: "Pega o que está em oferta no Mercado Livre agora, de qualquer categoria (página geral de ofertas). Se o ML barrar a página, usa o catálogo do ML pelos tipos de produto. Com isso ligado, as categorias abaixo são opcionais." }),
+      blocoDeps),
+    el("div", {}, chave_("Aceitar os mais vendidos sem desconto (“Por R$ X”)", "sem_desconto"),
+      el("span", { class: "dica", text: "Os 5 primeiros do ranking de mais vendidos passam mesmo sem preço antigo. Com desconto, vale o desconto mínimo da aba Envio e filtros." })),
+    campo("Etiqueta do Mercado Livre só deste grupo (opcional)", etiqueta,
+      el("small", { text: "Para ver no painel de afiliados do ML quanto cada grupo vende: crie outra etiqueta lá e cole aqui. Na Shopee, o bot marca o grupo sozinho (Sub ID)." })),
     el("div", {}, el("div", { class: "linha", style: "justify-content:space-between" },
         el("span", { style: "font-weight:600;font-size:14px", text: "Categorias do Mercado Livre" }), procurar),
       el("div", { style: "margin-top:6px" }, cats), contCats, avisoCats),
@@ -574,7 +605,7 @@ $("#bt-novo").onclick = () => {
   let n = 1; while (dados.grupos.some(g => g.chave === "novo_grupo" + (n > 1 ? n : ""))) n++;
   dados.grupos.push({ chave: "novo_grupo" + (n > 1 ? n : ""), ativo: true, nome: "Novo grupo", whatsapp: [], convite: "",
                       categorias: [], shopee: [], bloquear: [], ganchos: [], chamada: "", chamada_compra: "", peso_ml: 1, peso_shopee: 1,
-                      _novo: true });
+                      ofertas_gerais: true, departamentos: [], sem_desconto: false, etiqueta_ml: "", _novo: true });
   desenharGrupos(dados.grupos.length - 1); mudou();
   setTimeout(() => $("#lista-grupos details:last-child")?.scrollIntoView({ behavior: "smooth" }), 50);
 };
@@ -602,8 +633,8 @@ function lerCategorias(texto) {
   }
   return { categorias, invalidas };
 }
-async function abrirCategorias(grupo, depois) {
-  grupoDaCategoria = { grupo, depois };
+async function abrirCategorias(grupo, depois, campo = "categorias") {
+  grupoDaCategoria = { grupo, depois, campo };
   marcadas.clear(); contarMarcadas();
   $("#dlg-cat").showModal();
   await navegar("");
@@ -630,8 +661,8 @@ async function navegar(id) {
   }
 }
 function itemCategoria(c, podeAbrir) {
-  const { grupo } = grupoDaCategoria;
-  const ja = grupo.categorias.some(x => x.id === c.id);
+  const { grupo, campo } = grupoDaCategoria;
+  const ja = grupo[campo].some(x => x.id === c.id);
   const qtd = typeof c.total === "number" ? c.total.toLocaleString("pt-BR") + " anúncios · " : "";
   const caixa = el("input", { type: "checkbox", id: "cat-" + c.id });
   caixa.checked = ja || marcadas.has(c.id);
@@ -644,10 +675,10 @@ function itemCategoria(c, podeAbrir) {
 }
 $("#cat-fechar").onclick = () => $("#dlg-cat").close();
 $("#cat-add").onclick = () => {
-  const { grupo, depois } = grupoDaCategoria;
+  const { grupo, depois, campo } = grupoDaCategoria;
   let n = 0;
   for (const [id, nome] of marcadas)
-    if (!grupo.categorias.some(x => x.id === id)) { grupo.categorias.push({ id, nome }); n++; }
+    if (!grupo[campo].some(x => x.id === id)) { grupo[campo].push({ id, nome }); n++; }
   marcadas.clear(); contarMarcadas();
   depois();
   $("#dlg-cat").close();

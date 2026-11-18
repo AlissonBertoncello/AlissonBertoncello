@@ -112,28 +112,33 @@ def ml_login() -> None:
 
 # ── Geração dos links (Playwright + sessão logada) ───────────────────
 
-def _abrir_contexto(pw):
+def _abrir_contexto(pw, perfil: Path | None = None, visivel: bool = False):
     """Google Chrome instalado + perfil persistente do projeto, headless.
 
     O ML recusa o "Chrome for Testing" do Playwright, então usamos o Chrome real
-    (channel="chrome") e removemos as marcas de automação.
+    (channel="chrome") e removemos as marcas de automação. Com visivel=True, a janela é
+    de verdade (o ML desconfia menos dela), mas abre fora da tela para não atrapalhar.
     """
+    perfil = perfil or PERFIL_DIR
+    args = ["--disable-blink-features=AutomationControlled"]
+    if visivel:
+        args += ["--window-position=-32000,-32000", "--window-size=1280,900"]
     kwargs = dict(
         channel="chrome",
-        headless=True,
+        headless=not visivel,
         locale="pt-BR",
         user_agent=USER_AGENT,  # o headless se anuncia como HeadlessChrome
-        args=["--disable-blink-features=AutomationControlled"],
+        args=args,
         ignore_default_args=["--enable-automation"],
     )
     try:
-        return pw.chromium.launch_persistent_context(str(PERFIL_DIR), **kwargs)
+        return pw.chromium.launch_persistent_context(str(perfil), **kwargs)
     except Exception as e:
         if "chrome" not in str(e).lower():
             raise
         log.warning("Google Chrome não encontrado (%s); usando o Chromium do projeto", type(e).__name__)
         kwargs.pop("channel")
-        return pw.chromium.launch_persistent_context(str(PERFIL_DIR), **kwargs)
+        return pw.chromium.launch_persistent_context(str(perfil), **kwargs)
 
 
 # Chrome compartilhado: dentro de chrome_compartilhado(), a página de ofertas e o
@@ -231,12 +236,14 @@ def criar_links(page, urls: list[str], etiqueta: str) -> list[str]:
     return links
 
 
-def gerar_links_afiliado(ofertas: list[Oferta]) -> int:
-    """Preenche oferta.url_afiliado via Linkbuilder (lotes de 10). Retorna quantos gerou."""
+def gerar_links_afiliado(ofertas: list[Oferta], etiqueta: str = "") -> int:
+    """Preenche oferta.url_afiliado via Linkbuilder (lotes de 10). Retorna quantos gerou.
+    `etiqueta`: a de um grupo (link rastreável por grupo); vazio = ML_ETIQUETA do .env."""
     pendentes = [o for o in ofertas if not o.url_afiliado and o.url_produto]
     if not pendentes:
         return 0
-    if not config.ml_etiqueta:
+    etiqueta = etiqueta or config.ml_etiqueta
+    if not etiqueta:
         raise ErroAfiliado("ML_ETIQUETA não configurada no .env "
                            "(é a 'Etiqueta em uso' do Linkbuilder no painel de afiliados)")
     if not tem_sessao():
@@ -247,7 +254,7 @@ def gerar_links_afiliado(ofertas: list[Oferta]) -> int:
         for i in range(0, len(pendentes), TAMANHO_LOTE):
             lote = pendentes[i:i + TAMANHO_LOTE]
             try:
-                _gerar_lote(page, lote)
+                _gerar_lote(page, lote, etiqueta)
             except ErroAfiliado:
                 raise
             except Exception as e:
@@ -256,7 +263,7 @@ def gerar_links_afiliado(ofertas: list[Oferta]) -> int:
                 log.warning("Linkbuilder interrompido (%s) — recarregando a página e tentando de novo",
                             str(e).splitlines()[0][:150])
                 _abrir_linkbuilder(page)
-                _gerar_lote(page, [o for o in lote if not o.url_afiliado])
+                _gerar_lote(page, [o for o in lote if not o.url_afiliado], etiqueta)
     gerados = sum(1 for o in pendentes if o.url_afiliado)
     log.info("Mercado Livre: %d links de afiliado gerados", gerados)
     return gerados
@@ -270,11 +277,11 @@ def _abrir_linkbuilder(page) -> None:
     page.wait_for_timeout(1500)  # deixa os scripts de sessão da página rodarem
 
 
-def _gerar_lote(page, lote: list[Oferta]) -> None:
+def _gerar_lote(page, lote: list[Oferta], etiqueta: str = "") -> None:
     """Lote inteiro de uma vez; se o Linkbuilder recusar (ex: HTTP 500), tenta item por
     item, para que um produto problemático não derrube os outros."""
     try:
-        links = criar_links(page, [o.url_produto for o in lote], config.ml_etiqueta)
+        links = criar_links(page, [o.url_produto for o in lote], etiqueta or config.ml_etiqueta)
     except SessaoExpirada:
         raise
     except ErroAfiliado as e:
@@ -284,7 +291,7 @@ def _gerar_lote(page, lote: list[Oferta]) -> None:
         falhas = 0
         for o in lote:
             try:
-                [o.url_afiliado] = criar_links(page, [o.url_produto], config.ml_etiqueta)
+                [o.url_afiliado] = criar_links(page, [o.url_produto], etiqueta or config.ml_etiqueta)
             except SessaoExpirada:
                 raise
             except ErroAfiliado as e_item:

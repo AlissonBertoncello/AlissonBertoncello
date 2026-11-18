@@ -107,6 +107,10 @@ def ler_tudo() -> dict:
             from .categorias import nome
             cats = {str(c): nome(str(c)) for c in cats}
         convite = str(g.get("convite") or "")
+        deps = g.get("departamentos") or {}
+        if not isinstance(deps, dict):
+            from .categorias import nome
+            deps = {str(c): nome(str(c)) for c in deps}
         grupos.append({
             "chave": str(chave),
             "ativo": g.get("ativo") is not False,
@@ -121,6 +125,10 @@ def ler_tudo() -> dict:
             "chamada_compra": str(g.get("chamada_compra") or ""),
             "peso_ml": _peso(g, "mercadolivre"),
             "peso_shopee": _peso(g, "shopee"),
+            "ofertas_gerais": bool(g.get("ofertas_gerais", False)),
+            "departamentos": [{"id": str(k), "nome": str(v)} for k, v in deps.items()],
+            "sem_desconto": bool(g.get("sem_desconto", False)),
+            "etiqueta_ml": str(g.get("etiqueta_ml") or ""),
         })
     env = ler_env()
     return {
@@ -130,6 +138,7 @@ def ler_tudo() -> dict:
             "espacamento_segundos": int(geral.get("espacamento_segundos", 15)),
             "nao_repetir_dias": int(geral.get("nao_repetir_dias", 7)),
             "horario_ativo": str(geral.get("horario_ativo") or ""),
+            "aviso_preco": bool(geral.get("aviso_preco", True)),
         },
         "filtros": {
             "desconto_minimo": int(filtros.get("desconto_minimo", 0) or 0),
@@ -210,12 +219,14 @@ def validar(d: dict) -> list[str]:
         chaves.add(chave)
         if not gr.get("nome", "").strip():
             erros.append(f"Grupo {i}: falta o nome")
-        for c in gr.get("categorias") or []:
+        for c in [*(gr.get("categorias") or []), *(gr.get("departamentos") or [])]:
             if not _RE_CAT.match(str(c.get("id", ""))):
                 erros.append(f"{nome}: categoria '{c.get('id')}' inválida (formato MLB123)")
+        if not re.match(r"^[A-Za-z0-9_.-]{0,60}$", str(gr.get("etiqueta_ml") or "")):
+            erros.append(f"{nome}: a etiqueta do ML não pode ter espaços nem acentos")
         if gr.get("ativo"):
-            if not (gr.get("categorias") or gr.get("shopee")):
-                erros.append(f"{nome}: grupo ativo precisa de pelo menos uma categoria ou palavra da Shopee")
+            if not (gr.get("categorias") or gr.get("shopee") or gr.get("ofertas_gerais")):
+                erros.append(f"{nome}: grupo ativo precisa de ofertas gerais, categorias ou palavras da Shopee")
             if d.get("destino") == "whatsapp" and not gr.get("whatsapp"):
                 erros.append(f"{nome}: grupo ativo precisa do nome do grupo no WhatsApp")
         conv = (gr.get("convite") or "").strip()
@@ -334,12 +345,23 @@ def _aplicar_grupo(m: CommentedMap, gr: dict) -> None:
     sh = [t.strip() for t in gr.get("shopee") or [] if t.strip()]
     if sh != _lista(m.get("shopee")):
         m["shopee"] = _bloco(sh)
+    for campo in ("ofertas_gerais", "sem_desconto"):
+        if gr.get(campo) or campo in m:
+            _set(m, campo, bool(gr.get(campo)))
+    deps = {c["id"]: c["nome"].strip() or c["id"] for c in gr.get("departamentos") or []}
+    if deps or "departamentos" in m:
+        _set(m, "departamentos", deps)
+    etq = (gr.get("etiqueta_ml") or "").strip()
+    if etq or "etiqueta_ml" in m:
+        _set(m, "etiqueta_ml", etq)
 
 
 def aplicar(y: CommentedMap, d: dict) -> CommentedMap:
     """Copia os valores da tela para o YAML carregado (mantendo comentários e a ordem)."""
     geral = y.setdefault("geral", CommentedMap())
     for k, v in d["geral"].items():
+        if k == "aviso_preco" and v is True and k not in geral:
+            continue  # o padrão já é ligado: não precisa escrever
         _set(geral, k, v)
     filtros = y.setdefault("filtros", CommentedMap())
     for k in ("desconto_minimo", "preco_minimo", "preco_maximo"):

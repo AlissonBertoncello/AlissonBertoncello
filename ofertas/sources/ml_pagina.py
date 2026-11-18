@@ -119,18 +119,31 @@ def _html_navegador(urls: list[str]) -> dict[str, str]:
     como uma pessoa navegando: o ML às vezes responde sem produtos ao acesso direto."""
     from ..afiliado_ml import pagina_chrome
 
-    htmls: dict[str, str] = {}
     with pagina_chrome() as page:
-        for url in urls:
+        return ler_paginas(page, urls)
+
+
+def ler_paginas(page, urls: list[str], pausa_s: tuple[float, float] = (0, 0)) -> dict[str, str]:
+    """HTML de cada página (já com os cards carregados). Para na primeira que vier bloqueada.
+    pausa_s: espera aleatória entre uma página e outra, como uma pessoa navegando."""
+    import random
+
+    htmls: dict[str, str] = {}
+    for i, url in enumerate(urls):
+        if i and pausa_s[1]:
+            time.sleep(random.uniform(*pausa_s))
+        try:
+            page.goto(url, wait_until="domcontentloaded", timeout=45000)
             try:
-                page.goto(url, wait_until="domcontentloaded", timeout=45000)
-                try:
-                    page.wait_for_selector("div.poly-card", timeout=15000)
-                except Exception:
-                    pass  # sem cards: o HTML vai para o arquivo de diagnóstico
-                htmls[url] = page.content()
-            except Exception as e:
-                log.warning("Página de ofertas (Chrome) %s: %s", url, e)
+                page.wait_for_selector("div.poly-card", timeout=15000)
+            except Exception:
+                pass  # sem cards: o HTML vai para o arquivo de diagnóstico
+            htmls[url] = page.content()
+        except Exception as e:
+            log.warning("Página de ofertas (Chrome) %s: %s", url, e)
+            continue
+        if e_bloqueio(htmls[url]):
+            break
     return htmls
 
 
@@ -141,9 +154,14 @@ def _titulo(html: str | None) -> str:
     return t.get_text(strip=True)[:80] if t else ""
 
 
-def _e_verificacao(html: str | None) -> bool:
-    """Página "Segurança — Mercado Livre": o ML pediu para provar que não é robô."""
-    return _titulo(html).lower().startswith(("segurança", "seguranca", "security"))
+def e_bloqueio(html: str | None) -> bool:
+    """O ML barrou a visita: página "Segurança — Mercado Livre" (pede para provar que não é
+    robô) ou uma página praticamente vazia (~200 bytes, sem título) no lugar das ofertas."""
+    if html is None:
+        return False
+    if _titulo(html).lower().startswith(("segurança", "seguranca", "security")):
+        return True
+    return len(html) < 2000 and not _titulo(html) and "poly-card" not in html
 
 
 def _salvar_debug(url: str, html: str | None) -> None:
@@ -223,7 +241,7 @@ def buscar_ofertas(categorias: dict[str, str], paginas: int = 1, inicio: int = 1
             achadas_por_url[url] = parse_pagina(htmls[url]) if htmls.get(url) else []
             if achadas_por_url[url]:
                 continue
-            if _e_verificacao(htmls.get(url)):
+            if e_bloqueio(htmls.get(url)):
                 if not pausada():
                     _pausar_por_verificacao()
             else:

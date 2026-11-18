@@ -15,6 +15,7 @@ class Oferta:
     imagem: str | None = None
     extra: str | None = None   # frete grátis, loja oficial etc.
     url_afiliado: str = ""     # preenchido pelo Linkbuilder (meli.la/...)
+    posicao: int | None = None  # posição no ranking (mais vendidos/catálogo); None = fora de ranking
 
     @property
     def uid(self) -> str:
@@ -50,6 +51,11 @@ class Grupo:
     chamada_compra: str = ""   # texto antes do link do produto ("🛒 Compre aqui" + " no Mercado Livre:")
     peso_ml: int = 1           # proporção das lojas: a cada peso_ml ciclos do ML,
     peso_shopee: int = 1       # peso_shopee ciclos da Shopee
+    # ofertas gerais do ML (todas as categorias, página geral de ofertas + catálogo de reserva)
+    ofertas_gerais: bool = False
+    departamentos: dict[str, str] = field(default_factory=dict)  # vazio = todos os departamentos
+    sem_desconto: bool = False  # aceita os mais vendidos (top 5 do ranking) sem desconto ("Por R$ X")
+    etiqueta_ml: str = ""       # etiqueta do Linkbuilder só deste grupo (vazio = a do .env)
 
 
 @dataclass

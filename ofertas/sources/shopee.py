@@ -8,6 +8,7 @@ A busca é por palavra-chave (campo "shopee:" de cada grupo no config.yaml).
 import hashlib
 import json
 import logging
+import re
 import time
 
 import requests
@@ -158,10 +159,12 @@ def campanhas(termo: str = "", limite: int = 20) -> list[dict]:
     return achadas
 
 
-def link_afiliado(url: str) -> str:
-    """Link curto de afiliado (s.shopee.com.br/...) para qualquer página da Shopee."""
+def link_afiliado(url: str, sub_id: str = "cupom") -> str:
+    """Link curto de afiliado (s.shopee.com.br/...) para qualquer página da Shopee.
+    sub_id aparece no relatório da Shopee (ex.: o grupo de onde veio o clique)."""
+    sub = re.sub(r"[^A-Za-z0-9]", "", sub_id)[:50] or "bot"
     mutacao = (f"mutation{{generateShortLink(input:{{originUrl:{json.dumps(url)},"
-               f'subIds:["cupom"]}}){{shortLink}}}}')
+               f"subIds:[{json.dumps(sub)}]}}){{shortLink}}}}")
     link = (chamar(mutacao).get("generateShortLink") or {}).get("shortLink") or ""
     if not link:
         raise ErroShopee("a Shopee não devolveu o link curto de afiliado")
