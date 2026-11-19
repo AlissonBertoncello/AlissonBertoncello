@@ -49,6 +49,7 @@ fontes:
     ativa: true
     limite_por_busca: 20       # produtos pedidos por palavra-chave (máx. 50)
     ordenacao: 2               # 2 = mais vendidos · 1 = relevância · 5 = maior comissão
+    lista_geral: 2             # grupos de ofertas gerais: lista pronta sem palavra-chave (2 = mais vendidos · 1 = maior comissão)
 
 # Grupos de destino. "whatsapp" = nome EXATO do grupo no WhatsApp do número do bot
 # (liste os nomes com o LOGIN_WHATSAPP.bat ou: uv run python -m ofertas whatsapp-grupos).

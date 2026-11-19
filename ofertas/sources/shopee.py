@@ -130,6 +130,21 @@ def buscar(termo: str, limite: int | None = None, sessao: requests.Session | Non
     return ofertas
 
 
+def mais_vendidos(pagina: int = 1, limite: int | None = None, lista: int | None = None) -> list[Oferta]:
+    """Lista pronta da Shopee, sem palavra-chave (todas as categorias):
+    listType 2 = mais vendidos (padrão; fontes.shopee.lista_geral no config) · 1 = maior comissão."""
+    limite = max(1, min(int(limite or config.fonte_shopee.get("limite_por_busca", 20)), 50))
+    lista = int(lista or config.fonte_shopee.get("lista_geral", 2))
+    query = (f"{{productOfferV2(listType:{lista},sortType:2,page:{max(1, pagina)},limit:{limite})"
+             f"{{nodes{{{CAMPOS}}}}}}}")
+    nodes = (chamar(query).get("productOfferV2") or {}).get("nodes") or []
+    ofertas = [o for o in (node_para_oferta(n) for n in nodes) if o]
+    for i, o in enumerate(ofertas, 1):
+        o.posicao = (pagina - 1) * limite + i
+    log.info("Shopee mais vendidos (página %d): %d ofertas", pagina, len(ofertas))
+    return ofertas
+
+
 # ── cupons: campanhas da Shopee e link curto de afiliado ─────────────
 
 CAMPOS_CAMPANHA = "offerName offerLink imageUrl periodStartTime periodEndTime"

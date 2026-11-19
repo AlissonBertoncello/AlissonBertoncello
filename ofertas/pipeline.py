@@ -251,69 +251,112 @@ def _melhores(grupo: Grupo, brutas: list[Oferta], rotulo: str, n: int) -> tuple[
     return (diferentes + parecidas if diferentes else []), parecidas
 
 
-def _do_catalogo(grupo: Grupo, n: int) -> tuple[list[Oferta], list[Oferta]]:
-    """Reserva das ofertas gerais: catálogo do ML pelos nomes das subcategorias, em rodízio."""
+def _fonte_automatica(grupo: Grupo, n: int) -> tuple[list[Oferta], list[Oferta]]:
+    """Ofertas gerais pela API do ML: subcategorias de cada departamento em rodízio —
+    primeiro o ranking de mais vendidos, depois o catálogo pelo nome da subcategoria."""
     cliente = mercadolivre.cliente_padrao()
     try:
-        termos = ml_geral.termos_da_vez(grupo, cliente)
+        vez = ml_geral.da_vez(grupo, cliente)
     except Exception as e:
         _checar_rede()
-        log.warning("[%s] catálogo do ML: %s", grupo.nome, e)
+        log.warning("[%s] Mercado Livre (mais vendidos): %s", grupo.nome, e)
         return [], []
     reserva: list[Oferta] = []
-    for termo in termos:
-        try:
-            brutas = ml_geral.catalogo(termo, cliente)
-        except Exception as e:
-            _checar_rede()
-            log.warning("[%s] catálogo do ML '%s': %s", grupo.nome, termo, e)
-            continue
-        achadas, parecidas = _melhores(grupo, brutas, f"Catálogo do ML '{termo}'", n)
+    for cid, nome in vez:
+        for rotulo, buscar in ((f"Mais vendidos '{nome}'", lambda: ml_geral.mais_vendidos(cid, cliente)),
+                               (f"Catálogo do ML '{nome}'", lambda: ml_geral.catalogo(nome, cliente))):
+            try:
+                brutas = buscar()
+            except Exception as e:
+                _checar_rede()
+                log.debug("[%s] %s: %s", grupo.nome, rotulo, e)
+                continue
+            achadas, parecidas = _melhores(grupo, brutas, rotulo, n)
+            if achadas:
+                return achadas, []
+            reserva = reserva or parecidas
+    return [], reserva
+
+
+def _das_categorias(grupo: Grupo, n: int) -> tuple[list[Oferta], list[Oferta]]:
+    """Categorias do grupo, a partir da do rodízio: (para enviar, só parecidas)."""
+    cats = list(grupo.categorias.items())
+    if not cats:
+        return [], []
+    ordem = ordem_espalhada(len(cats))
+    inicio = _proxima.get(grupo.chave, 0) % len(cats)
+    reserva: list[Oferta] = []
+    pos_reserva = None
+    for passo in range(len(cats)):
+        pos = (inicio + passo) % len(cats)
+        cid, nome = cats[ordem[pos]]
+        brutas = coletar({cid: nome})
+        if not brutas:
+            _checar_rede()  # nada veio: se for falta de internet, para o ciclo aqui
+        achadas, parecidas = _melhores(grupo, brutas, nome, n)
         if achadas:
+            _proxima[grupo.chave] = pos + 1
             return achadas, []
-        reserva = reserva or parecidas
+        if parecidas and not reserva:
+            reserva, pos_reserva = parecidas, pos
+    _proxima[grupo.chave] = (inicio if pos_reserva is None else pos_reserva) + 1
     return [], reserva
 
 
 def _candidatas_ml(grupo: Grupo, n: int) -> list[Oferta]:
-    """Ofertas gerais (se o grupo usa) -> categorias do grupo, a partir da do rodízio ->
-    catálogo do ML (reserva das ofertas gerais). Pula a fonte que não tiver oferta nova (ou
-    só tiver produto parecido com os últimos enviados) e tenta a seguinte."""
+    """Grupo com ofertas gerais: página de ofertas (bônus, se abrir) -> mais vendidos e
+    catálogo do ML automáticos -> categorias do grupo. Grupo comum: categorias do grupo.
+    Pula a fonte sem oferta nova (ou só com produto parecido com os últimos enviados)."""
     if not config.fonte_ml.get("ativa"):
         return []
     reserva: list[Oferta] = []  # parecidas com as últimas: só se não houver outra
+    fontes = [_das_categorias]
     if grupo.ofertas_gerais:
         achadas, reserva = _melhores(grupo, ml_geral.ofertas_para(grupo), "Ofertas gerais do ML", n)
         if achadas:
             return achadas
-    cats = list(grupo.categorias.items())
-    if cats:
-        ordem = ordem_espalhada(len(cats))
-        inicio = _proxima.get(grupo.chave, 0) % len(cats)
-        pos_reserva = None
-        for passo in range(len(cats)):
-            pos = (inicio + passo) % len(cats)
-            cid, nome = cats[ordem[pos]]
-            brutas = coletar({cid: nome})
-            if not brutas:
-                _checar_rede()  # nada veio: se for falta de internet, para o ciclo aqui
-            achadas, parecidas = _melhores(grupo, brutas, nome, n)
-            if achadas:
-                _proxima[grupo.chave] = pos + 1
-                return achadas
-            if parecidas and not reserva:
-                reserva, pos_reserva = parecidas, pos
-        _proxima[grupo.chave] = (inicio if pos_reserva is None else pos_reserva) + 1
-    if grupo.ofertas_gerais:
-        achadas, parecidas = _do_catalogo(grupo, n)
+        fontes = [_fonte_automatica, _das_categorias]
+    for fonte in fontes:
+        achadas, parecidas = fonte(grupo, n)
         if achadas:
             return achadas
         reserva = reserva or parecidas
     return reserva
 
 
+# lista de mais vendidos da Shopee (sem palavra-chave) para os grupos de ofertas gerais
+PAGINAS_LISTA_SHOPEE = 10
+_pagina_lista_shopee: dict[str, int] = {}
+_lista_shopee_recusada: set[str] = set()  # a Shopee recusou a consulta: não tenta mais nesta execução
+
+
+def _usa_lista_shopee(grupo: Grupo) -> bool:
+    return grupo.ofertas_gerais and not grupo.departamentos and "lista" not in _lista_shopee_recusada
+
+
+def _da_lista_shopee(grupo: Grupo, n: int) -> list[Oferta]:
+    """Próxima página da lista de mais vendidos da Shopee (todas as categorias)."""
+    pagina = _pagina_lista_shopee.get(grupo.chave, 0) % PAGINAS_LISTA_SHOPEE + 1
+    _pagina_lista_shopee[grupo.chave] = pagina
+    try:
+        brutas = shopee.mais_vendidos(pagina)
+    except Exception as e:
+        if getattr(e, "rede", False):
+            _checar_rede()
+        _contar_shopee(False)
+        if not getattr(e, "passageiro", False):
+            _lista_shopee_recusada.add("lista")
+            log.warning("Shopee não aceitou a lista de mais vendidos (%s) — usando só as palavras-chave", e)
+        else:
+            log.warning("[%s] Shopee mais vendidos: %s", grupo.nome, e)
+        return []
+    _contar_shopee(True)
+    achadas, parecidas = _melhores(grupo, brutas, f"Shopee mais vendidos (página {pagina})", n)
+    return achadas or parecidas
+
+
 def _shopee_disponivel(grupo: Grupo) -> bool:
-    if not (grupo.shopee and config.fonte_shopee.get("ativa")):
+    if not ((grupo.shopee or _usa_lista_shopee(grupo)) and config.fonte_shopee.get("ativa")):
         return False
     if not shopee.tem_credenciais():
         if "credenciais" not in _avisou_shopee:
@@ -328,7 +371,13 @@ def _candidatas_shopee(grupo: Grupo, n: int) -> list[Oferta]:
     """Palavra-chave da vez na Shopee; se der erro ou não render oferta nova, tenta mais algumas."""
     if not _shopee_disponivel(grupo):
         return []
+    if _usa_lista_shopee(grupo):
+        candidatas = _da_lista_shopee(grupo, n)
+        if candidatas:
+            return candidatas
     termos = grupo.shopee
+    if not termos:
+        return []
     ordem = ordem_espalhada(len(termos))
     inicio = _proxima_shopee.get(grupo.chave, 0) % len(termos)
     tentativas = min(TENTATIVAS_SHOPEE, len(termos))

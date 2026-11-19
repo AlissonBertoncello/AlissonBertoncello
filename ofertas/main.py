@@ -111,6 +111,11 @@ def _linha_categoria(c: dict, recuo: str) -> str:
     return f"{recuo}{c['id']}: {c['name']}{qtd}"
 
 
+def cmd_testar_fontes(_):
+    from .teste_fontes import rodar
+    rodar()
+
+
 def cmd_categorias(args):
     """Mostra as categorias do ML com os códigos, no formato do config.yaml."""
     from .sources.mercadolivre import ErroAPI, cliente_padrao
@@ -328,6 +333,8 @@ def main():
     pt.set_defaults(fn=cmd_testar)
 
     sub.add_parser("diagnostico", help="testa quais caminhos de busca do ML funcionam").set_defaults(fn=cmd_diagnostico)
+    sub.add_parser("testar-fontes", help="testa de onde o bot consegue trazer ofertas (não envia nada)"
+                   ).set_defaults(fn=cmd_testar_fontes)
 
     pk = sub.add_parser("categorias", help="mostra as categorias do ML com os códigos para o config.yaml")
     pk.add_argument("id", nargs="?", help="código da categoria (ex.: MLB1276); sem código = principais")

@@ -1,13 +1,14 @@
 """Ofertas gerais do Mercado Livre: tudo o que está em oferta, de qualquer categoria
 (grupos com "ofertas_gerais: true").
 
-1. Página geral de ofertas (mercadolivre.com.br/ofertas, ou a de cada departamento do
-   grupo): poucas páginas por ciclo, num Chrome de verdade com a janela fora da tela e
-   um perfil próprio, sem login — se o ML barrar essa navegação, o login de afiliado
-   (Linkbuilder) não é afetado. Uma leitura abastece todos os grupos.
-2. Reserva, quando a página não traz nada (bloqueio ou tudo já enviado): busca no
-   catálogo do ML pelos nomes das subcategorias de cada departamento (tênis, polos,
-   mochilas, relógios, ferramentas…), em rodízio, sem lista fixa de marcas.
+1. Fonte principal, pela API oficial (não é barrada): o bot percorre sozinho as
+   subcategorias de cada departamento do ML (tênis, polos, mochilas, relógios,
+   ferramentas…) e lê o ranking de mais vendidos e o catálogo de cada uma, em rodízio,
+   sem lista fixa de categorias nem de marcas.
+2. Bônus: página geral de ofertas (mercadolivre.com.br/ofertas, ou a de cada
+   departamento do grupo), poucas páginas por ciclo, num Chrome de verdade com a janela
+   fora da tela e um perfil próprio, sem login. Se ela vier barrada ou vazia, fica
+   pausada por algumas horas (a cópia vai para data/ml_geral_debug.html).
 
 Ajustes em fontes.mercadolivre.ofertas_gerais no config.yaml (todos opcionais).
 """
@@ -114,11 +115,20 @@ def atualizar(grupos: list[Grupo], agora: float | None = None) -> None:
         if ml_pagina.e_bloqueio(html):
             _pausada_ate = agora + PAUSA_BLOQUEIO_H * 3600
             log.warning("Ofertas gerais: o Mercado Livre barrou a página de ofertas — pausada por %d h; "
-                        "enquanto isso os grupos usam o catálogo do ML (reserva)", PAUSA_BLOQUEIO_H)
+                        "os grupos seguem com os mais vendidos e o catálogo do ML", PAUSA_BLOQUEIO_H)
             break
         if html is None:
             continue
         achadas = ml_pagina.parse_pagina(html)
+        if not achadas and pagina_de(url) == 1:
+            # a página abriu, mas sem nenhuma oferta reconhecível (layout diferente, tela de CEP…)
+            _salvar_debug(html)
+            _pausada_ate = agora + PAUSA_BLOQUEIO_H * 3600
+            log.warning("Ofertas gerais: a página de ofertas abriu sem ofertas reconhecíveis (título: %r, "
+                        "%d bytes) — pausada por %d h; cópia em data/ml_geral_debug.html. Os grupos "
+                        "seguem com os mais vendidos e o catálogo do ML", ml_pagina._titulo(html),
+                        len(html), PAUSA_BLOQUEIO_H)
+            break
         estoque = _estoque.setdefault(fonte, {})
         for o in achadas:
             estoque[o.id_produto] = (o, agora)
@@ -132,6 +142,19 @@ def atualizar(grupos: list[Grupo], agora: float | None = None) -> None:
     if lidas:
         log.info("Ofertas gerais do ML: %d ofertas lidas (estoque: %d)", lidas,
                  sum(len(e) for e in _estoque.values()))
+
+
+def pagina_de(url: str) -> int:
+    import re
+    m = re.search(r"[?&]page=(\d+)", url)
+    return int(m.group(1)) if m else 1
+
+
+def _salvar_debug(html: str) -> None:
+    try:
+        (DATA_DIR / "ml_geral_debug.html").write_text(html, encoding="utf-8")
+    except OSError:
+        pass
 
 
 def ofertas_para(g: Grupo) -> list[Oferta]:
@@ -175,47 +198,66 @@ def _departamentos(g: Grupo, cliente) -> list[str]:
     return _termos["_raiz"]["termos"]
 
 
-def termos_do_departamento(dep: str, cliente) -> list[str]:
-    """Nomes das subcategorias (2 níveis) do departamento: 'Tênis', 'Polos', 'Mochilas'…"""
+def itens_do_departamento(dep: str, cliente) -> list[tuple[str, str]]:
+    """Subcategorias (2 níveis) do departamento: [(id, nome)] — 'Tênis', 'Polos', 'Mochilas'…"""
     _carregar_termos()
     guardado = _termos.get(dep)
-    if guardado and time.time() - guardado["em"] < VALIDADE_TERMOS_DIAS * 86400:
-        return guardado["termos"]
-    nomes: list[str] = []
+    if guardado and "itens" in guardado and time.time() - guardado["em"] < VALIDADE_TERMOS_DIAS * 86400:
+        return [tuple(x) for x in guardado["itens"]]
+    itens: list[tuple[str, str]] = []
     for filha in cliente.categoria(dep).get("children_categories") or []:
         try:
             netas = cliente.categoria(filha["id"]).get("children_categories") or []
         except Exception as e:
             log.debug("Subcategorias de %s: %s", filha.get("id"), e)
             netas = []
-        nomes += [n["name"] for n in netas] or [filha["name"]]
-    nomes = [n for n in dict.fromkeys(nomes) if n and not n.lower().startswith("outr")]
-    _termos[dep] = {"em": time.time(), "termos": nomes}
+        itens += [(n["id"], n["name"]) for n in netas] or [(filha["id"], filha["name"])]
+    vistos, limpos = set(), []
+    for cid, nome in itens:
+        if nome and nome not in vistos and not nome.lower().startswith("outr"):
+            vistos.add(nome)
+            limpos.append((cid, nome))
+    _termos[dep] = {"em": time.time(), "itens": limpos}
     _salvar_termos()
-    return nomes
+    return limpos
 
 
-def termos_da_vez(g: Grupo, cliente, qtd: int = TERMOS_POR_CICLO) -> list[str]:
-    """Próximos termos do grupo, um departamento de cada vez (variedade)."""
+def termos_do_departamento(dep: str, cliente) -> list[str]:
+    return [nome for _, nome in itens_do_departamento(dep, cliente)]
+
+
+def da_vez(g: Grupo, cliente, qtd: int = TERMOS_POR_CICLO) -> list[tuple[str, str]]:
+    """Próximas subcategorias do grupo [(id, nome)], um departamento de cada vez (variedade)."""
     _carregar_termos()
     deps = _departamentos(g, cliente)
-    escolhidos: list[str] = []
+    escolhidos: list[tuple[str, str]] = []
     for _ in range(len(deps) * 2):
         if len(escolhidos) >= qtd or not deps:
             break
         i = _rodizio_dep.get(g.chave, 0) % len(deps)
         _rodizio_dep[g.chave] = i + 1
         try:
-            termos = termos_do_departamento(deps[i], cliente)
+            itens = itens_do_departamento(deps[i], cliente)
         except Exception as e:
-            log.warning("Catálogo do ML: não consegui ler o departamento %s: %s", deps[i], e)
+            log.warning("Mercado Livre: não consegui ler o departamento %s: %s", deps[i], e)
             continue
-        if not termos:
+        if not itens:
             continue
-        j = _rodizio_termo.get((g.chave, deps[i]), 0) % len(termos)
+        j = _rodizio_termo.get((g.chave, deps[i]), 0) % len(itens)
         _rodizio_termo[(g.chave, deps[i])] = j + 1
-        escolhidos.append(termos[j])
+        escolhidos.append(itens[j])
     return escolhidos
+
+
+def termos_da_vez(g: Grupo, cliente, qtd: int = TERMOS_POR_CICLO) -> list[str]:
+    return [nome for _, nome in da_vez(g, cliente, qtd)]
+
+
+def mais_vendidos(cid: str, cliente) -> list[Oferta]:
+    """Ranking de mais vendidos da subcategoria (com a posição de cada produto)."""
+    from .mercadolivre import _destaques_de
+    site = str(config.fonte_ml.get("site") or "MLB")
+    return _destaques_de(cliente, site, cid, int(config.fonte_ml.get("limite_destaques", 20)))
 
 
 def catalogo(termo: str, cliente, limite: int = 10) -> list[Oferta]:

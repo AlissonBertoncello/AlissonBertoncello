@@ -133,22 +133,45 @@ def test_grupo_geral_envia_da_pagina_de_ofertas(monkeypatch, ciclo):
     assert ciclo.envios[0][1] == "MLB0000000005"
 
 
-def test_sem_pagina_usa_o_catalogo_pelos_tipos_de_produto(monkeypatch, ciclo):
+def test_sem_pagina_usa_mais_vendidos_e_catalogo_automaticos(monkeypatch, ciclo):
     monkeypatch.setattr(ml_geral, "_chrome_ler", lambda urls: {})
     monkeypatch.setattr(pipeline.mercadolivre, "cliente_padrao", lambda: object())
-    monkeypatch.setattr(ml_geral, "termos_da_vez", lambda g, c: ["Tênis", "Relógios"])
+    monkeypatch.setattr(ml_geral, "da_vez", lambda g, c: [("MLB1", "Tênis"), ("MLB2", "Relógios")])
     buscados = []
+    monkeypatch.setattr(ml_geral, "mais_vendidos", lambda cid, c: buscados.append(("ranking", cid)) or [])
 
     def catalogo(termo, cliente):
-        buscados.append(termo)
+        buscados.append(("catálogo", termo))
         if termo == "Tênis":
             return []
-        o = Oferta("mercadolivre", "MLB77", "Relógio Casio G-Shock", "https://ml/77", 400, 600, posicao=1)
-        return [o]
+        return [Oferta("mercadolivre", "MLB77", "Relógio Casio G-Shock", "https://ml/77", 400, 600, posicao=1)]
     monkeypatch.setattr(ml_geral, "catalogo", catalogo)
     g = Grupo("geral", "Geral", ofertas_gerais=True)
     pipeline.executar_ciclo(ciclo, [g], registrar=False)
-    assert buscados == ["Tênis", "Relógios"] and ciclo.envios[0][1] == "MLB77"
+    assert buscados == [("ranking", "MLB1"), ("catálogo", "Tênis"), ("ranking", "MLB2"), ("catálogo", "Relógios")]
+    assert ciclo.envios[0][1] == "MLB77"
+
+
+def test_grupo_geral_prefere_os_automaticos_as_categorias_antigas(monkeypatch, ciclo):
+    monkeypatch.setattr(ml_geral, "_chrome_ler", lambda urls: {})
+    monkeypatch.setattr(pipeline.mercadolivre, "cliente_padrao", lambda: object())
+    monkeypatch.setattr(ml_geral, "da_vez", lambda g, c: [("MLB9", "Mochilas")])
+    monkeypatch.setattr(ml_geral, "mais_vendidos", lambda cid, c: [
+        Oferta("mercadolivre", "MLB55", "Mochila Nike Academy", "https://ml/55", 150, 250, posicao=1)])
+    monkeypatch.setattr(pipeline, "coletar", lambda cats: [Oferta("mercadolivre", "MLB66", "Shampoo Automotivo", "https://ml/66", 30, 50)])
+    g = Grupo("geral", "Geral", {"MLB188063": "Limpeza Automotiva"}, ofertas_gerais=True)
+    pipeline.executar_ciclo(ciclo, [g], registrar=False)
+    assert ciclo.envios[0][1] == "MLB55"
+
+
+def test_pagina_aberta_sem_ofertas_pausa_e_guarda_copia(monkeypatch, caplog):
+    html = "<html><head><title>Informe seu CEP</title></head><body>" + "x" * 5000 + "</body></html>"
+    monkeypatch.setattr(ml_geral, "_chrome_ler", lambda urls: {u: html for u in urls})
+    monkeypatch.setattr(ml_geral, "DATA_DIR", ml_geral.ARQ_TERMOS.parent)
+    ml_geral.atualizar([Grupo("g", "G", ofertas_gerais=True)])
+    assert ml_geral.pausada()
+    assert any("sem ofertas reconhecíveis (título: 'Informe seu CEP'" in r.message for r in caplog.records)
+    assert (ml_geral.ARQ_TERMOS.parent / "ml_geral_debug.html").read_text(encoding="utf-8") == html
 
 
 def test_termos_vem_das_subcategorias_do_ml(monkeypatch):
@@ -248,7 +271,82 @@ def test_log_do_catalogo(monkeypatch, ciclo, caplog):
     caplog.set_level(logging.INFO)
     monkeypatch.setattr(ml_geral, "_chrome_ler", lambda urls: {})
     monkeypatch.setattr(pipeline.mercadolivre, "cliente_padrao", lambda: object())
-    monkeypatch.setattr(ml_geral, "termos_da_vez", lambda g, c: ["Mochilas"])
+    monkeypatch.setattr(ml_geral, "da_vez", lambda g, c: [("MLB9", "Mochilas")])
+    monkeypatch.setattr(ml_geral, "mais_vendidos", lambda cid, c: [])
     monkeypatch.setattr(ml_geral, "catalogo", lambda termo, cliente: [])
     pipeline.executar_ciclo(ciclo, [Grupo("g", "G", ofertas_gerais=True)], registrar=False)
+    assert any("Mais vendidos 'Mochilas': 0 coletadas" in r.message for r in caplog.records)
     assert any("Catálogo do ML 'Mochilas': 0 coletadas" in r.message for r in caplog.records)
+
+
+# ── B: lista de mais vendidos da Shopee ──────────────────────────────
+
+def _shopee_ligada(monkeypatch):
+    monkeypatch.setattr(config, "fonte_shopee", {"ativa": True})
+    monkeypatch.setattr(config, "shopee_app_id", "id")
+    monkeypatch.setattr(config, "shopee_app_secret", "s")
+
+
+def test_grupo_geral_usa_a_lista_de_mais_vendidos_da_shopee(monkeypatch, ciclo):
+    _shopee_ligada(monkeypatch)
+    paginas = []
+    monkeypatch.setattr(pipeline.shopee, "mais_vendidos", lambda pagina: paginas.append(pagina) or [
+        Oferta("shopee", f"S{pagina}", f"Fone Bluetooth {pagina}", "https://s/p", 50, 100, url_afiliado="https://s.shopee.com.br/x")])
+    monkeypatch.setattr(pipeline.shopee, "buscar", lambda termo: pytest.fail("não devia buscar palavra"))
+    g = Grupo("geral", "Geral", shopee=["fone"], ofertas_gerais=True, peso_ml=0, peso_shopee=1)
+    pipeline.executar_ciclo(ciclo, [g], registrar=False)
+    pipeline.executar_ciclo(ciclo, [g], registrar=False)
+    assert paginas == [1, 2] and [e[1] for e in ciclo.envios] == ["S1", "S2"]
+
+
+def test_lista_recusada_pela_shopee_volta_para_as_palavras(monkeypatch, ciclo, caplog):
+    _shopee_ligada(monkeypatch)
+    from ofertas.sources.shopee import ErroShopee
+    tentativas = []
+
+    def recusa(pagina):
+        tentativas.append(pagina)
+        raise ErroShopee("Shopee API: Unknown argument listType")
+    monkeypatch.setattr(pipeline.shopee, "mais_vendidos", recusa)
+    monkeypatch.setattr(pipeline.shopee, "buscar", lambda termo: [
+        Oferta("shopee", "K1", "Fone JBL", "https://s/p", 50, 100, url_afiliado="https://s.shopee.com.br/k")])
+    g = Grupo("geral", "Geral", shopee=["fone"], ofertas_gerais=True, peso_ml=0, peso_shopee=1)
+    pipeline.executar_ciclo(ciclo, [g], registrar=False)
+    pipeline.executar_ciclo(ciclo, [g], registrar=False)
+    assert tentativas == [1]  # não insiste depois de recusada
+    assert [e[1] for e in ciclo.envios] == ["K1", "K1"] or ciclo.envios[0][1] == "K1"
+    assert sum("não aceitou a lista de mais vendidos" in r.message for r in caplog.records) == 1
+
+
+def test_grupo_de_nicho_nao_usa_a_lista_geral_da_shopee(monkeypatch, ciclo):
+    _shopee_ligada(monkeypatch)
+    monkeypatch.setattr(pipeline.shopee, "mais_vendidos", lambda pagina: pytest.fail("grupo de nicho"))
+    monkeypatch.setattr(pipeline.shopee, "buscar", lambda termo: [
+        Oferta("shopee", "B1", "Batom", "https://s/p", 20, 40, url_afiliado="https://s.shopee.com.br/b")])
+    g = Grupo("gabi", "Gabi", shopee=["batom"], ofertas_gerais=True, departamentos={"MLB1246": "Beleza"},
+              peso_ml=0, peso_shopee=1)
+    pipeline.executar_ciclo(ciclo, [g], registrar=False)
+    assert ciclo.envios[0][1] == "B1"
+
+
+def test_consulta_da_lista_de_mais_vendidos(monkeypatch):
+    from ofertas.sources import shopee
+    consultas = []
+    monkeypatch.setattr(shopee, "chamar", lambda q: consultas.append(q) or {"productOfferV2": {"nodes": [
+        {"itemId": 1, "productName": "Fone", "offerLink": "https://s/1", "priceMin": "50", "priceDiscountRate": 20}]}})
+    [o] = shopee.mais_vendidos(pagina=2, limite=10)
+    assert "listType:2,sortType:2,page:2,limit:10" in consultas[0] and o.posicao == 11
+
+
+def test_testar_fontes_grava_o_resultado_mesmo_com_erros(monkeypatch, tmp_path):
+    from ofertas import teste_fontes
+    monkeypatch.setattr(teste_fontes, "PASTA", tmp_path)
+    monkeypatch.setattr(teste_fontes, "_a_mercado_livre", lambda: True)
+    monkeypatch.setattr(teste_fontes, "_b_shopee", lambda: (_ for _ in ()).throw(RuntimeError("Shopee fora")))
+    monkeypatch.setattr(teste_fontes, "_d_api_app", lambda: False)
+    monkeypatch.setattr(teste_fontes, "_c_e_d_logado", lambda: (True, False))
+    monkeypatch.setattr(teste_fontes, "_e_pagina_geral", lambda: False)
+    teste_fontes.rodar()
+    texto = (tmp_path / "resultado.txt").read_text(encoding="utf-8")
+    assert "❌ erro: Shopee fora" in texto
+    assert "Resumo: A ✅ · B ❌ · D1 ❌ · C ✅ · D2 ❌ · E ❌" in texto

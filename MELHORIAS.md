@@ -21,6 +21,14 @@ Ideias levantadas a partir de grupos concorrentes. Cada item depende de aprovaç
 | M5 | "⚠️ Preço e disponibilidade podem variar." embaixo do link |
 | R2b | Página de ofertas vazia (~200 bytes) também conta como bloqueio |
 
+## Implementado em 19/11/2026
+| Item | O que faz |
+|---|---|
+| A | Ofertas gerais pela API oficial do ML como fonte principal: mais vendidos + catálogo das subcategorias de cada departamento, em rodízio automático |
+| B | Shopee: lista de mais vendidos sem palavra-chave para os grupos de ofertas gerais (se a Shopee recusar, volta para as palavras) |
+| Teste | `TESTAR_FONTES.bat`: testa A, B, C (página de ofertas pelo login de afiliado), D (busca da API) e E (página geral no Chrome separado) no notebook |
+| Diagnóstico | Página geral aberta sem ofertas: log, cópia em data/ml_geral_debug.html e pausa de 3 h |
+
 ---
 
 ## 1. Mensagem: aprendizados de um grupo concorrente (15/10/2026)

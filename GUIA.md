@@ -293,10 +293,17 @@ Dois cliques em **`CONFIGURAR.bat`**: o painel abre no navegador (endereço `htt
 
 ### 9.2 Ofertas gerais do Mercado Livre (todas as categorias)
 
-Na aba **Grupos**, a chave **Ofertas gerais do Mercado Livre** faz o grupo receber **o que está em oferta no ML agora, de qualquer categoria**, como os grupos de "promoções". Não precisa de lista de categorias nem de marcas.
+Na aba **Grupos**, a chave **Ofertas gerais do Mercado Livre** faz o grupo receber **produtos de qualquer categoria**, como os grupos de "promoções". Não precisa de lista de categorias nem de marcas. Em cada ciclo, o bot tenta nesta ordem:
 
-- **De onde vem:** da página geral de ofertas do ML (`mercadolivre.com.br/ofertas`). O bot lê **poucas páginas por ciclo** (padrão 2), num Chrome de verdade com a janela **fora da tela** e um **perfil próprio, sem login** (`data\ml_ofertas_profile`): se o ML barrar essa navegação, o login de afiliado que gera os links não é afetado. Uma leitura abastece todos os grupos.
-- **Se o ML barrar a página** (log `Ofertas gerais: o Mercado Livre barrou a página de ofertas — pausada por 3 h`): o grupo continua recebendo pelo **catálogo do ML**, buscando pelos **tipos de produto** que o próprio ML lista em cada departamento (tênis, polos, mochilas, relógios, ferramentas…), em rodízio e de qualquer marca. A lista é lida do ML e guardada em `data\ml_termos_catalogo.json` (renovada toda semana).
+1. **Página geral de ofertas do ML** (bônus, quando o ML deixa abrir);
+2. **Mais vendidos e catálogo do ML, automático (fonte principal, API oficial):** o bot percorre sozinho as subcategorias de cada departamento (tênis, polos, mochilas, relógios, ferramentas…) e lê o ranking de mais vendidos e o catálogo de cada uma, em rodízio;
+3. as **categorias do grupo**, se houver;
+4. na vez da Shopee: a **lista de mais vendidos da Shopee** (sem palavra-chave, todas as categorias) e depois as palavras-chave do grupo. Se a Shopee não aceitar a lista, o bot avisa uma vez e fica só nas palavras.
+
+Para descobrir o que funciona no seu notebook, rode o **`TESTAR_FONTES.bat`** (com o bot fechado): ele testa cada fonte, mostra quantas ofertas trouxe e salva o resultado em `data\teste_fontes\resultado.txt`. Não envia nada aos grupos.
+
+- **Página geral de ofertas** (`mercadolivre.com.br/ofertas`): O bot lê **poucas páginas por ciclo** (padrão 2), num Chrome de verdade com a janela **fora da tela** e um **perfil próprio, sem login** (`data\ml_ofertas_profile`): se o ML barrar essa navegação, o login de afiliado que gera os links não é afetado. Uma leitura abastece todos os grupos.
+- **Se o ML barrar a página ou ela abrir sem ofertas** (log `barrou a página de ofertas` ou `abriu sem ofertas reconhecíveis`): ela fica pausada por 3 h (a cópia vai para `data\ml_geral_debug.html`) e o grupo segue pelos mais vendidos e pelo catálogo. A lista de subcategorias é lida do ML e guardada em `data\ml_termos_catalogo.json` (renovada toda semana).
 - **Só alguns departamentos:** para um grupo de nicho, preencha *Só estes departamentos* (botão *🔎 Escolher no Mercado Livre*), ex.: `MLB1246 Beleza e Cuidado Pessoal`. Vazio = tudo.
 - Com as ofertas gerais ligadas em algum grupo, o bot **para de ler a página de ofertas de cada categoria** (eram dezenas de visitas por hora, o motivo dos bloqueios). As categorias do grupo continuam valendo pelo ranking de mais vendidos.
 - **Aceitar os mais vendidos sem desconto (“Por R$ X”):** os 5 primeiros do ranking de mais vendidos passam mesmo sem preço antigo (os com desconto continuam precisando do desconto mínimo).
