@@ -5,6 +5,7 @@
 A. Mercado Livre pela API: mais vendidos e catálogo das subcategorias, automático
 B. Shopee: lista de mais vendidos sem palavra-chave (e uma busca por palavra, para comparar)
 D1. Busca completa da API do ML com a chave do app (hoje responde 403)
+G. Em alta no ML: termos mais buscados agora (lista oficial, grátis) procurados no catálogo
 F. IA (Claude) pesquisando ofertas, cada uma conferida na API do ML — só com a IA ligada
    no painel, porque é paga (o custo aparece no resultado)
 
@@ -90,6 +91,40 @@ def _b_shopee() -> bool:
     return ok
 
 
+def _g_em_alta() -> bool:
+    """Termos mais buscados agora no ML (lista oficial, grátis) procurados no catálogo."""
+    from .sources import ml_geral
+    from .sources.mercadolivre import cliente_padrao
+    cliente = cliente_padrao()
+    g = Grupo("teste_fontes", "Teste", ofertas_gerais=True)
+    try:
+        gerais = ml_geral._ler_em_alta("", cliente)
+        _p(f"   {'✅' if gerais else '⚪'} mais buscados no geral: {len(gerais)} termos — {', '.join(gerais[:10])}")
+    except Exception as e:
+        _p(f"   ❌ mais buscados no geral: {str(e)[:160]}")
+        gerais = []
+    deps = list(dict.fromkeys(ml_geral._departamentos(g, cliente)))[:4]
+    por_dep = 0
+    for cid in deps:
+        try:
+            termos = ml_geral._ler_em_alta(cid, cliente)
+            por_dep += len(termos)
+            _p(f"   {'✅' if termos else '⚪'} mais buscados em {cid}: {len(termos)} termos — {', '.join(termos[:6])}")
+        except Exception as e:
+            _p(f"   ❌ mais buscados em {cid}: {str(e)[:160]}")
+    termos = ml_geral.termos_em_alta(g, cliente)
+    total = 0
+    for termo in termos[:4]:
+        try:
+            achadas = ml_geral.catalogo(termo, cliente)
+        except Exception as e:
+            _p(f"   ❌ catálogo '{termo}': {str(e)[:120]}")
+            continue
+        total += len(achadas)
+        _p(f"   {'✅' if achadas else '⚪'} catálogo '{termo}': {_resumo(achadas)}")
+    return total > 0
+
+
 def _d_api_app() -> bool:
     from .sources.mercadolivre import cliente_padrao
     itens = cliente_padrao().buscar(str(config.fonte_ml.get("site") or "MLB"), q="tênis", limite=5)
@@ -152,6 +187,7 @@ def _rodar() -> None:
     res = {"A": _teste("A. Mercado Livre pela API (mais vendidos + catálogo, automático)", _a_mercado_livre),
            "B": _teste("B. Shopee (listas prontas, sem palavra-chave)", _b_shopee),
            "D1": _teste("D1. Busca da API do ML com a chave do app", _d_api_app)}
+    res["G"] = _teste("G. Em alta no ML (mais buscados agora, grátis) + catálogo", _g_em_alta)
     res["F"] = _teste("F. IA (Claude) pesquisando ofertas + conferência na API do ML", _f_ia)
     _p("\n══ Resumo: " + " · ".join(f"{k} {'✅' if v else '❌'}" for k, v in res.items()))
     (PASTA / "resultado.txt").write_text("\n".join(_linhas) + "\n", encoding="utf-8")

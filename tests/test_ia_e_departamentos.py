@@ -406,3 +406,51 @@ def test_busca_que_nao_termina_aproveita_os_links(monkeypatch):
     monkeypatch.setattr(ia, "_cliente", lambda: claude)
     sugestoes, uso = ia.pedir_sugestoes()
     assert uso["das_pesquisas"] == 2 and len(sugestoes) == 2
+
+
+# ── G2: em alta no ML (termos mais buscados agora) ──────────────────
+
+class ClienteTendencias:
+    def __init__(self, recusa=False):
+        self.pedidos = []
+        self.recusa = recusa
+
+    def get(self, caminho, params=None):
+        self.pedidos.append(caminho)
+        if self.recusa:
+            raise ErroAPI(f"GET {caminho} respondeu HTTP 403: forbidden")
+        return {"/trends/MLB/MLB1246": [{"keyword": "perfume masculino"}, {"keyword": "protetor solar"}],
+                "/trends/MLB": [{"keyword": "iphone 16"}, {"keyword": "Perfume Masculino"}]}.get(caminho, [])
+
+
+def test_termos_em_alta_intercalados_sem_repetir():
+    g = Grupo("g", "G", ofertas_gerais=True, departamentos={"MLB1246": "Beleza"})
+    c = ClienteTendencias()
+    assert ml_geral.termos_em_alta(g, c) == ["perfume masculino", "iphone 16", "protetor solar"]
+    ml_geral.termos_em_alta(g, c)
+    assert c.pedidos == ["/trends/MLB/MLB1246", "/trends/MLB"]  # guardado por 6 h
+    assert ml_geral.em_alta_da_vez(g, c) == ["perfume masculino", "iphone 16"]
+    assert ml_geral.em_alta_da_vez(g, c) == ["protetor solar", "perfume masculino"]
+
+
+def test_lista_em_alta_recusada_avisa_uma_vez(caplog):
+    g = Grupo("g", "G", ofertas_gerais=True, departamentos={"MLB1246": "Beleza"})
+    c = ClienteTendencias(recusa=True)
+    assert ml_geral.termos_em_alta(g, c) == [] and ml_geral.termos_em_alta(g, c) == []
+    assert len(c.pedidos) == 1
+    assert sum("mais buscados" in r.message for r in caplog.records) == 1
+
+
+def test_ciclo_usa_os_termos_em_alta_primeiro(monkeypatch, ciclo):
+    monkeypatch.setattr(mercadolivre, "cliente_padrao", lambda: object())
+    monkeypatch.setattr(ml_geral, "da_vez", lambda g, c: [("MLB9", "Mochilas")])
+    monkeypatch.setattr(ml_geral, "em_alta_da_vez", lambda g, c: ["perfume masculino"])
+    buscados = []
+
+    def catalogo(termo, cliente):
+        buscados.append(termo)
+        return [Oferta("mercadolivre", "MLB71", "Perfume Masculino Malbec 100ml", "https://ml/71", 150, 250, posicao=1)]
+    monkeypatch.setattr(ml_geral, "catalogo", catalogo)
+    monkeypatch.setattr(ml_geral, "mais_vendidos", lambda cid, c: buscados.append(cid) or [])
+    pipeline.executar_ciclo(ciclo, [Grupo("geral", "Geral", ofertas_gerais=True)], registrar=False)
+    assert buscados == ["perfume masculino"] and ciclo.envios[-1] == "MLB71"

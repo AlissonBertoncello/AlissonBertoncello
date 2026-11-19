@@ -370,7 +370,8 @@ def test_testar_fontes_grava_o_resultado_mesmo_com_erros(monkeypatch, tmp_path):
     monkeypatch.setattr(teste_fontes, "_b_shopee", lambda: (_ for _ in ()).throw(RuntimeError("Shopee fora")))
     monkeypatch.setattr(teste_fontes, "_d_api_app", lambda: False)
     monkeypatch.setattr(teste_fontes, "_f_ia", lambda: True)
+    monkeypatch.setattr(teste_fontes, "_g_em_alta", lambda: True)
     teste_fontes.rodar()
     texto = (tmp_path / "resultado.txt").read_text(encoding="utf-8")
     assert "❌ erro: Shopee fora" in texto
-    assert "Resumo: A ✅ · B ❌ · D1 ❌ · F ✅" in texto
+    assert "Resumo: A ✅ · B ❌ · D1 ❌ · G ✅ · F ✅" in texto

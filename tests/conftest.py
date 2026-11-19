@@ -14,9 +14,11 @@ def isolar(tmp_path, monkeypatch):
     monkeypatch.setattr(pipeline, "_pagina_lista_shopee", {})
     monkeypatch.setattr(pipeline, "_lista_shopee_recusada", set())
     monkeypatch.setattr(ml_pagina, "_pausada_ate", 0.0)
-    for nome in ("_estoque", "_lida_em", "_pagina_da_vez", "_termos", "_rodizio_dep", "_rodizio_termo"):
+    for nome in ("_estoque", "_lida_em", "_pagina_da_vez", "_termos", "_rodizio_dep", "_rodizio_termo", "_em_alta",
+                 "_rodizio_alta"):
         monkeypatch.setattr(ml_geral, nome, {})
     monkeypatch.setattr(ml_geral, "_pausada_ate", 0.0)
+    monkeypatch.setattr(ml_geral, "_em_alta_recusada", [])
     monkeypatch.setattr(ml_geral, "ARQ_TERMOS", tmp_path / "termos.json")
 
     def sem_link_por_grupo(*a, **k):  # nunca chama a Shopee de verdade nos testes

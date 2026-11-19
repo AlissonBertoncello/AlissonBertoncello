@@ -49,6 +49,10 @@ _pausada_ate = 0.0
 _termos: dict[str, dict] = {}            # departamento -> {"em": ts, "termos": [...]}
 _rodizio_dep: dict[str, int] = {}        # grupo -> próximo departamento
 _rodizio_termo: dict[tuple[str, str], int] = {}  # (grupo, departamento) -> próximo termo
+_em_alta: dict[str, tuple[float, list[str]]] = {}  # categoria ("" = geral) -> (lida em, termos)
+_rodizio_alta: dict[str, int] = {}       # grupo -> próximo termo em alta
+_em_alta_recusada: list[str] = []        # motivo, se o ML recusou a lista (não tenta mais nesta execução)
+VALIDADE_EM_ALTA_H = 6                   # termos mais buscados: relidos a cada 6 h
 
 
 def _opcoes() -> dict:
@@ -344,3 +348,62 @@ def catalogo(termo: str, cliente, limite: int = 10) -> list[Oferta]:
     for i, o in enumerate(achadas, 1):
         o.posicao = i
     return achadas
+
+
+# ── 3. em alta: termos mais buscados no ML agora -> catálogo ──────────
+
+def _ler_em_alta(cid: str, cliente) -> list[str]:
+    site = str(config.fonte_ml.get("site") or "MLB")
+    caminho = f"/trends/{site}/{cid}" if cid else f"/trends/{site}"
+    dados = cliente.get(caminho)
+    itens = dados if isinstance(dados, list) else (dados or {}).get("results") or []
+    return [str(x.get("keyword") or "").strip() for x in itens if isinstance(x, dict) and x.get("keyword")]
+
+
+def termos_em_alta(g: Grupo, cliente, agora: float | None = None) -> list[str]:
+    """Termos mais buscados agora no ML: os de cada departamento do grupo, intercalados,
+    e os gerais (relidos a cada 6 h). Vazio se o ML não liberar a lista."""
+    if _em_alta_recusada:
+        return []
+    agora = agora or time.time()
+    listas = []
+    for cid in [*_departamentos_unicos(g, cliente), ""]:
+        lida, termos = _em_alta.get(cid, (0.0, []))
+        if agora - lida > VALIDADE_EM_ALTA_H * 3600:
+            try:
+                termos = _ler_em_alta(cid, cliente)
+            except Exception as e:
+                if "HTTP 403" in str(e) or "HTTP 401" in str(e):
+                    _em_alta_recusada.append(str(e)[:120])
+                    log.warning("Mercado Livre: a lista de mais buscados (em alta) não está liberada "
+                                "para este app — seguindo sem ela")
+                    return []
+                log.debug("Em alta %s: %s", cid or "geral", e)
+                termos = termos or []
+            _em_alta[cid] = (agora, termos)
+        listas.append(termos)
+    vistos, saida = set(), []
+    for i in range(max((len(x) for x in listas), default=0)):
+        for termos in listas:
+            if i < len(termos) and termos[i].lower() not in vistos:
+                vistos.add(termos[i].lower())
+                saida.append(termos[i])
+    return saida
+
+
+def _departamentos_unicos(g: Grupo, cliente) -> list[str]:
+    try:
+        return list(dict.fromkeys(_departamentos(g, cliente)))
+    except Exception as e:
+        log.debug("Departamentos: %s", e)
+        return []
+
+
+def em_alta_da_vez(g: Grupo, cliente, qtd: int = 2) -> list[str]:
+    """Próximos termos em alta do grupo, em rodízio."""
+    termos = termos_em_alta(g, cliente)
+    if not termos:
+        return []
+    i = _rodizio_alta.get(g.chave, 0)
+    _rodizio_alta[g.chave] = i + qtd
+    return [termos[(i + k) % len(termos)] for k in range(min(qtd, len(termos)))]

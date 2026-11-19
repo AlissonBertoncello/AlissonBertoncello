@@ -296,9 +296,10 @@ Dois cliques em **`CONFIGURAR.bat`**: o painel abre no navegador (endereço `htt
 Na aba **Grupos**, a chave **Ofertas gerais do Mercado Livre** faz o grupo receber **produtos de qualquer categoria**, como os grupos de "promoções". Não precisa de lista de categorias nem de marcas. Em cada ciclo, o bot tenta nesta ordem:
 
 1. **Ofertas achadas pela IA** (se ligada — seção 9.4), já conferidas na API do ML;
-2. **Mais vendidos e catálogo do ML, automático (fonte principal, API oficial):** o bot percorre sozinho os departamentos de varejo — Calçados, Roupas e Bolsas (com peso 2), Beleza, Joias e Relógios, Esportes e Fitness, Ferramentas, Celulares, Eletrônicos, Informática, Casa e Móveis, Saúde — e lê o ranking de mais vendidos (no 1º nível de subcategoria, que tem ranking) e o catálogo pelo nome de cada tipo de produto (tênis, polos, mochilas, relógios…), em rodízio. Comida, bebida, livros, carros e imóveis ficam de fora;
-3. as **categorias do grupo**, se houver;
-4. na vez da Shopee: a **lista de mais vendidos da Shopee** (sem palavra-chave, todas as categorias) e depois as palavras-chave do grupo. Se a Shopee não aceitar a lista, o bot avisa uma vez e fica só nas palavras.
+2. **Em alta no ML (grátis):** os termos mais buscados agora no Mercado Livre (lista oficial, geral e de cada departamento, relida a cada 6 h) são procurados no catálogo do ML. Se o ML não liberar essa lista para o seu app, o bot avisa uma vez e segue sem ela;
+3. **Mais vendidos e catálogo do ML, automático (API oficial):** o bot percorre sozinho os departamentos de varejo — Calçados, Roupas e Bolsas (com peso 2), Beleza, Joias e Relógios, Esportes e Fitness, Ferramentas, Celulares, Eletrônicos, Informática, Casa e Móveis, Saúde — e lê o ranking de mais vendidos (no 1º nível de subcategoria, que tem ranking) e o catálogo pelo nome de cada tipo de produto (tênis, polos, mochilas, relógios…), em rodízio. Comida, bebida, livros, carros e imóveis ficam de fora;
+4. as **categorias do grupo**, se houver;
+5. na vez da Shopee: a **lista de mais vendidos da Shopee** (sem palavra-chave, todas as categorias) e depois as palavras-chave do grupo. Se a Shopee não aceitar a lista, o bot avisa uma vez e fica só nas palavras.
 
 Para descobrir o que funciona no seu notebook, rode o **`TESTAR_FONTES.bat`** (com o bot fechado): ele testa cada fonte, mostra quantas ofertas trouxe e salva o resultado em `data\teste_fontes\resultado.txt`. Não envia nada aos grupos. O teste da IA (F) só roda com a IA ligada no painel, porque é pago.
 
@@ -344,6 +345,8 @@ https://meli.la/...
 ---
 
 ### 9.4 IA para achar ofertas (Claude) — opcional e paga
+
+> **Situação em 19/11/2026:** nos testes, a pesquisa na web só trouxe páginas de busca do ML (`lista.mercadolivre.com.br/...`), nenhuma página de produto — então a IA não achou ofertas para conferir. **Deixe a IA desligada**; a fonte grátis *Em alta no ML* (seção 9.2) faz esse papel.
 
 Como o seu amigo faz com o ChatGPT: de tempos em tempos, o **Claude pesquisa na internet** as melhores ofertas do Mercado Livre do momento (marcas, moda, calçados, perfumes, relógios, eletrônicos, ferramentas, casa, fitness). O bot **confere cada produto na API oficial do ML** — preço de agora, preço antigo, foto, se existe — e **descarta o que não bater**: preço inventado ou produto que não existe nunca chega ao grupo. O que passou segue o caminho normal (filtros, sem repetir, link de afiliado, envio). Vale só para os grupos com **Ofertas gerais** ligadas.
 

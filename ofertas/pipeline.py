@@ -252,8 +252,9 @@ def _melhores(grupo: Grupo, brutas: list[Oferta], rotulo: str, n: int) -> tuple[
 
 
 def _fonte_automatica(grupo: Grupo, n: int) -> tuple[list[Oferta], list[Oferta]]:
-    """Ofertas gerais pela API do ML: subcategorias de cada departamento em rodízio —
-    primeiro o ranking de mais vendidos, depois o catálogo pelo nome da subcategoria."""
+    """Ofertas gerais pela API do ML: termos mais buscados agora (em alta) no catálogo;
+    depois as subcategorias de cada departamento em rodízio — o ranking de mais vendidos
+    e o catálogo pelo nome da subcategoria."""
     cliente = mercadolivre.cliente_padrao()
     try:
         vez = ml_geral.da_vez(grupo, cliente)
@@ -262,6 +263,23 @@ def _fonte_automatica(grupo: Grupo, n: int) -> tuple[list[Oferta], list[Oferta]]
         log.warning("[%s] Mercado Livre (mais vendidos): %s", grupo.nome, e)
         return [], []
     reserva: list[Oferta] = []
+    # primeiro: termos mais buscados agora no ML (em alta), procurados no catálogo
+    try:
+        alta = ml_geral.em_alta_da_vez(grupo, cliente)
+    except Exception as e:
+        log.debug("[%s] Em alta no ML: %s", grupo.nome, e)
+        alta = []
+    for termo in alta:
+        try:
+            brutas = ml_geral.catalogo(termo, cliente)
+        except Exception as e:
+            _checar_rede()
+            log.debug("[%s] Em alta '%s': %s", grupo.nome, termo, e)
+            continue
+        achadas, parecidas = _melhores(grupo, brutas, f"Em alta no ML '{termo}'", n)
+        if achadas:
+            return achadas, []
+        reserva = reserva or parecidas
     for cid, nome in vez:
         for rotulo, buscar in ((f"Mais vendidos '{nome}'", lambda: ml_geral.mais_vendidos(cid, cliente)),
                                (f"Catálogo do ML '{nome}'", lambda: ml_geral.catalogo(nome, cliente))):
