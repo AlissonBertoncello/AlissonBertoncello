@@ -78,25 +78,24 @@ def test_busca_liberada_usa_busca(monkeypatch):
     assert not any(ch.startswith("destaques") for ch in c.chamadas)
 
 
-def test_auto_cai_para_pagina(monkeypatch):
+def test_auto_nao_abre_a_pagina_de_ofertas(monkeypatch):
+    """A página de ofertas do ML barra acesso automático: no modo auto ela não é aberta."""
     _config(monkeypatch, modo="auto")
     monkeypatch.setattr(mercadolivre, "_pagina_da_vez", {})
 
-    class SemNada(ClienteFalso):
-        def destaques(self, site, cat):
-            raise ErroAPI("HTTP 403")
+    def nao_abrir(*a, **k):
+        raise AssertionError("abriu a página de ofertas")
+    monkeypatch.setattr(ml_pagina, "buscar_ofertas", nao_abrir)
+    ids = sorted(o.id_produto for o in mercadolivre.buscar_ofertas(ClienteFalso()))
+    assert ids == ["MLB1", "MLB900"]
+
+
+def test_modo_pagina_ainda_abre_a_pagina(monkeypatch):
+    _config(monkeypatch, modo="pagina")
+    monkeypatch.setattr(mercadolivre, "_pagina_da_vez", {})
     monkeypatch.setattr(ml_pagina, "buscar_ofertas",
                         lambda cats, paginas, inicio, navegador='auto': [mercadolivre.item_para_oferta(ITEM)])
-    assert [o.id_produto for o in mercadolivre.buscar_ofertas(SemNada())] == ["MLB1"]
-
-
-def test_auto_soma_mais_vendidos_e_pagina_de_ofertas(monkeypatch):
-    _config(monkeypatch, modo="auto")
-    monkeypatch.setattr(mercadolivre, "_pagina_da_vez", {})
-    da_pagina = mercadolivre.item_para_oferta({**ITEM, "id": "MLB777", "title": "Da página"})
-    monkeypatch.setattr(ml_pagina, "buscar_ofertas", lambda cats, paginas, inicio, navegador='auto': [da_pagina])
-    ids = sorted(o.id_produto for o in mercadolivre.buscar_ofertas(ClienteFalso()))
-    assert ids == ["MLB1", "MLB777", "MLB900"]
+    assert [o.id_produto for o in mercadolivre.buscar_ofertas(ClienteFalso())] == ["MLB1"]
 
 
 def test_rodizio_de_paginas_de_ofertas(monkeypatch):

@@ -1,7 +1,8 @@
 import pytest
 
 from ofertas import db, pipeline
-from ofertas.sources import ml_geral, ml_pagina, shopee
+from ofertas.config import config
+from ofertas.sources import ia_ofertas, ml_geral, ml_pagina, shopee
 
 
 @pytest.fixture(autouse=True)
@@ -22,3 +23,8 @@ def isolar(tmp_path, monkeypatch):
         raise shopee.ErroShopee("teste")
     monkeypatch.setattr(shopee, "link_afiliado", sem_link_por_grupo)
     monkeypatch.setattr(ml_geral, "_chrome_ler", lambda urls: {})  # nunca abre um Chrome de verdade
+    # IA: nunca usa a chave de verdade nem o arquivo de gasto de verdade
+    monkeypatch.setattr(config, "anthropic_api_key", "")
+    monkeypatch.setattr(config, "fonte_ia", {"ativa": False})
+    monkeypatch.setattr(ia_ofertas, "ARQ_ESTADO", tmp_path / "ia_ofertas.json")
+    monkeypatch.setattr(ia_ofertas, "_cliente", lambda: (_ for _ in ()).throw(AssertionError("chamou a IA")))

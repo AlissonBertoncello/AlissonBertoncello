@@ -40,10 +40,11 @@ CAMPOS_ENV = {
     "ML_ETIQUETA": False,
     "SHOPEE_APP_ID": False,
     "SHOPEE_APP_SECRET": True,
+    "ANTHROPIC_API_KEY": True,
 }
 # sobe quando a tela passa a precisar de campos novos: a tela compara com a dela e avisa
 # se quem responde é um painel antigo que ficou aberto desde antes da atualização
-VERSAO_PAINEL = 3
+VERSAO_PAINEL = 4
 _RE_CHAVE = re.compile(r"^[a-z0-9_]{1,30}$")
 _RE_HORA = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 _RE_CAT = re.compile(r"^MLB\d{1,10}$")
@@ -153,6 +154,8 @@ def ler_tudo() -> dict:
             "mercadolivre": bool((fontes.get("mercadolivre") or {}).get("ativa", True)),
             "shopee": bool((fontes.get("shopee") or {}).get("ativa", False)),
         },
+        "ia": _ler_ia(fontes.get("ia")),
+        "ia_info": _info_ia(),
         "versao": VERSAO_PAINEL,
         "destino": str(y.get("destino") or "console"),
         "grupos": grupos,
@@ -160,6 +163,36 @@ def ler_tudo() -> dict:
         "env": {k: {"secreto": s, "definido": bool(env.get(k)), "valor": "" if s else env.get(k, "")}
                 for k, s in CAMPOS_ENV.items()},
     }
+
+
+IA_PADRAO = {"ativa": False, "modelo": "claude-opus-5-5", "buscas_por_dia": 1, "intervalo_horas": 4,
+             "pesquisas_por_busca": 5, "gasto_max_mes_usd": 10}
+MODELOS_IA = ("claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5")
+
+
+def _ler_ia(c) -> dict:
+    c = c if isinstance(c, dict) else {}
+    d = dict(IA_PADRAO)
+    for k, padrao in IA_PADRAO.items():
+        v = c.get(k, padrao)
+        try:
+            d[k] = bool(v) if isinstance(padrao, bool) else str(v) if isinstance(padrao, str) \
+                else (float(v) if isinstance(padrao, float) or k in ("intervalo_horas", "gasto_max_mes_usd")
+                      else int(v))
+        except (TypeError, ValueError):
+            d[k] = padrao
+    for k in ("intervalo_horas", "gasto_max_mes_usd"):
+        if float(d[k]).is_integer():
+            d[k] = int(d[k])
+    return d
+
+
+def _info_ia() -> dict:
+    """Preços e gasto do mês, para a tela calcular o custo antes de ligar (não é salvo)."""
+    from .sources import ia_ofertas as ia
+    return {"precos": {m: list(p) for m, p in ia.PRECOS.items()}, "preco_pesquisa": ia.PRECO_PESQUISA,
+            "tokens": [ia.TOKENS_ENTRADA_BASE, ia.TOKENS_ENTRADA_POR_PESQUISA, ia.TOKENS_SAIDA],
+            "gasto_mes": round(ia.gasto_do_mes(), 2)}
 
 
 def _horarios(valor) -> list[str]:
@@ -247,11 +280,26 @@ def validar(d: dict) -> list[str]:
     if not any(gr.get("ativo") for gr in d.get("grupos") or []):
         erros.append("Deixe pelo menos um grupo ativo")
     erros += _validar_cupons(d.get("cupons"), chaves)
+    erros += _validar_ia(d.get("ia"))
     for k, v in (d.get("env") or {}).items():
         if k not in CAMPOS_ENV:
             erros.append(f"Credencial desconhecida: {k}")
         elif not isinstance(v, str) or any(c in v for c in "\r\n"):
             erros.append(f"{k}: valor inválido")
+    return erros
+
+
+def _validar_ia(c) -> list[str]:
+    if c is None:
+        return []
+    erros = []
+    if c.get("modelo") not in MODELOS_IA:
+        erros.append("IA: modelo desconhecido")
+    for campo, minimo, maximo in (("buscas_por_dia", 0, 24), ("intervalo_horas", 1, 24),
+                                  ("pesquisas_por_busca", 1, 20), ("gasto_max_mes_usd", 0, 1000)):
+        v = c.get(campo)
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or not minimo <= v <= maximo:
+            erros.append(f"IA: '{campo}' precisa ser de {minimo} a {maximo}")
     return erros
 
 
@@ -378,6 +426,11 @@ def aplicar(y: CommentedMap, d: dict) -> CommentedMap:
     for loja in ("mercadolivre", "shopee"):
         _set(fontes.setdefault(loja, CommentedMap()), "ativa", bool(d["fontes"][loja]))
     _set(y, "destino", d["destino"])
+    ia = d.get("ia")
+    if ia is not None and (ia != _ler_ia(None) or "ia" in fontes):
+        m = fontes.setdefault("ia", CommentedMap())
+        for k in IA_PADRAO:
+            _set(m, k, ia[k])
 
     grupos = y.setdefault("grupos", CommentedMap())
     pedidos = {gr["chave"]: gr for gr in d["grupos"]}
@@ -427,6 +480,7 @@ def salvar(d: dict) -> list[str]:
     if erros:
         return erros
     d.pop("versao", None)
+    d.pop("ia_info", None)
     y = aplicar(_carregar(), d)
     texto = StringIO()
     _yaml().dump(y, texto)

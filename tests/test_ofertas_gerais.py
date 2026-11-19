@@ -65,7 +65,23 @@ def ciclo(monkeypatch):
 T = 1_800_000_000.0
 
 
+def _ligar_pagina(monkeypatch):
+    """A página de ofertas do ML é opcional e vem desligada (o ML barra o acesso)."""
+    fonte = dict(config.fonte_ml or {})
+    fonte["ativa"] = True
+    fonte["ofertas_gerais"] = {**(fonte.get("ofertas_gerais") or {}), "pagina_ofertas": True}
+    monkeypatch.setattr(config, "fonte_ml", fonte)
+
+
+def test_pagina_de_ofertas_desligada_por_padrao(monkeypatch):
+    monkeypatch.setattr(config, "fonte_ml", {"ativa": True})
+    monkeypatch.setattr(ml_geral, "_chrome_ler", lambda urls: (_ for _ in ()).throw(AssertionError("abriu")))
+    ml_geral.atualizar([Grupo("g", "G", ofertas_gerais=True)], agora=T)
+    assert not ml_geral.pausada()
+
+
 def test_le_poucas_paginas_e_abastece_os_grupos(monkeypatch, ciclo):
+    _ligar_pagina(monkeypatch)
     lidas = []
 
     def chrome(urls):
@@ -88,6 +104,7 @@ def test_le_poucas_paginas_e_abastece_os_grupos(monkeypatch, ciclo):
 
 
 def test_cada_grupo_recebe_copia_com_link_proprio(monkeypatch):
+    _ligar_pagina(monkeypatch)
     monkeypatch.setattr(ml_geral, "_chrome_ler", lambda urls: {u: _pagina(_card("9", "Polo Tommy")) for u in urls})
     a, b = Grupo("a", "A", ofertas_gerais=True), Grupo("b", "B", ofertas_gerais=True)
     ml_geral.atualizar([a, b])
@@ -97,6 +114,7 @@ def test_cada_grupo_recebe_copia_com_link_proprio(monkeypatch):
 
 
 def test_pagina_barrada_pausa_e_avisa(monkeypatch, caplog):
+    _ligar_pagina(monkeypatch)
     lidas = []
     vazia = "<html><head></head><body></body></html>"  # ~200 bytes, sem título (R2b)
     monkeypatch.setattr(ml_geral, "_chrome_ler", lambda urls: lidas.extend(urls) or {u: vazia for u in urls})
@@ -110,6 +128,11 @@ def test_pagina_barrada_pausa_e_avisa(monkeypatch, caplog):
 def test_r2b_pagina_vazia_e_bloqueio():
     assert ml_pagina.e_bloqueio("<html><head></head><body></body></html>")
     assert ml_pagina.e_bloqueio("<html><head><title>Segurança — Mercado Livre</title></head></html>")
+    # tela "Olá! Para continuar, acesse sua conta" (tráfego suspeito), que veio no teste E
+    verificacao = ("<html><head><title>Mercado Libre</title></head><body>Olá! Para continuar, acesse sua conta"
+                   "<script>location='/gz/account-verification?go=x&reason=suspicious-traffic'</script>"
+                   + "x" * 5000 + "</body></html>")
+    assert ml_pagina.e_bloqueio(verificacao)
     assert not ml_pagina.e_bloqueio(_pagina(_card("1", "x")))
     assert not ml_pagina.e_bloqueio(None)
 
@@ -127,6 +150,7 @@ def test_com_ofertas_gerais_nao_le_a_pagina_de_cada_categoria(monkeypatch):
 # ── pipeline: ofertas gerais -> categorias -> catálogo ───────────────
 
 def test_grupo_geral_envia_da_pagina_de_ofertas(monkeypatch, ciclo):
+    _ligar_pagina(monkeypatch)
     monkeypatch.setattr(ml_geral, "_chrome_ler", lambda urls: {u: _pagina(_card("5", "Tênis New Balance 460")) for u in urls})
     g = Grupo("geral", "Geral", ofertas_gerais=True)
     assert pipeline.executar_ciclo(ciclo, [g], registrar=False) == 1
@@ -165,6 +189,7 @@ def test_grupo_geral_prefere_os_automaticos_as_categorias_antigas(monkeypatch, c
 
 
 def test_pagina_aberta_sem_ofertas_pausa_e_guarda_copia(monkeypatch, caplog):
+    _ligar_pagina(monkeypatch)
     html = "<html><head><title>Informe seu CEP</title></head><body>" + "x" * 5000 + "</body></html>"
     monkeypatch.setattr(ml_geral, "_chrome_ler", lambda urls: {u: html for u in urls})
     monkeypatch.setattr(ml_geral, "DATA_DIR", ml_geral.ARQ_TERMOS.parent)
@@ -344,9 +369,8 @@ def test_testar_fontes_grava_o_resultado_mesmo_com_erros(monkeypatch, tmp_path):
     monkeypatch.setattr(teste_fontes, "_a_mercado_livre", lambda: True)
     monkeypatch.setattr(teste_fontes, "_b_shopee", lambda: (_ for _ in ()).throw(RuntimeError("Shopee fora")))
     monkeypatch.setattr(teste_fontes, "_d_api_app", lambda: False)
-    monkeypatch.setattr(teste_fontes, "_c_e_d_logado", lambda: (True, False))
-    monkeypatch.setattr(teste_fontes, "_e_pagina_geral", lambda: False)
+    monkeypatch.setattr(teste_fontes, "_f_ia", lambda: True)
     teste_fontes.rodar()
     texto = (tmp_path / "resultado.txt").read_text(encoding="utf-8")
     assert "❌ erro: Shopee fora" in texto
-    assert "Resumo: A ✅ · B ❌ · D1 ❌ · C ✅ · D2 ❌ · E ❌" in texto
+    assert "Resumo: A ✅ · B ❌ · D1 ❌ · F ✅" in texto

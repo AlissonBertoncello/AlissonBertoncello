@@ -2,13 +2,14 @@
 (grupos com "ofertas_gerais: true").
 
 1. Fonte principal, pela API oficial (não é barrada): o bot percorre sozinho as
-   subcategorias de cada departamento do ML (tênis, polos, mochilas, relógios,
-   ferramentas…) e lê o ranking de mais vendidos e o catálogo de cada uma, em rodízio,
-   sem lista fixa de categorias nem de marcas.
-2. Bônus: página geral de ofertas (mercadolivre.com.br/ofertas, ou a de cada
-   departamento do grupo), poucas páginas por ciclo, num Chrome de verdade com a janela
-   fora da tela e um perfil próprio, sem login. Se ela vier barrada ou vazia, fica
-   pausada por algumas horas (a cópia vai para data/ml_geral_debug.html).
+   subcategorias dos departamentos de varejo do ML (moda e calçados, beleza, relógios,
+   esportes, ferramentas, eletrônicos, casa…) e lê o ranking de mais vendidos e o
+   catálogo de cada uma, em rodízio, sem lista fixa de marcas.
+2. Ofertas achadas pela IA (sources/ia_ofertas.py), já conferidas na API do ML, entram
+   no mesmo estoque (fonte "ia").
+3. Opcional e desligada por padrão (pagina_ofertas: true): página geral de ofertas
+   (mercadolivre.com.br/ofertas) num Chrome com perfil próprio. Nos testes o ML barrou
+   todo acesso automático a ela (tela de segurança ou de verificação de conta).
 
 Ajustes em fontes.mercadolivre.ofertas_gerais no config.yaml (todos opcionais).
 """
@@ -29,6 +30,13 @@ VALIDADE_ESTOQUE_H = 12      # oferta lida há mais tempo que isso sai do estoqu
 VALIDADE_TERMOS_DIAS = 7     # nomes das subcategorias: relidos uma vez por semana
 PAUSA_BLOQUEIO_H = 3
 TERMOS_POR_CICLO = 3         # buscas no catálogo por grupo e ciclo, antes de desistir
+FONTE_IA = "ia"              # estoque das ofertas achadas pela IA (vale para todo grupo de ofertas gerais)
+
+# departamentos usados quando o grupo não escolhe (começo do nome no ML, sem acento);
+# o número é o peso no rodízio (moda e calçados vendem mais: aparecem 2x)
+DEPARTAMENTOS_PADRAO = (("calcados, roupas", 2), ("beleza", 1), ("joias", 1), ("esportes", 1),
+                        ("ferramentas", 1), ("celulares", 1), ("eletronicos", 1),
+                        ("informatica", 1), ("casa, moveis", 1), ("saude", 1))
 
 # departamentos que não são de varejo (ficam fora quando o grupo não escolhe departamentos)
 _FORA = ("imóveis", "imoveis", "carros, motos", "serviços", "servicos", "ingressos",
@@ -48,7 +56,8 @@ def _opcoes() -> dict:
     return {"paginas_por_ciclo": int(o.get("paginas_por_ciclo", 2)),
             "atualizar_minutos": int(o.get("atualizar_minutos", 30)),
             "paginas_max": int(o.get("paginas_max", 10)),
-            "janela": str(o.get("janela") or "visivel").lower()}
+            "janela": str(o.get("janela") or "visivel").lower(),
+            "pagina_ofertas": bool(o.get("pagina_ofertas", False))}
 
 
 def fontes_do_grupo(g: Grupo) -> list[str]:
@@ -91,10 +100,13 @@ def atualizar(grupos: list[Grupo], agora: float | None = None) -> None:
     (no máximo `paginas_por_ciclo` páginas por ciclo, somando todas as fontes)."""
     global _pausada_ate
     agora = agora or time.time()
+    _limpar_estoque(agora)
+    op = _opcoes()
+    if not op["pagina_ofertas"]:  # desligada por padrão: o ML barra o acesso automático
+        return
     fontes = {f for g in grupos if g.ofertas_gerais for f in fontes_do_grupo(g)}
     if not fontes or pausada():
         return
-    op = _opcoes()
     vencidas = sorted((f for f in fontes if agora - _lida_em.get(f, 0) >= op["atualizar_minutos"] * 60),
                       key=lambda f: _lida_em.get(f, 0))
     if not vencidas:
@@ -136,12 +148,25 @@ def atualizar(grupos: list[Grupo], agora: float | None = None) -> None:
         _lida_em[fonte] = agora
         proxima = _pagina_da_vez.get(fonte, 1) + 1
         _pagina_da_vez[fonte] = 1 if (not achadas or proxima > op["paginas_max"]) else proxima
-    for estoque in _estoque.values():  # tira o que está velho demais
-        for k in [k for k, (_, em) in estoque.items() if agora - em > VALIDADE_ESTOQUE_H * 3600]:
-            del estoque[k]
+    _limpar_estoque(agora)
     if lidas:
         log.info("Ofertas gerais do ML: %d ofertas lidas (estoque: %d)", lidas,
                  sum(len(e) for e in _estoque.values()))
+
+
+def _limpar_estoque(agora: float) -> None:
+    """Tira do estoque o que foi lido há tempo demais (o preço muda)."""
+    for estoque in _estoque.values():
+        for k in [k for k, (_, em) in estoque.items() if agora - em > VALIDADE_ESTOQUE_H * 3600]:
+            del estoque[k]
+
+
+def guardar(fonte: str, ofertas: list[Oferta], agora: float | None = None) -> None:
+    """Põe ofertas no estoque (usado pela IA, com fonte "ia")."""
+    agora = agora or time.time()
+    estoque = _estoque.setdefault(fonte, {})
+    for o in ofertas:
+        estoque[o.id_produto] = (o, agora)
 
 
 def pagina_de(url: str) -> int:
@@ -160,7 +185,7 @@ def _salvar_debug(html: str) -> None:
 def ofertas_para(g: Grupo) -> list[Oferta]:
     """Cópias das ofertas do estoque que interessam ao grupo (cada grupo gera o próprio link)."""
     vistas, saida = set(), []
-    for fonte in fontes_do_grupo(g):
+    for fonte in [FONTE_IA] + fontes_do_grupo(g):
         for o, _ in (_estoque.get(fonte) or {}).values():
             if o.id_produto not in vistas:
                 vistas.add(o.id_produto)
@@ -186,38 +211,71 @@ def _salvar_termos() -> None:
         pass
 
 
+def _sem_acento(texto: str) -> str:
+    import unicodedata
+    return "".join(c for c in unicodedata.normalize("NFD", texto.lower()) if unicodedata.category(c) != "Mn")
+
+
+def escolher_departamentos(raiz: list[dict]) -> list[str]:
+    """Departamentos de varejo do ML na ordem do rodízio (com peso); sem nenhum conhecido,
+    todos menos os que não são de varejo."""
+    nomes = [(c["id"], _sem_acento(c.get("name", ""))) for c in raiz if c.get("id")]
+    escolhidos: list[str] = []
+    for inicio, peso in DEPARTAMENTOS_PADRAO:
+        for cid, nome in nomes:
+            if nome.startswith(inicio):
+                escolhidos += [cid] * peso
+                break
+    if not escolhidos:
+        escolhidos = [cid for cid, nome in nomes if not any(_sem_acento(x) in nome for x in _FORA)]
+    # espalha as repetições (A B A C… em vez de A A B C)
+    unicos = list(dict.fromkeys(escolhidos))
+    extras = [c for c in unicos if escolhidos.count(c) > 1]
+    ordem: list[str] = []
+    for i, c in enumerate(unicos):
+        ordem.append(c)
+        if extras and i == len(unicos) // 2:
+            ordem += extras
+    return ordem
+
+
 def _departamentos(g: Grupo, cliente) -> list[str]:
     if g.departamentos:
         return list(g.departamentos)
-    if "_raiz" not in _termos or time.time() - _termos["_raiz"]["em"] > VALIDADE_TERMOS_DIAS * 86400:
+    guardado = _termos.get("_raiz2")
+    if not guardado or time.time() - guardado["em"] > VALIDADE_TERMOS_DIAS * 86400:
         raiz = cliente.categorias_raiz(str(config.fonte_ml.get("site") or "MLB"))
-        _termos["_raiz"] = {"em": time.time(),
-                            "termos": [c["id"] for c in raiz
-                                       if not any(x in c.get("name", "").lower() for x in _FORA)]}
+        _termos["_raiz2"] = {"em": time.time(), "termos": escolher_departamentos(raiz)}
         _salvar_termos()
-    return _termos["_raiz"]["termos"]
+    return _termos["_raiz2"]["termos"]
 
 
 def itens_do_departamento(dep: str, cliente) -> list[tuple[str, str]]:
-    """Subcategorias (2 níveis) do departamento: [(id, nome)] — 'Tênis', 'Polos', 'Mochilas'…"""
+    """Subcategorias do departamento: [(id do ranking, nome para o catálogo)].
+
+    O ranking de mais vendidos é lido na subcategoria do 1º nível ('Calçados', 'Relógios'),
+    que tem ranking; as do 2º nível ('Tênis', 'Polos', 'Mochilas') costumam não ter (404)
+    e servem de nome para a busca no catálogo. A ordem alterna entre as subcategorias do
+    1º nível, para variar."""
     _carregar_termos()
     guardado = _termos.get(dep)
-    if guardado and "itens" in guardado and time.time() - guardado["em"] < VALIDADE_TERMOS_DIAS * 86400:
+    if guardado and guardado.get("v") == 2 and time.time() - guardado["em"] < VALIDADE_TERMOS_DIAS * 86400:
         return [tuple(x) for x in guardado["itens"]]
-    itens: list[tuple[str, str]] = []
+    grupos: list[list[tuple[str, str]]] = []
     for filha in cliente.categoria(dep).get("children_categories") or []:
         try:
             netas = cliente.categoria(filha["id"]).get("children_categories") or []
         except Exception as e:
             log.debug("Subcategorias de %s: %s", filha.get("id"), e)
             netas = []
-        itens += [(n["id"], n["name"]) for n in netas] or [(filha["id"], filha["name"])]
+        grupos.append([(filha["id"], n["name"]) for n in netas] or [(filha["id"], filha["name"])])
+    itens = [g[i] for i in range(max((len(g) for g in grupos), default=0)) for g in grupos if i < len(g)]
     vistos, limpos = set(), []
     for cid, nome in itens:
         if nome and nome not in vistos and not nome.lower().startswith("outr"):
             vistos.add(nome)
             limpos.append((cid, nome))
-    _termos[dep] = {"em": time.time(), "itens": limpos}
+    _termos[dep] = {"em": time.time(), "itens": limpos, "v": 2}
     _salvar_termos()
     return limpos
 
@@ -253,11 +311,29 @@ def termos_da_vez(g: Grupo, cliente, qtd: int = TERMOS_POR_CICLO) -> list[str]:
     return [nome for _, nome in da_vez(g, cliente, qtd)]
 
 
+def _sem_ranking() -> set[str]:
+    _carregar_termos()
+    return set((_termos.get("_sem_ranking") or {}).get("termos") or [])
+
+
 def mais_vendidos(cid: str, cliente) -> list[Oferta]:
-    """Ranking de mais vendidos da subcategoria (com a posição de cada produto)."""
+    """Ranking de mais vendidos da subcategoria (com a posição de cada produto). Categoria
+    sem ranking (404) fica anotada e não é pedida de novo por uma semana."""
     from .mercadolivre import _destaques_de
+    if cid in _sem_ranking():
+        return []
     site = str(config.fonte_ml.get("site") or "MLB")
-    return _destaques_de(cliente, site, cid, int(config.fonte_ml.get("limite_destaques", 20)))
+    try:
+        return _destaques_de(cliente, site, cid, int(config.fonte_ml.get("limite_destaques", 20)))
+    except Exception as e:
+        if "HTTP 404" not in str(e):
+            raise
+        guardado = _termos.get("_sem_ranking")
+        if not guardado or time.time() - guardado["em"] > VALIDADE_TERMOS_DIAS * 86400:
+            guardado = _termos["_sem_ranking"] = {"em": time.time(), "termos": []}
+        guardado["termos"].append(cid)
+        _salvar_termos()
+        return []
 
 
 def catalogo(termo: str, cliente, limite: int = 10) -> list[Oferta]:

@@ -156,10 +156,16 @@ def _titulo(html: str | None) -> str:
 
 def e_bloqueio(html: str | None) -> bool:
     """O ML barrou a visita: página "Segurança — Mercado Livre" (pede para provar que não é
-    robô) ou uma página praticamente vazia (~200 bytes, sem título) no lugar das ofertas."""
+    robô), a tela de verificação de conta ("Para continuar, acesse sua conta") ou uma
+    página praticamente vazia (~200 bytes, sem título) no lugar das ofertas."""
     if html is None:
         return False
     if _titulo(html).lower().startswith(("segurança", "seguranca", "security")):
+        return True
+    # tela "Olá! Para continuar, acesse sua conta" (tráfego suspeito: pede login/verificação)
+    baixo = html[:200000].lower()
+    if any(x in baixo for x in ("account-verification", "suspicious-traffic", "suspicious_traffic")) \
+            and "poly-card" not in baixo:
         return True
     return len(html) < 2000 and not _titulo(html) and "poly-card" not in html
 

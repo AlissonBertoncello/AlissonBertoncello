@@ -341,8 +341,8 @@ def buscar_ofertas(cliente: ClienteML | None = None,
                    so_categorias: dict[str, str] | None = None) -> list[Oferta]:
     """Ofertas de todas as buscas/categorias do config, ou só de so_categorias (sem repetição).
 
-    modo (config.yaml): "auto" = mais vendidos da API + página de ofertas do ML;
-    "api" = só API; "pagina" = só a página de ofertas.
+    modo (config.yaml): "auto"/"api" = API oficial (mais vendidos + catálogo);
+    "pagina" = só a página de ofertas (o ML costuma barrar).
     """
     modo = str(config.fonte_ml.get("modo") or "auto").lower()
     cats = so_categorias or categorias()
@@ -352,9 +352,9 @@ def buscar_ofertas(cliente: ClienteML | None = None,
             ofertas = _buscar_api(cliente or cliente_padrao(), so_categorias)
         except ErroAPI as e:
             log.error("Mercado Livre API: %s", e)
-    # com as ofertas gerais ligadas, a página de ofertas é lida só por elas (poucas visitas):
-    # ler também a de cada categoria faria dezenas de visitas por hora e o ML barraria
-    if modo == "pagina" or (modo == "auto" and not config.usa_ofertas_gerais):
+    # a página de ofertas do ML barra qualquer acesso automático (até com login): no modo
+    # "auto" ela não é mais aberta; só no modo "pagina", se alguém quiser forçar
+    if modo == "pagina":
         for o in _via_pagina_ofertas(cats):
             ofertas.setdefault(o.id_produto, o)
     log.info("Mercado Livre: %d ofertas coletadas", len(ofertas))

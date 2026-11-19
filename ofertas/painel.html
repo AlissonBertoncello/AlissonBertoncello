@@ -264,6 +264,25 @@
       <p class="ajuda">Painel de afiliados da Shopee → Open API.</p>
       <div class="grade" id="env-shopee"></div>
     </div>
+    <div class="card">
+      <h2>IA para achar ofertas (Claude) — pago por uso</h2>
+      <p class="ajuda">Nos grupos com “Ofertas gerais”, o Claude pesquisa na internet as melhores ofertas do Mercado Livre do momento. O bot confere cada produto na API oficial do ML (preço de agora, foto, se existe) e descarta o que não bater — a IA nunca manda preço inventado para o grupo. A cobrança é da Anthropic, em dólar, no cartão cadastrado em console.anthropic.com.</p>
+      <div class="grade" id="env-ia"></div>
+      <div class="grade" style="margin-top:12px">
+        <label class="campo"><span>Modelo</span>
+          <select data-c="ia.modelo">
+            <option value="claude-opus-5-5">Claude Opus 5.5 (melhor, mais caro)</option>
+            <option value="claude-sonnet-5-5">Claude Sonnet 5.5 (metade do preço)</option>
+            <option value="claude-haiku-5-5">Claude Haiku 5.5 (o mais barato, pesquisa mais simples)</option>
+          </select></label>
+        <label class="campo"><span>Buscas por dia (máximo)</span><input type="number" min="0" max="24" data-c="ia.buscas_por_dia"><small>0 = nenhuma</small></label>
+        <label class="campo"><span>Intervalo entre buscas (horas)</span><input type="number" min="1" max="24" step="0.5" data-c="ia.intervalo_horas"></label>
+        <label class="campo"><span>Pesquisas na web por busca</span><input type="number" min="1" max="20" data-c="ia.pesquisas_por_busca"><small>Mais pesquisas = mais ofertas, mais caro</small></label>
+        <label class="campo"><span>Gasto máximo por mês (US$)</span><input type="number" min="0" max="1000" step="0.01" data-c="ia.gasto_max_mes_usd"><small>Chegou nisso, a IA para até o mês seguinte. 0 = sem teto</small></label>
+      </div>
+      <p class="dica" id="ia-custo" style="margin-top:12px"></p>
+      <label class="chave" style="margin-top:8px"><input type="checkbox" id="ia-ativa"><span class="trilho"></span> Ligar a IA</label>
+    </div>
   </section>
 </main>
 
@@ -295,6 +314,7 @@ const ROTULOS_ENV = {
   ML_ETIQUETA: ["Etiqueta de afiliado", "A 'Etiqueta em uso' do Linkbuilder"],
   SHOPEE_APP_ID: ["App ID", ""],
   SHOPEE_APP_SECRET: ["Secret", ""],
+  ANTHROPIC_API_KEY: ["Chave da API do Claude", "console.anthropic.com → API Keys (começa com sk-ant-)"],
 };
 const LOJAS = { mercadolivre: "💛 Mercado Livre", shopee: "🧡 Shopee" };
 const CHAMADA_PADRAO = "💬 Manda essa oferta pra alguém que vai gostar!";
@@ -327,11 +347,13 @@ const SUGESTOES = {
     "CORRE QUE ESSE PREÇO NÃO DURA!", "O PARCEIRO VAI PERGUNTAR ONDE VOCÊ ACHOU", "MANUTENÇÃO EM DIA SEM ESVAZIAR A CARTEIRA",
     "UPGRADE QUE CABE NO BOLSO 💪", "PROMOÇÃO DE RESPEITO, PATRÃO!", "SÓ QUEM TEM CARRO SABE O VALOR DISSO"] },
 };
+let iaInfo = null;  // preços e gasto do mês (vêm do painel, não são salvos)
 let original = null, dados = null, gruposWA = [], grupoDaCategoria = null, painelAntigo = false;
-const VERSAO_PAINEL = 3;  // a mesma de painel.py
+const VERSAO_PAINEL = 4;  // a mesma de painel.py
 // campos que versões antigas do painel não mandam: assim a tela não quebra
 function completar(d) {
   d.geral.aviso_preco ??= true;
+  d.ia ??= { ativa: false, modelo: "claude-opus-5-5", buscas_por_dia: 1, intervalo_horas: 4, pesquisas_por_busca: 5, gasto_max_mes_usd: 10 };
   d.cupons ??= { horarios: ["10:00", "15:00", "20:00"], shopee_campanhas: false, grupos_campanhas: [], lista: [] };
   for (const g of d.grupos) {
     g.departamentos ??= []; g.ofertas_gerais ??= false; g.sem_desconto ??= false; g.etiqueta_ml ??= "";
@@ -378,7 +400,7 @@ function mudou() {
   topo.title = painelAntigo ? "Painel de versão antiga: feche o CONFIGURAR.bat e abra de novo"
     : sujo ? "Salvar as alterações" : "Nada para salvar";
   $("#barra-msg").textContent = "Alterações não salvas";
-  estimativa();
+  estimativa(); estimativaIA();
 }
 
 // ── campo de etiquetas (chips) ──
@@ -798,6 +820,39 @@ function desenharContas() {
   }));
   bloco(["ML_CLIENT_ID", "ML_CLIENT_SECRET", "ML_ETIQUETA"], "#env-ml");
   bloco(["SHOPEE_APP_ID", "SHOPEE_APP_SECRET"], "#env-shopee");
+  bloco(["ANTHROPIC_API_KEY"], "#env-ia");
+  const liga = $("#ia-ativa");
+  liga.checked = !!dados.ia.ativa;
+  liga.onchange = () => {
+    if (liga.checked) {
+      const c = custoIA();
+      const temChave = dados.env.ANTHROPIC_API_KEY?.definido || (dados.envNovo || {}).ANTHROPIC_API_KEY;
+      const ok = confirm(`Ligar a IA? Custo estimado: US$ ${c.busca.toFixed(2)} por busca · até US$ ${c.dia.toFixed(2)} por dia · `
+        + `≈ US$ ${c.livre.toFixed(2)} em 30 dias` + (c.teto ? ` — nunca mais que US$ ${c.teto.toFixed(2)} no mês (teto)` : " (sem teto!)")
+        + ".\n\nA cobrança é da Anthropic, em dólar, no seu cartão." + (temChave ? "" : "\n\n⚠️ Falta a chave da API do Claude (campo acima): sem ela a IA não liga."));
+      if (!ok) { liga.checked = false; return; }
+    }
+    dados.ia.ativa = liga.checked; mudou();
+  };
+}
+function custoIA() {
+  const ia = dados.ia, info = iaInfo || { precos: { "claude-opus-5-5": [4, 20] }, preco_pesquisa: 0.01, tokens: [3000, 8000, 4000] };
+  const [pe, ps] = info.precos[ia.modelo] || info.precos["claude-opus-5-5"];
+  const n = Number(ia.pesquisas_por_busca) || 0, [base, porPesq, saida] = info.tokens;
+  const busca = ((base + n * porPesq) * pe + saida * ps) / 1e6 + n * info.preco_pesquisa;
+  const dia = busca * (Number(ia.buscas_por_dia) || 0);
+  const livre = dia * 30, teto = Number(ia.gasto_max_mes_usd) || 0;
+  const mes = teto ? Math.min(livre, teto) : livre;
+  const diasAteTeto = teto && dia > 0 && livre > teto ? Math.floor(teto / dia) : 0;
+  return { busca, dia, mes, livre, teto, diasAteTeto };
+}
+function estimativaIA() {
+  if (!$("#ia-custo") || !dados.ia) return;
+  const c = custoIA();
+  $("#ia-custo").textContent = `Custo estimado: ≈ US$ ${c.busca.toFixed(2)} por busca · ≈ US$ ${c.dia.toFixed(2)} por dia · `
+    + `≈ US$ ${c.livre.toFixed(2)} em 30 dias` + (c.teto ? ` — com o teto, no máximo US$ ${c.teto.toFixed(2)} no mês` : " — ⚠️ sem teto de gasto")
+    + (c.diasAteTeto ? ` (o teto chega em ≈ ${c.diasAteTeto} dias e a IA para até o mês seguinte: diminua as buscas ou aumente o teto)` : "")
+    + `. Gasto real neste mês: US$ ${(iaInfo?.gasto_mes || 0).toFixed(2)}. É uma estimativa: o valor real aparece no log do bot a cada busca.`;
 }
 
 // ── salvar ──
@@ -859,6 +914,7 @@ function avisarPainelAntigo() {
 }
 async function carregar() {
   original = await api("/api/config");
+  iaInfo = original.ia_info || null; delete original.ia_info;
   painelAntigo = original.versao !== VERSAO_PAINEL;
   completar(original);
   dados = clone(original);

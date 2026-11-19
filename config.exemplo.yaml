@@ -23,8 +23,9 @@ fontes:
   mercadolivre:
     ativa: true
     site: MLB                  # MLB = Brasil
-    # modo: auto = mais vendidos da API + página de ofertas do ML (recomendado)
-    #       api = só API | pagina = só a página mercadolivre.com.br/ofertas
+    # modo: auto = API oficial: mais vendidos + catálogo (recomendado)
+    #       api = o mesmo | pagina = só a página mercadolivre.com.br/ofertas (o ML barra o
+    #       acesso automático a ela, até com login: não use)
     modo: auto
     limite_por_busca: 50       # itens pedidos à API por busca/categoria (máx. 50)
     limite_destaques: 20       # se a busca da API for bloqueada: mais vendidos por categoria
@@ -34,11 +35,12 @@ fontes:
     # página de ofertas: auto = acesso direto e, se vier sem produtos, abre no Google Chrome
     #                    sempre = só pelo Chrome | nunca = só acesso direto
     pagina_navegador: auto
-    # grupos com "ofertas_gerais: true": tudo o que está em oferta no ML, de qualquer categoria.
-    # Lê poucas páginas por ciclo num Chrome com perfil próprio (data\ml_ofertas_profile, sem
-    # login), com a janela fora da tela. Com isso ligado, a página de ofertas de cada
-    # categoria deixa de ser lida (eram dezenas de visitas por hora: o ML barrava).
+    # grupos com "ofertas_gerais: true": mais vendidos e catálogo dos departamentos de varejo
+    # do ML (moda e calçados, beleza, relógios, esportes, ferramentas, eletrônicos, casa…),
+    # em rodízio, mais as ofertas achadas pela IA (fontes.ia). A página geral de ofertas só
+    # é aberta com pagina_ofertas: true (desligada: o ML barra o acesso automático).
     ofertas_gerais:
+      pagina_ofertas: false    # true = tenta também mercadolivre.com.br/ofertas num Chrome próprio
       paginas_por_ciclo: 2     # páginas lidas por ciclo, somando todos os grupos
       atualizar_minutos: 30    # cada página (geral ou de um departamento) é relida no máximo nesse intervalo
       paginas_max: 10          # rodízio: página 1 até esta e recomeça
@@ -50,6 +52,17 @@ fontes:
     limite_por_busca: 20       # produtos pedidos por palavra-chave (máx. 50)
     ordenacao: 2               # 2 = mais vendidos · 1 = relevância · 5 = maior comissão
     lista_geral: 2             # grupos de ofertas gerais: lista pronta sem palavra-chave (2 = mais vendidos · 1 = maior comissão)
+  ia:
+    # IA (Claude) pesquisa na internet as ofertas do ML do momento, para os grupos de ofertas
+    # gerais; o bot confere cada uma na API do ML e descarta o que não bater. PAGO POR USO
+    # (cobrado pela Anthropic, em dólar): precisa de ANTHROPIC_API_KEY no .env. O painel
+    # (aba Contas) mostra o custo estimado antes de ligar.
+    ativa: false
+    modelo: claude-opus-5-5    # claude-opus-5-5 | claude-sonnet-5-5 (metade do preço) | claude-haiku-5-5
+    buscas_por_dia: 1          # máximo de buscas por dia (1 por dia no Opus ≈ US$ 9 por mês)
+    intervalo_horas: 4         # tempo mínimo entre uma busca e outra
+    pesquisas_por_busca: 5     # pesquisas na web por busca (US$ 0,01 cada, mais os tokens)
+    gasto_max_mes_usd: 10      # chegou nisso no mês, a IA para até o mês seguinte (0 = sem teto)
 
 # Grupos de destino. "whatsapp" = nome EXATO do grupo no WhatsApp do número do bot
 # (liste os nomes com o LOGIN_WHATSAPP.bat ou: uv run python -m ofertas whatsapp-grupos).

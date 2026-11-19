@@ -28,6 +28,10 @@ Ideias levantadas a partir de grupos concorrentes. Cada item depende de aprovaç
 | B | Shopee: lista de mais vendidos sem palavra-chave para os grupos de ofertas gerais (se a Shopee recusar, volta para as palavras) |
 | Teste | `TESTAR_FONTES.bat`: testa A, B, C (página de ofertas pelo login de afiliado), D (busca da API) e E (página geral no Chrome separado) no notebook |
 | Diagnóstico | Página geral aberta sem ofertas: log, cópia em data/ml_geral_debug.html e pausa de 3 h |
+| P1 | Página de ofertas do ML não é mais aberta (barrava até com login); a tela "Para continuar, acesse sua conta" também conta como bloqueio |
+| P2 | Ofertas gerais: departamentos de varejo escolhidos (moda e calçados com peso 2; sem comida, bebida, livros), ranking lido no nível que tem ranking e subcategoria sem ranking anotada |
+| IA1 | IA (Claude com pesquisa na web) acha ofertas do ML; cada uma é conferida na API do ML antes de ir ao estoque; chave, modelo, buscas por dia, teto de gasto e custo estimado no painel (aba Contas) |
+| Teste | `TESTAR_FONTES.bat` agora testa A, B, D1 e F (IA, só se ligada) |
 
 ---
 

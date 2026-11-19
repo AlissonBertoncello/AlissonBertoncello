@@ -4,12 +4,13 @@
 
 A. Mercado Livre pela API: mais vendidos e catálogo das subcategorias, automático
 B. Shopee: lista de mais vendidos sem palavra-chave (e uma busca por palavra, para comparar)
-C. Página de ofertas do ML lida de dentro do login de afiliado (janela do Linkbuilder)
-D. Busca completa da API do ML (com a chave do app e de dentro do login)
-E. Página geral de ofertas no Chrome separado (o jeito atual das ofertas gerais)
+D1. Busca completa da API do ML com a chave do app (hoje responde 403)
+F. IA (Claude) pesquisando ofertas, cada uma conferida na API do ML — só com a IA ligada
+   no painel, porque é paga (o custo aparece no resultado)
 
-O resultado fica em data/teste_fontes/resultado.txt (sem senhas nem dados da conta) e a
-página do teste E em data/teste_fontes/e_pagina_geral.html (navegador sem login).
+(A página de ofertas do ML não é mais testada: nos testes de 19/11 ela barrou todo acesso
+automático, até com login.) O resultado fica em data/teste_fontes/resultado.txt (sem
+senhas nem dados da conta).
 """
 import logging
 import time
@@ -89,41 +90,6 @@ def _b_shopee() -> bool:
     return ok
 
 
-def _c_e_d_logado() -> tuple[bool, bool]:
-    """C (página de ofertas) e D (API) lidos de dentro da janela logada do Linkbuilder."""
-    from . import afiliado_ml
-    from .sources import ml_pagina
-    ok_c = ok_d = False
-    with afiliado_ml.pagina_chrome() as page:
-        afiliado_ml._abrir_linkbuilder(page)
-        _p("\n── C. Página de ofertas lida de dentro do login de afiliado")
-        r = page.evaluate("""async (url) => {
-            try { const resp = await fetch(url, {credentials: 'include'});
-                  return {http: resp.status, html: await resp.text()}; }
-            catch (e) { return {erro: String(e)}; } }""", ml_pagina.URL_OFERTAS)
-        if r.get("erro"):
-            _p(f"   ❌ {r['erro'][:200]}")
-        else:
-            html = r.get("html") or ""
-            achadas = ml_pagina.parse_pagina(html)
-            ok_c = bool(achadas)
-            situacao = "barrada" if ml_pagina.e_bloqueio(html) else ("ok" if achadas else "sem ofertas reconhecíveis")
-            _p(f"   {'✅' if achadas else '❌'} HTTP {r.get('http')}, título {ml_pagina._titulo(html)!r}, "
-               f"{len(html)} bytes — {situacao}: {_resumo(achadas)}")
-        _p("\n── D2. Busca da API do ML de dentro do login")
-        r = page.evaluate("""async () => {
-            try { const resp = await fetch('https://api.mercadolibre.com/sites/MLB/search?q=tenis&limit=5');
-                  const j = await resp.json().catch(() => ({}));
-                  return {http: resp.status, n: (j.results || []).length}; }
-            catch (e) { return {erro: String(e)}; } }""")
-        if r.get("erro"):
-            _p(f"   ❌ {r['erro'][:200]}")
-        else:
-            ok_d = bool(r.get("n"))
-            _p(f"   {'✅' if ok_d else '❌'} HTTP {r.get('http')}, {r.get('n')} resultados")
-    return ok_c, ok_d
-
-
 def _d_api_app() -> bool:
     from .sources.mercadolivre import cliente_padrao
     itens = cliente_padrao().buscar(str(config.fonte_ml.get("site") or "MLB"), q="tênis", limite=5)
@@ -131,20 +97,27 @@ def _d_api_app() -> bool:
     return bool(itens)
 
 
-def _e_pagina_geral() -> bool:
-    from .sources import ml_geral, ml_pagina
-    htmls = ml_geral._chrome_ler([ml_pagina.URL_OFERTAS])
-    html = htmls.get(ml_pagina.URL_OFERTAS)
-    if html is None:
-        _p("   ❌ a página não abriu")
+def _f_ia() -> bool:
+    """IA (Claude) + conferência na API do ML. Só roda com a IA ligada no painel (é paga)."""
+    from .sources import ia_ofertas as ia
+    op = ia.opcoes()
+    if not config.anthropic_api_key:
+        _p("   ⚪ sem ANTHROPIC_API_KEY no .env (aba Contas do painel)")
         return False
-    (PASTA / "e_pagina_geral.html").write_text(html, encoding="utf-8")
-    achadas = ml_pagina.parse_pagina(html)
-    situacao = "barrada" if ml_pagina.e_bloqueio(html) else ("ok" if achadas else "sem ofertas reconhecíveis")
-    _p(f"   {'✅' if achadas else '❌'} título {ml_pagina._titulo(html)!r}, {len(html)} bytes — "
-       f"{situacao}: {_resumo(achadas)}")
-    _p("   (cópia da página em data/teste_fontes/e_pagina_geral.html)")
-    return bool(achadas)
+    if not op["ativa"]:
+        c = ia.estimativa(op)
+        _p(f"   ⚪ IA desligada no painel — não testei (é paga: ≈ US$ {c['por_busca']:.2f} por busca)")
+        return False
+    if op["gasto_max_mes_usd"] and ia.gasto_do_mes() >= op["gasto_max_mes_usd"]:
+        _p(f"   ⚪ gasto do mês já chegou no teto (US$ {op['gasto_max_mes_usd']:.2f})")
+        return False
+    sugestoes, uso = ia.pedir_sugestoes(op)
+    ia._registrar_busca(uso["custo"], time.time())
+    ofertas, descartadas = ia.conferir(sugestoes)
+    _p(f"   {'✅' if ofertas else '❌'} {len(sugestoes)} sugeridas pela IA, {len(ofertas)} conferidas na API "
+       f"do ML, {descartadas} descartadas · {uso['pesquisas']} pesquisas · custo US$ {uso['custo']:.3f}")
+    _p(f"        {_resumo(ofertas)}")
+    return bool(ofertas)
 
 
 def rodar() -> None:
@@ -165,12 +138,7 @@ def _rodar() -> None:
     res = {"A": _teste("A. Mercado Livre pela API (mais vendidos + catálogo, automático)", _a_mercado_livre),
            "B": _teste("B. Shopee (listas prontas, sem palavra-chave)", _b_shopee),
            "D1": _teste("D1. Busca da API do ML com a chave do app", _d_api_app)}
-    try:
-        res["C"], res["D2"] = _c_e_d_logado()
-    except Exception as e:
-        _p(f"\n── C/D2: o Linkbuilder (login de afiliado) não abriu no Chrome: {str(e).splitlines()[0][:200]}")
-        res["C"] = res["D2"] = False
-    res["E"] = _teste("E. Página geral de ofertas no Chrome separado (jeito atual)", _e_pagina_geral)
+    res["F"] = _teste("F. IA (Claude) pesquisando ofertas + conferência na API do ML", _f_ia)
     _p("\n══ Resumo: " + " · ".join(f"{k} {'✅' if v else '❌'}" for k, v in res.items()))
     (PASTA / "resultado.txt").write_text("\n".join(_linhas) + "\n", encoding="utf-8")
     print(f"\nResultado salvo em {PASTA / 'resultado.txt'} — mande esse arquivo (ou um print desta tela).")

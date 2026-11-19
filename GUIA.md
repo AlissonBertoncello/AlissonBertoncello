@@ -25,7 +25,7 @@ Este guia leva você do zero até o bot rodando, e explica o que fazer em cada e
 A cada ciclo (por exemplo, a cada 45 minutos), para **cada grupo** configurado:
 
 1. **Busca promoções**, alternando as lojas a cada ciclo (**meio a meio**):
-   - **Mercado Livre**, nas categorias do grupo (em rodízio): **mais vendidos** pela API oficial (categoria + subcategorias) e **página de ofertas** da categoria;
+   - **Mercado Livre**, nas categorias do grupo (em rodízio): **mais vendidos** e **catálogo** pela API oficial (categoria + subcategorias) e, nos grupos de ofertas gerais, também as ofertas achadas pela **IA** (opcional, paga — seção 9.4);
    - **Shopee** (opcional), pela Open API de afiliados, nas **palavras-chave** do grupo (em rodízio).
    Se a loja da vez não tiver oferta nova (ou a Shopee não estiver configurada), usa a outra.
 2. **Filtra**: desconto mínimo, faixa de preço, palavras bloqueadas, e **não repete** produto (nem variação de cor/tamanho) no mesmo grupo dentro do prazo.
@@ -284,7 +284,7 @@ Dois cliques em **`CONFIGURAR.bat`**: o painel abre no navegador (endereço `htt
 | **Grupos** | ligar/desligar grupos, criar e excluir, **ofertas gerais do Mercado Livre** (todas as categorias — seção 9.2), aceitar mais vendidos sem desconto, etiqueta do ML por grupo, trocar nome, grupos do WhatsApp (o botão **Carregar grupos do WhatsApp** traz os nomes exatos, com emoji — precisa do Docker aberto), link de convite, **categorias do Mercado Livre** — uma por linha, no formato `MLB188063 Limpeza Automotiva` (dá para colar várias de uma vez; apague a linha para remover). O botão *🔎 Procurar categorias no Mercado Livre* abre a lista de categorias e subcategorias com o nº de anúncios: marque quantas quiser (pode entrar e sair das subcategorias) e clique em *Adicionar marcadas*. Se o Mercado Livre não responder, aparece *Tentar de novo*, palavras da Shopee, palavras bloqueadas do grupo, **ganchos** (frases de abertura em caixa alta, em rodízio — há sugestões prontas para Feminino, Mamãe e Bebê e Carro), **chamada de compra** (o texto antes do link do produto; o bot completa com "no Mercado Livre:" / "na Shopee:"), **chamada para compartilhar** (o texto antes do link de convite, ex.: "🤝 Manda pro parceiro que tá precisando!"), **proporção das lojas** (ex.: 3 ofertas do Mercado Livre para 1 da Shopee) e uma **prévia da mensagem** |
 | **Envio e filtros** | intervalo, ofertas por vez, pausa entre mensagens, dias sem repetir, horário de envio (mostra a estimativa de mensagens por dia), desconto/preço mínimo e máximo, palavras bloqueadas de todos os grupos, lojas ligadas e destino |
 | **Cupons** | horários dos posts de cupom, campanhas automáticas da Shopee (liga/desliga e quais grupos recebem) e a sua lista de cupons: descrição, código, link, validade e grupos — com prévia da mensagem. Veja a seção 9.3 |
-| **Contas** | ML_CLIENT_ID/SECRET, ML_ETIQUETA, SHOPEE_APP_ID/SECRET. Campos secretos nunca aparecem na tela: deixe em branco para manter |
+| **Contas** | ML_CLIENT_ID/SECRET, ML_ETIQUETA, SHOPEE_APP_ID/SECRET e a **IA para achar ofertas** (chave do Claude, modelo, buscas por dia, gasto máximo por mês e o custo estimado — seção 9.4). Campos secretos nunca aparecem na tela: deixe em branco para manter |
 
 - Mude o que quiser e clique em **Salvar** (a barra aparece embaixo quando há alteração). Se algo estiver errado, o painel mostra o que corrigir e **não grava nada**.
 - **Não precisa reiniciar o bot:** com ele rodando, as mudanças valem em até 10 segundos (o log mostra `Configuração atualizada`). Exceção: trocar o destino (WhatsApp/tela) só vale ao reabrir o bot.
@@ -295,17 +295,17 @@ Dois cliques em **`CONFIGURAR.bat`**: o painel abre no navegador (endereço `htt
 
 Na aba **Grupos**, a chave **Ofertas gerais do Mercado Livre** faz o grupo receber **produtos de qualquer categoria**, como os grupos de "promoções". Não precisa de lista de categorias nem de marcas. Em cada ciclo, o bot tenta nesta ordem:
 
-1. **Página geral de ofertas do ML** (bônus, quando o ML deixa abrir);
-2. **Mais vendidos e catálogo do ML, automático (fonte principal, API oficial):** o bot percorre sozinho as subcategorias de cada departamento (tênis, polos, mochilas, relógios, ferramentas…) e lê o ranking de mais vendidos e o catálogo de cada uma, em rodízio;
+1. **Ofertas achadas pela IA** (se ligada — seção 9.4), já conferidas na API do ML;
+2. **Mais vendidos e catálogo do ML, automático (fonte principal, API oficial):** o bot percorre sozinho os departamentos de varejo — Calçados, Roupas e Bolsas (com peso 2), Beleza, Joias e Relógios, Esportes e Fitness, Ferramentas, Celulares, Eletrônicos, Informática, Casa e Móveis, Saúde — e lê o ranking de mais vendidos (no 1º nível de subcategoria, que tem ranking) e o catálogo pelo nome de cada tipo de produto (tênis, polos, mochilas, relógios…), em rodízio. Comida, bebida, livros, carros e imóveis ficam de fora;
 3. as **categorias do grupo**, se houver;
 4. na vez da Shopee: a **lista de mais vendidos da Shopee** (sem palavra-chave, todas as categorias) e depois as palavras-chave do grupo. Se a Shopee não aceitar a lista, o bot avisa uma vez e fica só nas palavras.
 
-Para descobrir o que funciona no seu notebook, rode o **`TESTAR_FONTES.bat`** (com o bot fechado): ele testa cada fonte, mostra quantas ofertas trouxe e salva o resultado em `data\teste_fontes\resultado.txt`. Não envia nada aos grupos.
+Para descobrir o que funciona no seu notebook, rode o **`TESTAR_FONTES.bat`** (com o bot fechado): ele testa cada fonte, mostra quantas ofertas trouxe e salva o resultado em `data\teste_fontes\resultado.txt`. Não envia nada aos grupos. O teste da IA (F) só roda com a IA ligada no painel, porque é pago.
 
-- **Página geral de ofertas** (`mercadolivre.com.br/ofertas`): O bot lê **poucas páginas por ciclo** (padrão 2), num Chrome de verdade com a janela **fora da tela** e um **perfil próprio, sem login** (`data\ml_ofertas_profile`): se o ML barrar essa navegação, o login de afiliado que gera os links não é afetado. Uma leitura abastece todos os grupos.
-- **Se o ML barrar a página ou ela abrir sem ofertas** (log `barrou a página de ofertas` ou `abriu sem ofertas reconhecíveis`): ela fica pausada por 3 h (a cópia vai para `data\ml_geral_debug.html`) e o grupo segue pelos mais vendidos e pelo catálogo. A lista de subcategorias é lida do ML e guardada em `data\ml_termos_catalogo.json` (renovada toda semana).
+- **Página de ofertas do ML (`mercadolivre.com.br/ofertas`) não é mais aberta:** nos testes de 19/11 o ML barrou todo acesso automático a ela, até com o login de afiliado (tela de segurança ou "Para continuar, acesse sua conta"). Quem quiser tentar mesmo assim: `pagina_ofertas: true` em `fontes.mercadolivre.ofertas_gerais` no `config.yaml` (se vier barrada, fica pausada por 3 h).
+- A lista de subcategorias é lida do ML e guardada em `data\ml_termos_catalogo.json` (renovada toda semana); subcategoria sem ranking de mais vendidos fica anotada ali e não é pedida de novo na semana.
 - **Só alguns departamentos:** para um grupo de nicho, preencha *Só estes departamentos* (botão *🔎 Escolher no Mercado Livre*), ex.: `MLB1246 Beleza e Cuidado Pessoal`. Vazio = tudo.
-- Com as ofertas gerais ligadas em algum grupo, o bot **para de ler a página de ofertas de cada categoria** (eram dezenas de visitas por hora, o motivo dos bloqueios). As categorias do grupo continuam valendo pelo ranking de mais vendidos.
+- A página de ofertas **de cada categoria** também não é mais aberta (modo `auto`): as categorias do grupo continuam valendo pelo ranking de mais vendidos e pelo catálogo.
 - **Aceitar os mais vendidos sem desconto (“Por R$ X”):** os 5 primeiros do ranking de mais vendidos passam mesmo sem preço antigo (os com desconto continuam precisando do desconto mínimo).
 - **Etiqueta do ML só deste grupo:** se a sua conta de afiliados permitir criar mais de uma etiqueta, crie uma por grupo e cole no campo: o painel de afiliados do ML passa a mostrar as vendas de cada grupo. **Na Shopee o bot já faz isso sozinho:** o link sai com o grupo como *Sub ID* (veja no relatório da Shopee por Sub ID).
 - Na aba **Envio e filtros**, a chave do aviso *“⚠️ Preço e disponibilidade podem variar.”* coloca essa linha embaixo do link de cada oferta (ligada por padrão).
@@ -343,6 +343,20 @@ https://meli.la/...
 
 ---
 
+### 9.4 IA para achar ofertas (Claude) — opcional e paga
+
+Como o seu amigo faz com o ChatGPT: de tempos em tempos, o **Claude pesquisa na internet** as melhores ofertas do Mercado Livre do momento (marcas, moda, calçados, perfumes, relógios, eletrônicos, ferramentas, casa, fitness). O bot **confere cada produto na API oficial do ML** — preço de agora, preço antigo, foto, se existe — e **descarta o que não bater**: preço inventado ou produto que não existe nunca chega ao grupo. O que passou segue o caminho normal (filtros, sem repetir, link de afiliado, envio). Vale só para os grupos com **Ofertas gerais** ligadas.
+
+**Para ligar:**
+1. Crie uma conta em **console.anthropic.com**, cadastre um cartão em *Billing* e coloque créditos (ex.: US$ 10).
+2. Em *API Keys*, crie uma chave (começa com `sk-ant-`).
+3. No painel, aba **Contas**, cartão *IA para achar ofertas*: cole a chave, escolha o modelo, as buscas por dia e o **gasto máximo por mês**. O painel mostra o **custo estimado** — confira antes de ligar.
+4. Ligue a chave **Ligar a IA** (o painel pede confirmação mostrando o custo) e clique em **Salvar**.
+
+**Custo** (preços oficiais da Anthropic, em dólar): cada busca usa as pesquisas na web (US$ 0,01 cada) mais o texto que a IA lê e escreve. Com 5 pesquisas por busca, uma busca fica em torno de **US$ 0,30 no Opus 5.5**, US$ 0,18 no Sonnet 5.5 e US$ 0,06 no Haiku 5.5. Com **1 busca por dia no Opus ≈ US$ 9 por mês**. O **gasto máximo por mês** é um teto de verdade: o bot soma o custo real de cada busca (`data\ia_ofertas.json`) e, chegando no teto, a IA para até o mês seguinte. Cada busca aparece no log, ex.: `IA: 18 sugeridas, 12 conferidas no ML (6 descartadas) · 5 pesquisas · US$ 0.284 (mês: US$ 1.10 de 10.00)`. Se o modelo recusar o pedido, a Anthropic tenta de novo em outro modelo automaticamente.
+
+**Mensagens no log:** `IA: chave ANTHROPIC_API_KEY inválida` (copie a chave de novo), `IA: sem créditos na conta da Anthropic` (coloque créditos em *Billing*). Nesses casos o bot não tenta de novo antes do intervalo, para não gastar à toa.
+
 ## 10. Atualizar o projeto
 
 1. Baixe o ZIP de novo (**Code → Download ZIP**) e extraia **por cima** da pasta.
@@ -375,12 +389,22 @@ https://meli.la/...
 ### `fontes.mercadolivre`
 | Chave | Padrão | O que faz |
 |---|---|---|
-| `modo` | `auto` | `auto` = mais vendidos + página de ofertas; `api` = só API; `pagina` = só página de ofertas |
+| `modo` | `auto` | `auto`/`api` = API oficial (mais vendidos + catálogo); `pagina` = só a página de ofertas (o ML barra: não use) |
 | `limite_destaques` | 20 | mais vendidos lidos por (sub)categoria |
 | `subcategorias_por_busca` | 2 | (sub)categorias consultadas por ciclo, em rodízio |
 | `paginas_ofertas` | 1 | páginas de ofertas lidas por ciclo (~48 promoções cada) |
 | `paginas_ofertas_max` | 10 | rodízio vai da página 1 até esta e recomeça |
 | `pagina_navegador` | `auto` | página de ofertas: `auto` = acesso direto e, se vier sem produtos, abre no Google Chrome (e as próximas 20 buscas já vão direto pelo Chrome); `sempre` = só pelo Chrome; `nunca` = só acesso direto |
+
+### `fontes.ia` (seção 9.4)
+| Chave | Padrão | O que faz |
+|---|---|---|
+| `ativa` | `false` | liga a IA (precisa de `ANTHROPIC_API_KEY` no `.env`) |
+| `modelo` | `claude-opus-5-5` | `claude-opus-5-5` · `claude-sonnet-5-5` (metade do preço) · `claude-haiku-5-5` (o mais barato) |
+| `buscas_por_dia` | 1 | máximo de buscas por dia |
+| `intervalo_horas` | 4 | tempo mínimo entre buscas |
+| `pesquisas_por_busca` | 5 | pesquisas na web por busca (US$ 0,01 cada) |
+| `gasto_max_mes_usd` | 10 | teto de gasto no mês (0 = sem teto) |
 
 ### `fontes.shopee`
 | Chave | Padrão | O que faz |

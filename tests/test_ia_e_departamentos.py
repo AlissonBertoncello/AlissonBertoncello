@@ -1,0 +1,329 @@
+"""P1 (página de ofertas desligada), P2 (departamentos escolhidos, ranking no nível certo,
+categoria sem ranking anotada) e IA1 (Claude pesquisa, a API do ML confere)."""
+import datetime as dt
+import json
+from types import SimpleNamespace as NS
+
+import pytest
+
+from ofertas import painel, pipeline
+from ofertas.config import config
+from ofertas.models import ConfigCupons, Grupo, Oferta
+from ofertas.sources import ia_ofertas as ia
+from ofertas.sources import mercadolivre, ml_geral
+from ofertas.sources.mercadolivre import ErroAPI
+
+T = dt.datetime(2026, 11, 19, 10, 0).timestamp()
+
+RAIZ_ML = [{"id": "MLB1430", "name": "Calçados, Roupas e Bolsas"}, {"id": "MLB1403", "name": "Alimentos e Bebidas"},
+           {"id": "MLB1246", "name": "Beleza e Cuidado Pessoal"}, {"id": "MLB3937", "name": "Joias e Relógios"},
+           {"id": "MLB1196", "name": "Livros, Revistas e Comics"}, {"id": "MLB1000", "name": "Eletrônicos, Áudio e Vídeo"},
+           {"id": "MLB1459", "name": "Imóveis"}]
+
+
+# ── P2: departamentos ───────────────────────────────────────────────
+
+def test_departamentos_escolhidos_sem_comida_nem_livros():
+    deps = ml_geral.escolher_departamentos(RAIZ_ML)
+    assert set(deps) == {"MLB1430", "MLB1246", "MLB3937", "MLB1000"}
+    assert deps.count("MLB1430") == 2  # moda e calçados com peso 2
+    assert deps[0] != deps[1]  # repetição espalhada
+
+
+def test_sem_departamento_conhecido_usa_todos_de_varejo():
+    assert ml_geral.escolher_departamentos([{"id": "A", "name": "Novidade"}, {"id": "B", "name": "Imóveis"}]) == ["A"]
+
+
+def test_departamentos_do_painel_continuam_valendo():
+    g = Grupo("g", "G", ofertas_gerais=True, departamentos={"MLB1246": "Beleza"})
+    assert ml_geral._departamentos(g, object()) == ["MLB1246"]
+
+
+class ClienteArvore:
+    def __init__(self):
+        self.destaques_pedidos = []
+
+    def categoria(self, cid):
+        arvore = {"DEP": [{"id": "CAL", "name": "Calçados"}, {"id": "REL", "name": "Relógios"}],
+                  "CAL": [{"id": "TEN", "name": "Tênis"}, {"id": "BOT", "name": "Botas"}],
+                  "REL": [{"id": "PUL", "name": "Relógios de Pulso"}]}
+        return {"children_categories": arvore.get(cid, [])}
+
+    def destaques(self, site, cid):
+        self.destaques_pedidos.append(cid)
+        raise ErroAPI(f"GET /highlights/MLB/category/{cid} respondeu HTTP 404: not found")
+
+
+def test_ranking_no_primeiro_nivel_e_nomes_do_segundo_alternando():
+    itens = ml_geral.itens_do_departamento("DEP", ClienteArvore())
+    # ranking pela subcategoria do 1º nível; nome do 2º nível para o catálogo; alterna CAL/REL
+    assert itens == [("CAL", "Tênis"), ("REL", "Relógios de Pulso"), ("CAL", "Botas")]
+
+
+def test_categoria_sem_ranking_fica_anotada():
+    c = ClienteArvore()
+    assert ml_geral.mais_vendidos("CAL", c) == []
+    assert ml_geral.mais_vendidos("CAL", c) == []
+    assert c.destaques_pedidos == ["CAL"]  # o 404 não é pedido de novo
+    assert "CAL" in json.loads(ml_geral.ARQ_TERMOS.read_text(encoding="utf-8"))["_sem_ranking"]["termos"]
+
+
+def test_outro_erro_do_ranking_continua_sendo_erro():
+    class Fora(ClienteArvore):
+        def destaques(self, site, cid):
+            raise ErroAPI("HTTP 500")
+    with pytest.raises(ErroAPI):
+        ml_geral.mais_vendidos("CAL", Fora())
+
+
+# ── IA: limites e custo ─────────────────────────────────────────────
+
+def _ligar_ia(monkeypatch, **op):
+    monkeypatch.setattr(config, "anthropic_api_key", "sk-ant-teste")
+    monkeypatch.setattr(config, "fonte_ia", {"ativa": True, **op})
+
+
+def test_ia_desligada_por_padrao():
+    assert not ia.ligada()
+    assert ia.motivo_para_nao_buscar(T) == "desligada"
+
+
+def test_ia_sem_chave_nao_busca(monkeypatch):
+    monkeypatch.setattr(config, "fonte_ia", {"ativa": True})
+    assert ia.motivo_para_nao_buscar(T) == "sem ANTHROPIC_API_KEY no .env"
+
+
+def test_estimativa_de_custo():
+    op = {**ia.opcoes(), "modelo": "claude-opus-5-5", "pesquisas_por_busca": 5, "buscas_por_dia": 3,
+          "gasto_max_mes_usd": 0}
+    c = ia.estimativa(op)
+    # 43 mil tokens lidos a US$ 4/milhão + 4 mil escritos a US$ 20/milhão + 5 pesquisas a US$ 0,01
+    assert c["por_busca"] == pytest.approx(0.172 + 0.08 + 0.05, abs=0.001)
+    assert c["por_mes"] == pytest.approx(c["por_busca"] * 90, abs=0.05)
+    assert ia.estimativa({**op, "gasto_max_mes_usd": 10})["por_mes"] == 10
+
+
+def test_limites_por_dia_intervalo_e_gasto(monkeypatch):
+    _ligar_ia(monkeypatch, buscas_por_dia=2, intervalo_horas=4, gasto_max_mes_usd=1)
+    assert ia.motivo_para_nao_buscar(T) is None
+    ia._registrar_busca(0.30, T)
+    assert "intervalo" in ia.motivo_para_nao_buscar(T + 3600)
+    assert ia.motivo_para_nao_buscar(T + 5 * 3600) is None
+    ia._registrar_busca(0.30, T + 5 * 3600)
+    assert "2 buscas por dia" in ia.motivo_para_nao_buscar(T + 10 * 3600)
+    amanha = T + 24 * 3600
+    assert ia.motivo_para_nao_buscar(amanha) is None
+    ia._registrar_busca(0.50, amanha)
+    assert "gasto do mês" in ia.motivo_para_nao_buscar(amanha + 6 * 3600)
+    assert ia.gasto_do_mes(hoje=dt.date(2026, 11, 20)) == pytest.approx(1.10)
+
+
+# ── IA: pedido ao Claude (falso) ────────────────────────────────────
+
+def _uso(entrada=40000, saida=3000, pesquisas=4):
+    return NS(input_tokens=entrada, output_tokens=saida, cache_creation_input_tokens=0,
+              cache_read_input_tokens=0, server_tool_use=NS(web_search_requests=pesquisas))
+
+
+class Claude:
+    def __init__(self, respostas):
+        self.respostas = list(respostas)
+        self.pedidos = []
+        self.beta = NS(messages=NS(create=self._create))
+        self.messages = NS(create=self._create)
+
+    def _create(self, **pedido):
+        self.pedidos.append(pedido)
+        return self.respostas.pop(0)
+
+
+SUGESTOES = [
+    {"url": "https://produto.mercadolivre.com.br/MLB-1234567890-tenis-nike-_JM", "titulo": "Tênis Nike",
+     "preco": 199.9, "preco_original": 399.9},
+    {"url": "https://www.mercadolivre.com.br/relogio-casio/p/MLB22334455", "titulo": "Relógio Casio",
+     "preco": 150, "preco_original": 300},
+    {"url": "https://produto.mercadolivre.com.br/MLB-9999999999-inventado-_JM", "titulo": "Inventado",
+     "preco": 10, "preco_original": 100},
+]
+
+
+def _resposta_final():
+    return NS(stop_reason="tool_use", usage=_uso(), content=[
+        NS(type="text", text="Achei estas."),
+        NS(type="tool_use", name="entregar_ofertas", input={"ofertas": SUGESTOES})])
+
+
+def test_pede_com_pesquisa_na_web_e_continua_pesquisa_longa(monkeypatch):
+    _ligar_ia(monkeypatch)
+    claude = Claude([NS(stop_reason="pause_turn", usage=_uso(10000, 500, 2), content=[NS(type="text", text="...")]),
+                     _resposta_final()])
+    monkeypatch.setattr(ia, "_cliente", lambda: claude)
+    sugestoes, uso = ia.pedir_sugestoes()
+    assert [s["titulo"] for s in sugestoes] == ["Tênis Nike", "Relógio Casio", "Inventado"]
+    assert len(claude.pedidos) == 2 and claude.pedidos[1]["messages"][-1]["role"] == "assistant"
+    p = claude.pedidos[0]
+    assert p["model"] == "claude-opus-5-5"
+    pesquisa = next(t for t in p["tools"] if t["name"] == "web_search")
+    assert pesquisa["type"] == "web_search_20260209" and pesquisa["max_uses"] == 5
+    assert "mercadolivre.com.br" in pesquisa["allowed_domains"]
+    assert uso["pesquisas"] == 6 and uso["custo"] == pytest.approx(
+        ia.custo_real("claude-opus-5-5", 50000, 3500, 6))
+
+
+def test_haiku_usa_a_pesquisa_basica(monkeypatch):
+    _ligar_ia(monkeypatch, modelo="claude-haiku-5-5")
+    claude = Claude([_resposta_final()])
+    monkeypatch.setattr(ia, "_cliente", lambda: claude)
+    ia.pedir_sugestoes()
+    assert claude.pedidos[0]["tools"][0]["type"] == "web_search_20250305"
+    assert "fallbacks" not in claude.pedidos[0]
+
+
+def test_lista_em_json_no_texto_tambem_vale():
+    r = NS(content=[NS(type="text", text='Aqui: {"ofertas": [{"url": "u", "titulo": "t", "preco": 1, "preco_original": 0}]}')])
+    assert ia._sugestoes_da_resposta(r)[0]["titulo"] == "t"
+
+
+class ClienteML:
+    def itens(self, ids):
+        if ids == ["MLB1234567890"]:
+            return [{"id": "MLB1234567890", "title": "Tênis Nike Revolution 7", "price": 189.9,
+                     "original_price": 399.9, "permalink": "https://produto.mercadolivre.com.br/MLB-1234567890-x",
+                     "thumbnail": "http://x/a-I.jpg"}]
+        return []
+
+    def produto(self, pid):
+        if pid == "MLB22334455":
+            return {"id": pid, "name": "Relógio Casio G-Shock", "buy_box_winner": {"price": 299.0, "original_price": 599.0}}
+        raise ErroAPI("HTTP 404")
+
+    def buscar_produtos(self, site, q, limite):
+        return []
+
+
+def test_so_fica_o_que_a_api_do_ml_confirma():
+    ofertas, descartadas = ia.conferir(SUGESTOES, ClienteML())
+    assert descartadas == 1
+    por_id = {o.id_produto: o for o in ofertas}
+    assert set(por_id) == {"MLB1234567890", "MLB22334455"}
+    assert por_id["MLB1234567890"].preco == 189.9  # preço da API, não o da IA
+    assert por_id["MLB22334455"].titulo == "Relógio Casio G-Shock"
+
+
+def test_sem_link_procura_pelo_nome_e_confere_se_e_o_mesmo(monkeypatch):
+    achados = [Oferta("mercadolivre", "MLB5", "Perfume Malbec Gold 100ml", "https://ml/5", 150, 250),
+               Oferta("mercadolivre", "MLB6", "Furadeira Bosch", "https://ml/6", 200, 300)]
+    monkeypatch.setattr(mercadolivre, "_via_catalogo", lambda c, site, q, n: achados)
+    ok, ruins = ia.conferir([{"url": "https://pelando.com.br/x", "titulo": "Perfume Malbec Gold 100ml"},
+                             {"url": "", "titulo": "Panela Tramontina"}], ClienteML())
+    assert [o.id_produto for o in ok] == ["MLB5"] and ruins == 1
+
+
+@pytest.fixture
+def ciclo(monkeypatch):
+    for nome in ("_proxima", "_proxima_shopee", "_loja_da_vez"):
+        monkeypatch.setattr(pipeline, nome, {})
+    monkeypatch.setattr(config, "fonte_ml", {"ativa": True})
+    monkeypatch.setattr(config, "fonte_shopee", {"ativa": False})
+    monkeypatch.setattr(config, "max_posts_por_ciclo", 1)
+    monkeypatch.setattr(config, "desconto_minimo", 10)
+    monkeypatch.setattr(config, "preco_minimo", 0)
+    monkeypatch.setattr(config, "preco_maximo", 0)
+    monkeypatch.setattr(config, "palavras_bloqueadas", [])
+    monkeypatch.setattr(config, "cupons", ConfigCupons(horarios=[]))
+    monkeypatch.setattr(pipeline, "dentro_do_horario", lambda: True)
+
+    def gerar(lista, etiqueta=""):
+        for o in lista:
+            o.url_afiliado = f"https://meli.la/{o.id_produto}"
+    monkeypatch.setattr(pipeline.afiliado_ml, "gerar_links_afiliado", gerar)
+
+    class Destino:
+        nome = "console"
+        envios = []
+
+        def enviar(self, o, msg, grupo):
+            self.envios.append(o.id_produto)
+    return Destino()
+
+
+def test_ciclo_envia_oferta_achada_pela_ia_e_conferida(monkeypatch, ciclo):
+    _ligar_ia(monkeypatch)
+    claude = Claude([_resposta_final()])
+    monkeypatch.setattr(ia, "_cliente", lambda: claude)
+    monkeypatch.setattr(mercadolivre, "cliente_padrao", lambda: ClienteML())
+    g = Grupo("clube", "Clube", ofertas_gerais=True)
+    assert pipeline.executar_ciclo(ciclo, [g], registrar=False) == 1
+    assert ciclo.envios[0] in {"MLB1234567890", "MLB22334455"}
+    # no ciclo seguinte não pergunta de novo (intervalo), usa o estoque
+    pipeline.executar_ciclo(ciclo, [g], registrar=False)
+    assert len(claude.pedidos) == 1
+    assert ia.ler_estado()["buscas_dia"] == {dt.date.today().isoformat(): 1}
+
+
+def test_ciclo_sem_grupo_de_ofertas_gerais_nao_chama_a_ia(monkeypatch, ciclo):
+    _ligar_ia(monkeypatch)
+    monkeypatch.setattr(pipeline, "coletar", lambda cats: [])
+    pipeline.executar_ciclo(ciclo, [Grupo("b", "B", {"MLB1": "x"})], registrar=False)  # _cliente falha se chamar
+
+
+def test_erro_da_chave_nao_derruba_o_ciclo(monkeypatch, caplog):
+    import anthropic
+    import httpx2 as httpx  # mesmo pacote HTTP do SDK
+    _ligar_ia(monkeypatch)
+
+    class Recusa:
+        def _create(self, **k):
+            raise anthropic.AuthenticationError("invalid x-api-key", response=httpx.Response(
+                401, request=httpx.Request("POST", "https://api.anthropic.com/v1/messages")), body=None)
+    r = Recusa()
+    r.beta = NS(messages=NS(create=r._create))
+    monkeypatch.setattr(ia, "_cliente", lambda: r)
+    assert ia.buscar(T) == []
+    assert any("chave ANTHROPIC_API_KEY inválida" in x.message for x in caplog.records)
+    assert ia.motivo_para_nao_buscar(T + 60) is not None  # não fica tentando à toa
+
+
+# ── painel ──────────────────────────────────────────────────────────
+
+@pytest.fixture
+def arquivos(tmp_path, monkeypatch):
+    import shutil
+    from pathlib import Path
+    raiz = Path(__file__).resolve().parent.parent
+    shutil.copy(raiz / "config.exemplo.yaml", tmp_path / "config.yaml")
+    (tmp_path / ".env").write_text("ML_CLIENT_ID=1\n", encoding="utf-8")
+    monkeypatch.setattr(painel, "ARQ_CONFIG", tmp_path / "config.yaml")
+    monkeypatch.setattr(painel, "ARQ_ENV", tmp_path / ".env")
+    monkeypatch.setattr(painel, "DATA_DIR", tmp_path)
+    return tmp_path
+
+
+def test_painel_le_e_grava_a_ia(arquivos):
+    import yaml
+    d = painel.ler_tudo()
+    assert d["ia"]["ativa"] is False and d["ia"]["modelo"] == "claude-opus-5-5"
+    assert d["env"]["ANTHROPIC_API_KEY"] == {"secreto": True, "definido": False, "valor": ""}
+    assert d["ia_info"]["precos"]["claude-opus-5-5"] == [4.0, 20.0]
+    d["env"] = {"ANTHROPIC_API_KEY": "sk-ant-xyz"}
+    d["ia"].update(ativa=True, buscas_por_dia=2, gasto_max_mes_usd=5.5)
+    assert painel.salvar(d) == []
+    ia_yaml = yaml.safe_load((arquivos / "config.yaml").read_text(encoding="utf-8"))["fontes"]["ia"]
+    assert ia_yaml["ativa"] is True and ia_yaml["buscas_por_dia"] == 2 and ia_yaml["gasto_max_mes_usd"] == 5.5
+    assert "ANTHROPIC_API_KEY=sk-ant-xyz" in (arquivos / ".env").read_text(encoding="utf-8")
+    assert painel.ler_tudo()["env"]["ANTHROPIC_API_KEY"]["valor"] == ""  # segredo não volta para a tela
+
+
+def test_painel_valida_a_ia(arquivos):
+    d = painel.ler_tudo()
+    d["env"] = {}
+    d["ia"].update(modelo="gpt-5", buscas_por_dia=99, intervalo_horas=0)
+    erros = painel.salvar(d)
+    assert any("modelo desconhecido" in e for e in erros)
+    assert any("buscas_por_dia" in e for e in erros) and any("intervalo_horas" in e for e in erros)
+
+
+def test_tela_mostra_custo_antes_de_ligar():
+    html = painel.ARQ_HTML.read_text(encoding="utf-8")
+    assert 'id="ia-custo"' in html and "Ligar a IA? Custo estimado" in html
+    assert "ANTHROPIC_API_KEY" in html

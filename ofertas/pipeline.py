@@ -10,7 +10,7 @@ from .config import config, dentro_do_horario
 from .destinos import Destino
 from .formatter import montar_mensagem
 from .models import Grupo, Oferta
-from .sources import mercadolivre, ml_geral, shopee
+from .sources import ia_ofertas, mercadolivre, ml_geral, shopee
 
 log = logging.getLogger("ofertas.pipeline")
 
@@ -304,7 +304,7 @@ def _das_categorias(grupo: Grupo, n: int) -> tuple[list[Oferta], list[Oferta]]:
 
 
 def _candidatas_ml(grupo: Grupo, n: int) -> list[Oferta]:
-    """Grupo com ofertas gerais: página de ofertas (bônus, se abrir) -> mais vendidos e
+    """Grupo com ofertas gerais: estoque (ofertas da IA conferidas no ML) -> mais vendidos e
     catálogo do ML automáticos -> categorias do grupo. Grupo comum: categorias do grupo.
     Pula a fonte sem oferta nova (ou só com produto parecido com os últimos enviados)."""
     if not config.fonte_ml.get("ativa"):
@@ -525,6 +525,11 @@ def executar_ciclo(destino: Destino, grupos: list[Grupo], registrar: bool = True
             ml_geral.atualizar(grupos)
         except Exception as e:
             log.error("Ofertas gerais do ML: %s", e)
+        if any(g.ofertas_gerais for g in grupos) and ia_ofertas.ligada():
+            try:  # ofertas achadas pela IA e conferidas na API do ML (só na hora e no limite)
+                ia_ofertas.buscar()
+            except Exception as e:
+                log.error("IA: %s", e)
     # um Chrome só no ciclo inteiro (páginas de ofertas + Linkbuilder), aberto só se precisar;
     # ele fecha depois dos envios, porque fechar o Chrome pode demorar
     with afiliado_ml.chrome_compartilhado():

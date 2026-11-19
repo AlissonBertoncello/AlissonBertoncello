@@ -58,6 +58,7 @@ class Config:
         self.ml_etiqueta: str = os.getenv("ML_ETIQUETA", "").strip()
         self.shopee_app_id: str = os.getenv("SHOPEE_APP_ID", "").strip()
         self.shopee_app_secret: str = os.getenv("SHOPEE_APP_SECRET", "").strip()
+        self.anthropic_api_key: str = os.getenv("ANTHROPIC_API_KEY", "").strip()
         self.evolution_url: str = os.getenv("EVOLUTION_URL", "http://localhost:8080").strip()
         self.evolution_api_key: str = os.getenv("EVOLUTION_API_KEY", "").strip()
         self.evolution_instancia: str = os.getenv("EVOLUTION_INSTANCIA", "bot-ofertas").strip()
@@ -80,6 +81,7 @@ class Config:
         fontes = y.get("fontes") or {}
         self.fonte_ml: dict = fontes.get("mercadolivre") or {"ativa": False}
         self.fonte_shopee: dict = fontes.get("shopee") or {"ativa": False}
+        self.fonte_ia: dict = fontes.get("ia") or {"ativa": False}
 
         self.destino: str = str(y.get("destino") or "console").strip().lower()
         self.grupos: list[Grupo] = ler_grupos(y.get("grupos") or {})
