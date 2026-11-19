@@ -295,11 +295,17 @@ Dois cliques em **`CONFIGURAR.bat`**: o painel abre no navegador (endereço `htt
 
 Na aba **Grupos**, a chave **Ofertas gerais do Mercado Livre** faz o grupo receber **produtos de qualquer categoria**, como os grupos de "promoções". Não precisa de lista de categorias nem de marcas. Em cada ciclo, o bot tenta nesta ordem:
 
-1. **Ofertas achadas pela IA** (se ligada — seção 9.4), já conferidas na API do ML;
-2. **Em alta no ML (grátis):** os termos mais buscados agora no Mercado Livre (lista oficial, geral e de cada departamento, relida a cada 6 h) são procurados no catálogo do ML. Se o ML não liberar essa lista para o seu app, o bot avisa uma vez e segue sem ela;
-3. **Mais vendidos e catálogo do ML, automático (API oficial):** o bot percorre sozinho os departamentos de varejo — Calçados, Roupas e Bolsas (com peso 2), Beleza, Joias e Relógios, Esportes e Fitness, Ferramentas, Celulares, Eletrônicos, Informática, Casa e Móveis, Saúde — e lê o ranking de mais vendidos (no 1º nível de subcategoria, que tem ranking) e o catálogo pelo nome de cada tipo de produto (tênis, polos, mochilas, relógios…), em rodízio. Comida, bebida, livros, carros e imóveis ficam de fora;
+1. **Ofertas achadas pela IA ou pela página de ofertas** (se ligadas — hoje as duas ficam desligadas);
+2. **Mais vendidos e catálogo do ML (API oficial, grátis):** o bot percorre sozinho os departamentos de varejo — Calçados, Roupas e Bolsas (com peso 2), Beleza, Joias e Relógios, Esportes e Fitness, Ferramentas, Celulares, Eletrônicos, Informática, Casa e Móveis, Saúde — e lê, em rodízio, o ranking de mais vendidos e o catálogo de 3 subcategorias por ciclo. **Junta as candidatas e manda a de nota mais alta** (veja abaixo). Comida, bebida, livros, carros e imóveis ficam de fora;
+3. **Em alta no ML (reserva):** só quando os rankings não têm nada novo — os termos mais buscados agora em cada departamento do grupo (relidos a cada 6 h), sem a lista geral, sem palavra solta que não seja marca ("graxa", "snoopy"), sem datas e festa ("black friday", "natal", "bandeira") e sem palavras bloqueadas;
 4. as **categorias do grupo**, se houver;
-5. na vez da Shopee: a **lista de mais vendidos da Shopee** (sem palavra-chave, todas as categorias) e depois as palavras-chave do grupo. Se a Shopee não aceitar a lista, o bot avisa uma vez e fica só nas palavras.
+5. na vez da Shopee: a **lista de mais vendidos da Shopee** (sem palavra-chave) e depois as palavras-chave do grupo.
+
+**Nota de qualidade (grupos de ofertas gerais):** cada candidata ganha pontos pelo desconto (até 80), **+40 se for de marca conhecida** (pela ficha do produto no ML ou pelo título — ~200 marcas já vêm na lista: Nike, Adidas, Olympikus, Casio, JBL, Samsung, Mondial, Philco, Bosch, Tramontina, Natura, Boticário…; acrescente outras em *Envio e filtros → Marcas boas*), até +20 pela posição no ranking e +10 se o preço estiver entre R$ 60 e R$ 1.500. Produto sem marca não é proibido: só perde para um de marca. O log mostra a escolhida, ex.: `Escolhida pela nota 117: Escova Rotativa Mondial… (-54%, marca mondial)`.
+
+**Pisos do grupo:** no cartão do grupo, *Desconto mínimo deste grupo* e *Preço mínimo deste grupo*. Vazio = o da aba Envio e filtros; nos grupos de ofertas gerais, vazio no arquivo = **25% e R$ 25**.
+
+> ⚠️ As **palavras bloqueadas em todos os grupos** (aba Envio e filtros) valem também para os grupos de ofertas gerais. Se ali estiverem `masculino`, `óculos`, `barba`… (vindas do grupo feminino), produtos masculinos nunca chegam ao Clube. Para um grupo só, use as palavras bloqueadas **do grupo**.
 
 Para descobrir o que funciona no seu notebook, rode o **`TESTAR_FONTES.bat`** (com o bot fechado): ele testa cada fonte, mostra quantas ofertas trouxe e salva o resultado em `data\teste_fontes\resultado.txt`. Não envia nada aos grupos. O teste da IA (F) só roda com a IA ligada no painel, porque é pago.
 

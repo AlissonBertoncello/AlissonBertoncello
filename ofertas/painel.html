@@ -210,6 +210,11 @@
         <div id="pal-geral" style="margin-top:6px"></div>
         <span class="dica">Ofertas com essas palavras (inteiras) no título são ignoradas. Digite e aperte Enter.</span>
       </div>
+      <div style="margin-top:14px">
+        <span style="font-weight:600;font-size:14px">Marcas boas (além das que o bot já conhece)</span>
+        <div id="marcas-boas" style="margin-top:6px"></div>
+        <span class="dica">Nos grupos de ofertas gerais, produto de marca conhecida ganha prioridade (Nike, Adidas, Casio, JBL, Samsung, Mondial, Philco, Bosch, Tramontina, Natura e outras ~200 já vêm na lista). Acrescente aqui as que quiser.</span>
+      </div>
     </div>
 
     <div class="card">
@@ -349,14 +354,17 @@ const SUGESTOES = {
 };
 let iaInfo = null;  // preços e gasto do mês (vêm do painel, não são salvos)
 let original = null, dados = null, gruposWA = [], grupoDaCategoria = null, painelAntigo = false;
-const VERSAO_PAINEL = 4;  // a mesma de painel.py
+const VERSAO_PAINEL = 5;  // a mesma de painel.py
 // campos que versões antigas do painel não mandam: assim a tela não quebra
 function completar(d) {
   d.geral.aviso_preco ??= true;
+  d.filtros.marcas_boas ??= [];
   d.ia ??= { ativa: false, modelo: "claude-opus-5-5", buscas_por_dia: 1, intervalo_horas: 4, pesquisas_por_busca: 5, gasto_max_mes_usd: 10 };
   d.cupons ??= { horarios: ["10:00", "15:00", "20:00"], shopee_campanhas: false, grupos_campanhas: [], lista: [] };
   for (const g of d.grupos) {
     g.departamentos ??= []; g.ofertas_gerais ??= false; g.sem_desconto ??= false; g.etiqueta_ml ??= "";
+    if (g.desconto_minimo === undefined) g.desconto_minimo = null;
+    if (g.preco_minimo === undefined) g.preco_minimo = null;
     g.ganchos ??= []; g.bloquear ??= []; g.shopee ??= []; g.whatsapp ??= []; g.categorias ??= [];
     g.chamada ??= ""; g.chamada_compra ??= ""; g.peso_ml ??= 1; g.peso_shopee ??= 1;
   }
@@ -453,6 +461,7 @@ function ligarCampos() {
   $("#h-24").onchange = $("#h-ini").onchange = $("#h-fim").onchange = horario;
   $("#h-faixa").style.opacity = $("#h-24").checked ? .4 : 1;
   $("#pal-geral").replaceChildren(chips(dados.filtros.palavras_bloqueadas, mudou));
+  $("#marcas-boas").replaceChildren(chips(dados.filtros.marcas_boas, mudou, { placeholder: "ex.: Saint Germain" }));
 }
 
 function estimativa() {
@@ -541,6 +550,12 @@ function cartaoGrupo(g, i, aberto) {
     el("span", { class: "dica", text: "Vazio = tudo (grupo geral, como o do seu amigo). Para um grupo de nicho, escolha os departamentos dele (ex.: Beleza, Bebês)." }));
   const mostrarDeps = () => { blocoDeps.style.display = g.ofertas_gerais ? "" : "none"; };
   mostrarDeps();
+  const piso = (campoG, passo) => {
+    const inp = el("input", { type: "number", min: "0", step: passo, value: g[campoG] ?? "", placeholder: "vazio = o da aba Envio e filtros" });
+    inp.oninput = () => { g[campoG] = inp.value === "" ? null : (passo === "1" ? parseInt(inp.value, 10) : parseFloat(inp.value)); mudou(); };
+    return inp;
+  };
+  const pisoDesc = piso("desconto_minimo", "1"), pisoPreco = piso("preco_minimo", "0.01");
   const etiqueta = el("input", { type: "text", value: g.etiqueta_ml || "", placeholder: "vazio = a etiqueta da aba Contas" });
   etiqueta.oninput = () => { g.etiqueta_ml = etiqueta.value.trim(); mudou(); };
 
@@ -611,10 +626,13 @@ function cartaoGrupo(g, i, aberto) {
       el("span", { class: "dica", text: "Nome exato, com emoji. Vários grupos recebem as mesmas ofertas. Use “Carregar grupos do WhatsApp” para escolher da lista." })),
     campo("Link de convite (vai no fim de cada oferta)", convite),
     el("div", {}, chave_("Ofertas gerais do Mercado Livre (todas as categorias)", "ofertas_gerais", mostrarDeps),
-      el("span", { class: "dica", text: "Pega o que está em oferta no Mercado Livre agora, de qualquer categoria (página geral de ofertas). Se o ML barrar a página, usa o catálogo do ML pelos tipos de produto. Com isso ligado, as categorias abaixo são opcionais." }),
+      el("span", { class: "dica", text: "Pega os mais vendidos com desconto dos departamentos de varejo do Mercado Livre (moda, calçados, beleza, relógios, eletrônicos, ferramentas, casa…) e manda os de nota mais alta: marca conhecida, desconto, posição no ranking e preço. Com isso ligado, as categorias abaixo são opcionais." }),
       blocoDeps),
     el("div", {}, chave_("Aceitar os mais vendidos sem desconto (“Por R$ X”)", "sem_desconto"),
       el("span", { class: "dica", text: "Os 5 primeiros do ranking de mais vendidos passam mesmo sem preço antigo. Com desconto, vale o desconto mínimo da aba Envio e filtros." })),
+    el("div", { class: "grade" },
+      campo("Desconto mínimo deste grupo (%)", pisoDesc, el("small", { text: "Vazio = o da aba Envio e filtros. Grupos de ofertas gerais: 25% se ficar vazio no arquivo." })),
+      campo("Preço mínimo deste grupo (R$)", pisoPreco, el("small", { text: "Corta bugigangas. Grupos de ofertas gerais: R$ 25 se ficar vazio no arquivo." }))),
     campo("Etiqueta do Mercado Livre só deste grupo (opcional)", etiqueta,
       el("small", { text: "Para ver no painel de afiliados do ML quanto cada grupo vende: crie outra etiqueta lá e cole aqui. Na Shopee, o bot marca o grupo sozinho (Sub ID)." })),
     el("div", {}, el("div", { class: "linha", style: "justify-content:space-between" },
@@ -646,7 +664,7 @@ $("#bt-novo").onclick = () => {
   let n = 1; while (dados.grupos.some(g => g.chave === "novo_grupo" + (n > 1 ? n : ""))) n++;
   dados.grupos.push({ chave: "novo_grupo" + (n > 1 ? n : ""), ativo: true, nome: "Novo grupo", whatsapp: [], convite: "",
                       categorias: [], shopee: [], bloquear: [], ganchos: [], chamada: "", chamada_compra: "", peso_ml: 1, peso_shopee: 1,
-                      ofertas_gerais: true, departamentos: [], sem_desconto: false, etiqueta_ml: "", _novo: true });
+                      ofertas_gerais: true, departamentos: [], sem_desconto: false, etiqueta_ml: "", desconto_minimo: 25, preco_minimo: 25, _novo: true });
   desenharGrupos(dados.grupos.length - 1); mudou();
   setTimeout(() => $("#lista-grupos details:last-child")?.scrollIntoView({ behavior: "smooth" }), 50);
 };

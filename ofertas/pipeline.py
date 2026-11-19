@@ -5,7 +5,7 @@ import socket
 import time
 from collections import Counter
 
-from . import afiliado_ml, cupons, db
+from . import afiliado_ml, cupons, db, qualidade
 from .config import config, dentro_do_horario
 from .destinos import Destino
 from .formatter import montar_mensagem
@@ -61,19 +61,23 @@ TOP_SEM_DESCONTO = 5  # "mais vendido sem desconto também vale": só os 5 prime
 
 
 def motivo_descarte(o: Oferta, grupo: str, bloquear: list[str] = (),
-                    sem_desconto: bool = False) -> str | None:
+                    sem_desconto: bool = False, desconto_min: int | None = None,
+                    preco_min: float | None = None) -> str | None:
     """Por que a oferta não serve para o grupo (None = serve).
-    sem_desconto: aceita os primeiros do ranking de mais vendidos sem preço antigo ("Por R$ X")."""
+    sem_desconto: aceita os primeiros do ranking de mais vendidos sem preço antigo ("Por R$ X").
+    desconto_min / preco_min: pisos só deste grupo (None = os de filtros)."""
     if not o.titulo:
         return "sem título"
     if db.ja_enviada(o.uid, config.nao_repetir_dias, grupo, o.titulo):
         return "já enviadas"
-    if config.desconto_minimo and (o.desconto or 0) < config.desconto_minimo:
+    minimo = config.desconto_minimo if desconto_min is None else desconto_min
+    if minimo and (o.desconto or 0) < minimo:
         campeao = sem_desconto and o.desconto is None and o.posicao and o.posicao <= TOP_SEM_DESCONTO
         if not campeao:
-            return f"desconto < {config.desconto_minimo}%"
+            return f"desconto < {minimo}%"
+    piso = config.preco_minimo if preco_min is None else preco_min
     if o.preco is not None:
-        if config.preco_minimo and o.preco < config.preco_minimo:
+        if piso and o.preco < piso:
             return "preço baixo"
         if config.preco_maximo and o.preco > config.preco_maximo:
             return "preço alto"
@@ -123,7 +127,8 @@ def modelos(titulo: str) -> set[str]:
 
 
 def filtrar(ofertas: list[Oferta], grupo: str, bloquear: list[str] = (),
-            motivos: Counter | None = None, sem_desconto: bool = False) -> list[Oferta]:
+            motivos: Counter | None = None, sem_desconto: bool = False,
+            desconto_min: int | None = None, preco_min: float | None = None) -> list[Oferta]:
     """Ofertas que passam nos filtros; em `motivos` conta por que as outras saíram."""
     aprovadas = []
     enviados = set()  # modelos já enviados ao grupo no prazo de não repetir
@@ -131,7 +136,7 @@ def filtrar(ofertas: list[Oferta], grupo: str, bloquear: list[str] = (),
         for t in db.titulos_desde(grupo, config.nao_repetir_dias):
             enviados |= modelos(t)
     for o in ofertas:
-        motivo = motivo_descarte(o, grupo, bloquear, sem_desconto)
+        motivo = motivo_descarte(o, grupo, bloquear, sem_desconto, desconto_min, preco_min)
         if motivo is None and enviados & modelos(o.titulo):
             motivo = "já enviadas"  # mesmo modelo em outro anúncio
         if motivo is None:
@@ -154,11 +159,13 @@ def _chave_similar(titulo: str) -> str:
     return db.chave_do_titulo(titulo)
 
 
-def escolher(ofertas: list[Oferta], n: int) -> list[Oferta]:
-    """Top N por desconto, pulando variações do mesmo produto."""
+def escolher(ofertas: list[Oferta], n: int, por_nota: bool = False) -> list[Oferta]:
+    """Top N por desconto (ou pela nota de qualidade: marca, desconto, ranking, preço),
+    pulando variações do mesmo produto."""
     escolhidas: list[Oferta] = []
     vistas: set[str] = set()
-    for o in sorted(ofertas, key=lambda o: o.desconto or 0, reverse=True):
+    chave = qualidade.nota if por_nota else (lambda o: o.desconto or 0)
+    for o in sorted(ofertas, key=chave, reverse=True):
         chave = _chave_similar(o.titulo)
         if chave in vistas:
             continue
@@ -238,13 +245,23 @@ def resumo_shopee() -> None:
         e["resumido"] = True
 
 
+def filtrar_do_grupo(grupo: Grupo, brutas: list[Oferta], motivos: Counter | None = None) -> list[Oferta]:
+    return filtrar(brutas, grupo.chave, grupo.bloquear, motivos, grupo.sem_desconto,
+                   grupo.desconto_minimo, grupo.preco_minimo)
+
+
+def escolher_do_grupo(grupo: Grupo, boas: list[Oferta], n: int) -> list[Oferta]:
+    """Grupos de ofertas gerais escolhem pela nota de qualidade; os outros, pelo desconto."""
+    return escolher(boas, n, por_nota=grupo.ofertas_gerais)
+
+
 def _melhores(grupo: Grupo, brutas: list[Oferta], rotulo: str, n: int) -> tuple[list[Oferta], list[Oferta]]:
     """Filtra e escolhe as candidatas de uma fonte: (para enviar, só parecidas com as últimas)."""
     motivos = Counter()
-    boas = filtrar(brutas, grupo.chave, grupo.bloquear, motivos, grupo.sem_desconto)
+    boas = filtrar_do_grupo(grupo, brutas, motivos)
     log.info("[%s] %s: %s", grupo.nome, rotulo, _resumo(brutas, boas, motivos))
     # reservas: se uma ficar sem link de afiliado, a próxima melhor entra no lugar
-    candidatas = escolher(boas, n * 3)
+    candidatas = escolher_do_grupo(grupo, boas, n * 3)
     if not candidatas:
         return [], []
     diferentes, parecidas = _separar_parecidas(grupo, candidatas, rotulo)
@@ -252,34 +269,19 @@ def _melhores(grupo: Grupo, brutas: list[Oferta], rotulo: str, n: int) -> tuple[
 
 
 def _fonte_automatica(grupo: Grupo, n: int) -> tuple[list[Oferta], list[Oferta]]:
-    """Ofertas gerais pela API do ML: termos mais buscados agora (em alta) no catálogo;
-    depois as subcategorias de cada departamento em rodízio — o ranking de mais vendidos
-    e o catálogo pelo nome da subcategoria."""
+    """Ofertas gerais pela API do ML: subcategorias de cada departamento em rodízio — o
+    ranking de mais vendidos e o catálogo pelo nome da subcategoria. Junta as candidatas
+    de todas as subcategorias da vez e manda as de nota mais alta. Os termos mais buscados
+    (em alta) ficam de reserva, quando os rankings não têm nada novo."""
     cliente = mercadolivre.cliente_padrao()
     try:
         vez = ml_geral.da_vez(grupo, cliente)
     except Exception as e:
         _checar_rede()
         log.warning("[%s] Mercado Livre (mais vendidos): %s", grupo.nome, e)
-        return [], []
+        vez = []
+    juntas: list[Oferta] = []
     reserva: list[Oferta] = []
-    # primeiro: termos mais buscados agora no ML (em alta), procurados no catálogo
-    try:
-        alta = ml_geral.em_alta_da_vez(grupo, cliente)
-    except Exception as e:
-        log.debug("[%s] Em alta no ML: %s", grupo.nome, e)
-        alta = []
-    for termo in alta:
-        try:
-            brutas = ml_geral.catalogo(termo, cliente)
-        except Exception as e:
-            _checar_rede()
-            log.debug("[%s] Em alta '%s': %s", grupo.nome, termo, e)
-            continue
-        achadas, parecidas = _melhores(grupo, brutas, f"Em alta no ML '{termo}'", n)
-        if achadas:
-            return achadas, []
-        reserva = reserva or parecidas
     for cid, nome in vez:
         for rotulo, buscar in ((f"Mais vendidos '{nome}'", lambda: ml_geral.mais_vendidos(cid, cliente)),
                                (f"Catálogo do ML '{nome}'", lambda: ml_geral.catalogo(nome, cliente))):
@@ -290,10 +292,44 @@ def _fonte_automatica(grupo: Grupo, n: int) -> tuple[list[Oferta], list[Oferta]]
                 log.debug("[%s] %s: %s", grupo.nome, rotulo, e)
                 continue
             achadas, parecidas = _melhores(grupo, brutas, rotulo, n)
-            if achadas:
-                return achadas, []
+            juntas += achadas
             reserva = reserva or parecidas
+    if juntas:
+        return _as_melhores(grupo, juntas, n), []
+    # reserva: termos mais buscados agora no ML (em alta), procurados no catálogo
+    try:
+        alta = ml_geral.em_alta_da_vez(grupo, cliente)
+    except Exception as e:
+        log.debug("[%s] Em alta no ML: %s", grupo.nome, e)
+        alta = []
+    for termo in alta:
+        try:
+            brutas = ml_geral.catalogo(termo, cliente, limite=30)
+        except Exception as e:
+            _checar_rede()
+            log.debug("[%s] Em alta '%s': %s", grupo.nome, termo, e)
+            continue
+        achadas, parecidas = _melhores(grupo, brutas, f"Em alta no ML '{termo}'", n)
+        if achadas:
+            return achadas, []
+        reserva = reserva or parecidas
     return [], reserva
+
+
+def _as_melhores(grupo: Grupo, ofertas: list[Oferta], n: int) -> list[Oferta]:
+    """Candidatas de várias fontes -> as de nota mais alta (sem repetir o produto)."""
+    vistos, unicas = set(), []
+    for o in ofertas:
+        if o.uid not in vistos:
+            vistos.add(o.uid)
+            unicas.append(o)
+    melhores = escolher_do_grupo(grupo, unicas, n * 3)
+    if melhores and grupo.ofertas_gerais:
+        o = melhores[0]
+        marca = qualidade.marca_boa(o)
+        log.info("[%s] Escolhida pela nota %.0f: %s (%s%s)", grupo.nome, qualidade.nota(o), o.titulo[:60],
+                 f"-{o.desconto}%" if o.desconto else "sem desconto", f", marca {marca}" if marca else "")
+    return melhores
 
 
 def _das_categorias(grupo: Grupo, n: int) -> tuple[list[Oferta], list[Oferta]]:
@@ -330,9 +366,11 @@ def _candidatas_ml(grupo: Grupo, n: int) -> list[Oferta]:
     reserva: list[Oferta] = []  # parecidas com as últimas: só se não houver outra
     fontes = [_das_categorias]
     if grupo.ofertas_gerais:
-        achadas, reserva = _melhores(grupo, ml_geral.ofertas_para(grupo), "Ofertas gerais do ML", n)
-        if achadas:
-            return achadas
+        estoque = ml_geral.ofertas_para(grupo)  # IA / página de ofertas, quando ligadas
+        if estoque:
+            achadas, reserva = _melhores(grupo, estoque, "Ofertas gerais do ML", n)
+            if achadas:
+                return achadas
         fontes = [_fonte_automatica, _das_categorias]
     for fonte in fontes:
         achadas, parecidas = fonte(grupo, n)
@@ -415,9 +453,9 @@ def _candidatas_shopee(grupo: Grupo, n: int) -> list[Oferta]:
             continue
         _contar_shopee(True)
         motivos = Counter()
-        boas = filtrar(brutas, grupo.chave, grupo.bloquear, motivos, grupo.sem_desconto)
+        boas = filtrar_do_grupo(grupo, brutas, motivos)
         log.info("[%s] Shopee '%s': %s", grupo.nome, termo, _resumo(brutas, boas, motivos))
-        candidatas = escolher(boas, n * 3)
+        candidatas = escolher_do_grupo(grupo, boas, n * 3)
         if not candidatas:
             continue
         diferentes, parecidas = _separar_parecidas(grupo, candidatas, f"Shopee '{termo}'")

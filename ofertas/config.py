@@ -74,6 +74,8 @@ class Config:
         self.desconto_minimo: int = int(filtros.get("desconto_minimo", 0))
         self.preco_minimo: float = float(filtros.get("preco_minimo", 0))
         self.preco_maximo: float = float(filtros.get("preco_maximo", 0))
+        self.marcas_boas: list[str] = [str(m).strip() for m in (filtros.get("marcas_boas") or [])
+                                        if str(m).strip()]
         self.palavras_bloqueadas: list[str] = [
             str(p).lower() for p in (filtros.get("palavras_bloqueadas") or [])
         ]
@@ -129,6 +131,7 @@ def ler_grupos(dados: dict) -> list[Grupo]:
         else:
             deps = {str(c).strip().upper(): nome_categoria(str(c).strip().upper()) for c in deps}
         gerais = bool(g.get("ofertas_gerais", False))
+        desc_min, preco_min = pisos_do_grupo(g)
         if cats or shopee or gerais:
             grupos.append(Grupo(chave=str(chave), nome=str(g.get("nome") or chave), categorias=cats,
                                 whatsapp=_lista(g.get("whatsapp")),
@@ -139,8 +142,28 @@ def ler_grupos(dados: dict) -> list[Grupo]:
                                 peso_ml=_peso(g, "mercadolivre"), peso_shopee=_peso(g, "shopee"),
                                 ofertas_gerais=gerais, departamentos=deps,
                                 sem_desconto=bool(g.get("sem_desconto", False)),
-                                etiqueta_ml=str(g.get("etiqueta_ml") or "").strip()))
+                                etiqueta_ml=str(g.get("etiqueta_ml") or "").strip(),
+                                desconto_minimo=desc_min, preco_minimo=preco_min))
     return grupos
+
+
+# grupos de ofertas gerais: pisos de qualidade quando o grupo não define os seus
+PISOS_OFERTAS_GERAIS = (25, 25.0)  # desconto mínimo (%), preço mínimo (R$)
+
+
+def pisos_do_grupo(g: dict) -> tuple[int | None, float | None]:
+    """(desconto mínimo, preço mínimo) do grupo; None = vale o de filtros."""
+    gerais = bool(g.get("ofertas_gerais", False))
+    d, p = g.get("desconto_minimo"), g.get("preco_minimo")
+    try:
+        d = int(d) if d is not None else (PISOS_OFERTAS_GERAIS[0] if gerais else None)
+    except (TypeError, ValueError):
+        d = None
+    try:
+        p = float(p) if p is not None else (PISOS_OFERTAS_GERAIS[1] if gerais else None)
+    except (TypeError, ValueError):
+        p = None
+    return d, p
 
 
 def hora_texto(valor) -> str:

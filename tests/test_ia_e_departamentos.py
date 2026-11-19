@@ -15,6 +15,13 @@ from ofertas.sources.mercadolivre import ErroAPI
 
 T = dt.datetime(2026, 11, 19, 10, 0).timestamp()
 
+
+@pytest.fixture(autouse=True)
+def sem_bloqueio_geral(monkeypatch):
+    """Não depende das palavras bloqueadas do config.yaml local."""
+    monkeypatch.setattr(config, "palavras_bloqueadas", [])
+    monkeypatch.setattr(config, "marcas_boas", [])
+
 RAIZ_ML = [{"id": "MLB1430", "name": "Calçados, Roupas e Bolsas"}, {"id": "MLB1403", "name": "Alimentos e Bebidas"},
            {"id": "MLB1246", "name": "Beleza e Cuidado Pessoal"}, {"id": "MLB3937", "name": "Joias e Relógios"},
            {"id": "MLB1196", "name": "Livros, Revistas e Comics"}, {"id": "MLB1000", "name": "Eletrônicos, Áudio e Vídeo"},
@@ -419,18 +426,27 @@ class ClienteTendencias:
         self.pedidos.append(caminho)
         if self.recusa:
             raise ErroAPI(f"GET {caminho} respondeu HTTP 403: forbidden")
-        return {"/trends/MLB/MLB1246": [{"keyword": "perfume masculino"}, {"keyword": "protetor solar"}],
-                "/trends/MLB": [{"keyword": "iphone 16"}, {"keyword": "Perfume Masculino"}]}.get(caminho, [])
+        return {"/trends/MLB/MLB1246": [{"keyword": "perfume masculino"}, {"keyword": "queratina"},
+                                        {"keyword": "kit natal boticario"}, {"keyword": "protetor solar"}],
+                "/trends/MLB/MLB1430": [{"keyword": "jordan"}, {"keyword": "snoopy"},
+                                        {"keyword": "tenis nike air"}, {"keyword": "Perfume Masculino"}],
+                "/trends/MLB": [{"keyword": "black friday"}, {"keyword": "gta 6"}]}.get(caminho, [])
 
 
-def test_termos_em_alta_intercalados_sem_repetir():
-    g = Grupo("g", "G", ofertas_gerais=True, departamentos={"MLB1246": "Beleza"})
+def test_termos_em_alta_dos_departamentos_sem_termos_fracos():
+    g = Grupo("g", "G", ofertas_gerais=True, departamentos={"MLB1246": "Beleza", "MLB1430": "Moda"})
     c = ClienteTendencias()
-    assert ml_geral.termos_em_alta(g, c) == ["perfume masculino", "iphone 16", "protetor solar"]
+    # sem a lista geral; sem palavra solta (queratina, snoopy), sem data (natal); marca solta vale
+    assert ml_geral.termos_em_alta(g, c) == ["perfume masculino", "jordan", "tenis nike air", "protetor solar"]
     ml_geral.termos_em_alta(g, c)
-    assert c.pedidos == ["/trends/MLB/MLB1246", "/trends/MLB"]  # guardado por 6 h
-    assert ml_geral.em_alta_da_vez(g, c) == ["perfume masculino", "iphone 16"]
-    assert ml_geral.em_alta_da_vez(g, c) == ["protetor solar", "perfume masculino"]
+    assert c.pedidos == ["/trends/MLB/MLB1246", "/trends/MLB/MLB1430"]  # guardado por 6 h
+    assert ml_geral.em_alta_da_vez(g, c) == ["perfume masculino", "jordan"]
+    assert ml_geral.em_alta_da_vez(g, c) == ["tenis nike air", "protetor solar"]
+
+
+def test_termo_com_palavra_bloqueada_do_grupo_fica_de_fora():
+    g = Grupo("g", "G", ofertas_gerais=True, bloquear=["protetor"])
+    assert not ml_geral.termo_bom("protetor solar", g) and ml_geral.termo_bom("perfume masculino", g)
 
 
 def test_lista_em_alta_recusada_avisa_uma_vez(caplog):
@@ -441,16 +457,142 @@ def test_lista_em_alta_recusada_avisa_uma_vez(caplog):
     assert sum("mais buscados" in r.message for r in caplog.records) == 1
 
 
-def test_ciclo_usa_os_termos_em_alta_primeiro(monkeypatch, ciclo):
+def test_em_alta_so_de_reserva_quando_os_rankings_nao_tem_nada(monkeypatch, ciclo):
     monkeypatch.setattr(mercadolivre, "cliente_padrao", lambda: object())
     monkeypatch.setattr(ml_geral, "da_vez", lambda g, c: [("MLB9", "Mochilas")])
     monkeypatch.setattr(ml_geral, "em_alta_da_vez", lambda g, c: ["perfume masculino"])
     buscados = []
 
-    def catalogo(termo, cliente):
-        buscados.append(termo)
-        return [Oferta("mercadolivre", "MLB71", "Perfume Masculino Malbec 100ml", "https://ml/71", 150, 250, posicao=1)]
+    def catalogo(termo, cliente, limite=10):
+        buscados.append((termo, limite))
+        if termo == "perfume masculino":
+            return [Oferta("mercadolivre", "MLB71", "Perfume Masculino Malbec 100ml", "https://ml/71", 150, 250, posicao=1)]
+        return []
     monkeypatch.setattr(ml_geral, "catalogo", catalogo)
     monkeypatch.setattr(ml_geral, "mais_vendidos", lambda cid, c: buscados.append(cid) or [])
     pipeline.executar_ciclo(ciclo, [Grupo("geral", "Geral", ofertas_gerais=True)], registrar=False)
-    assert buscados == ["perfume masculino"] and ciclo.envios[-1] == "MLB71"
+    assert buscados == ["MLB9", ("Mochilas", 10), ("perfume masculino", 30)]
+    assert ciclo.envios[-1] == "MLB71"
+
+
+# ── Q4/Q5: nota de qualidade e pisos do grupo ───────────────────────
+
+def _o(id_, titulo, preco, original, posicao=None, marca=None):
+    return Oferta("mercadolivre", id_, titulo, f"https://ml/{id_}", preco, original, posicao=posicao, marca=marca)
+
+
+# produtos que apareceram de verdade nos testes e no log de 19/11
+REAIS = [
+    _o("1", "Escova Rotativa Mondial Ceramica Tourmaline Ion 3x1 Erb-01", 139.00, 302.17, 3),
+    _o("2", "Prancha Philco PPR10 Titanium Digital Bivolt 230°C", 142.04, 267.99, 5),
+    _o("3", "Secador de Cabelo Gama Italy Eleganza Plus 2100W Ceramic Ion", 141.00, 238.98, 8),
+    _o("4", "Óculos de Sol Saint Germain Siena Oval Tartaruga para Mulher", 69.90, 183.95, 1),
+    _o("5", "Caixa Porta Relógios 6 Lugares Maleta Com Estojo Organizador", 42.99, 110.23, 2),
+    _o("6", "Guarda Chuva Abre E Fecha Automático Reforçado Contra Vento", 35.64, 69.88, 4),
+    _o("7", "Funko Pop! Calendario Advento - O Estranho Mundo De Jack", 335.00, 408.54),
+    _o("8", "Graxa Unilit Blue 1KG - GRAXA AZUL", 38.53, 42.81),
+    _o("9", "Balança Digital Utensílio BALANÇA DIGITAL 50 kg Portátil", 24.78, 35.91),
+    _o("10", "Gravata Masculina Premium Tradicional Padrinhos Casamento", 17.74, 33.47, 6),
+    _o("11", "40 Peças / 46 Peças Jogo De Chave Catraca Caixa De Ferramentas", 28.99, 87.85),
+]
+
+
+def test_pisos_do_grupo_de_ofertas_gerais_cortam_o_fraco():
+    from ofertas import config as cfg
+    [g] = cfg.ler_grupos({"clube": {"ofertas_gerais": True}})
+    assert (g.desconto_minimo, g.preco_minimo) == (25, 25.0)
+    boas = {o.id_produto for o in pipeline.filtrar_do_grupo(g, REAIS)}
+    assert boas == {"1", "2", "3", "4", "5", "6", "11"}  # sai Funko, graxa, balança, gravata
+    [comum] = cfg.ler_grupos({"mulher": {"categorias": {"MLB1": "x"}}})
+    assert (comum.desconto_minimo, comum.preco_minimo) == (None, None)  # vale o de filtros
+    [proprio] = cfg.ler_grupos({"c": {"ofertas_gerais": True, "desconto_minimo": 40, "preco_minimo": 0}})
+    assert (proprio.desconto_minimo, proprio.preco_minimo) == (40, 0.0)
+
+
+def test_nota_poe_as_marcas_na_frente():
+    g = Grupo("clube", "Clube", ofertas_gerais=True, desconto_minimo=25, preco_minimo=25)
+    ordem = [o.id_produto for o in pipeline.escolher_do_grupo(g, pipeline.filtrar_do_grupo(g, REAIS), 10)]
+    assert set(ordem[:3]) == {"1", "2", "3"}  # Mondial, Philco, Gama Italy
+    assert ordem.index("11") > 2 and ordem.index("6") > 2
+
+
+def test_marca_da_ficha_do_ml_tambem_vale():
+    from ofertas import qualidade
+    assert qualidade.marca_boa(_o("x", "Tênis Esportivo Masculino Corrida", 199, 399, marca="Olympikus")) == "olympikus"
+    assert qualidade.marca_boa(_o("y", "Tênis Esportivo Masculino Corrida", 199, 399, marca="Genérica")) is None
+    assert qualidade.marca_boa(_o("z", "Fone JBL Tune 520BT", 199, 399)) == "jbl"
+
+
+def test_marcas_extras_do_painel(monkeypatch):
+    from ofertas import qualidade
+    monkeypatch.setattr(config, "marcas_boas", ["Saint Germain"])
+    assert qualidade.marca_boa(REAIS[3]) == "saint germain"
+
+
+def test_grupo_comum_continua_pelo_desconto():
+    g = Grupo("mulher", "Mulher")
+    ordem = [o.id_produto for o in pipeline.escolher_do_grupo(g, REAIS[:6], 6)]
+    assert ordem[0] == "4"  # maior desconto (62%), sem nota
+
+
+def test_ciclo_junta_os_rankings_e_manda_o_de_nota_maior(monkeypatch, ciclo):
+    monkeypatch.setattr(mercadolivre, "cliente_padrao", lambda: object())
+    monkeypatch.setattr(ml_geral, "da_vez", lambda g, c: [("A", "Óculos"), ("B", "Escovas")])
+    rankings = {"A": [REAIS[3]], "B": [REAIS[0]]}
+    monkeypatch.setattr(ml_geral, "mais_vendidos", lambda cid, c: rankings[cid])
+    monkeypatch.setattr(ml_geral, "catalogo", lambda termo, c, limite=10: [])
+    monkeypatch.setattr(ml_geral, "em_alta_da_vez", lambda g, c: (_ for _ in ()).throw(AssertionError("em alta")))
+    pipeline.executar_ciclo(ciclo, [Grupo("clube", "Clube", ofertas_gerais=True, desconto_minimo=25,
+                                          preco_minimo=25)], registrar=False)
+    assert ciclo.envios[-1] == "1"  # a Mondial, não o óculos que veio primeiro
+
+
+def test_estoque_vazio_nao_aparece_no_log(monkeypatch, ciclo, caplog):
+    import logging
+    caplog.set_level(logging.INFO)
+    monkeypatch.setattr(mercadolivre, "cliente_padrao", lambda: object())
+    monkeypatch.setattr(ml_geral, "da_vez", lambda g, c: [])
+    monkeypatch.setattr(ml_geral, "em_alta_da_vez", lambda g, c: [])
+    pipeline.executar_ciclo(ciclo, [Grupo("clube", "Clube", ofertas_gerais=True)], registrar=False)
+    assert not any("Ofertas gerais do ML" in r.message for r in caplog.records)
+
+
+def test_painel_pisos_do_grupo_e_marcas(arquivos):
+    import yaml
+    d = painel.ler_tudo()
+    d["env"] = {}
+    g = d["grupos"][0]
+    assert g["desconto_minimo"] is None and g["preco_minimo"] is None  # grupo comum: vale o geral
+    g["desconto_minimo"], g["preco_minimo"] = 30, 49.9
+    d["filtros"]["marcas_boas"] = ["Saint Germain"]
+    assert painel.salvar(d) == []
+    y = yaml.safe_load((arquivos / "config.yaml").read_text(encoding="utf-8"))
+    gy = y["grupos"][g["chave"]]
+    assert gy["desconto_minimo"] == 30 and gy["preco_minimo"] == 49.9
+    assert y["filtros"]["marcas_boas"] == ["Saint Germain"]
+    d = painel.ler_tudo()
+    d["env"] = {}
+    d["grupos"][0]["desconto_minimo"] = None  # apagar = volta ao geral
+    assert painel.salvar(d) == []
+    assert "desconto_minimo" not in yaml.safe_load((arquivos / "config.yaml").read_text(encoding="utf-8"))["grupos"][g["chave"]]
+
+
+def test_painel_grupo_de_ofertas_gerais_mostra_os_pisos_padrao(arquivos):
+    d = painel.ler_tudo()
+    d["env"] = {}
+    d["grupos"][0]["ofertas_gerais"] = True
+    import yaml
+    assert painel.salvar(d) == []
+    d = painel.ler_tudo()
+    assert (d["grupos"][0]["desconto_minimo"], d["grupos"][0]["preco_minimo"]) == (25, 25)
+    gy = yaml.safe_load((arquivos / "config.yaml").read_text(encoding="utf-8"))["grupos"][d["grupos"][0]["chave"]]
+    assert "desconto_minimo" not in gy and "preco_minimo" not in gy  # padrão: não precisa escrever
+
+
+def test_painel_valida_os_pisos(arquivos):
+    d = painel.ler_tudo()
+    d["env"] = {}
+    d["grupos"][0]["desconto_minimo"] = 150
+    d["grupos"][0]["preco_minimo"] = -1
+    erros = painel.salvar(d)
+    assert any("desconto mínimo do grupo" in e for e in erros) and any("preço mínimo do grupo" in e for e in erros)

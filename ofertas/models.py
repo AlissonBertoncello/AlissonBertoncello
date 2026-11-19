@@ -16,6 +16,7 @@ class Oferta:
     extra: str | None = None   # frete grátis, loja oficial etc.
     url_afiliado: str = ""     # preenchido pelo Linkbuilder (meli.la/...)
     posicao: int | None = None  # posição no ranking (mais vendidos/catálogo); None = fora de ranking
+    marca: str | None = None   # marca da ficha do produto no ML (quando a API informa)
 
     @property
     def uid(self) -> str:
@@ -56,6 +57,8 @@ class Grupo:
     departamentos: dict[str, str] = field(default_factory=dict)  # vazio = todos os departamentos
     sem_desconto: bool = False  # aceita os mais vendidos (top 5 do ranking) sem desconto ("Por R$ X")
     etiqueta_ml: str = ""       # etiqueta do Linkbuilder só deste grupo (vazio = a do .env)
+    desconto_minimo: int | None = None   # piso só deste grupo (None = o de filtros)
+    preco_minimo: float | None = None    # piso só deste grupo (None = o de filtros)
 
 
 @dataclass

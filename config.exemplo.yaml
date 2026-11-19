@@ -18,6 +18,7 @@ filtros:
   # itens masculinos que aparecem em Beleza (barbear) e Moda Íntima/Praia
   # vale para TODOS os grupos (palavras inteiras); para um grupo só, use "bloquear:" no grupo
   palavras_bloqueadas: [masculino, masculina, barbeador, barbear, barba, aparador, acabamento, kemei, cueca, sunga, cachorro, cão, gato, pet, óculos, lente, câmera, club 6]
+  # marcas_boas: [Saint Germain]   # marcas extras com prioridade nos grupos de ofertas gerais (~200 já vêm no bot)
 
 fontes:
   mercadolivre:
@@ -76,6 +77,8 @@ fontes:
 #   departamentos: {MLB1246: Beleza e Cuidado Pessoal}  -> só esses departamentos (vazio = todos)
 #   sem_desconto: true     -> aceita os 5 primeiros do ranking de mais vendidos sem desconto ("Por R$ X")
 #   etiqueta_ml: minha_tag -> etiqueta do Linkbuilder só deste grupo (para ver as vendas por grupo)
+#   desconto_minimo: 25 / preco_minimo: 25 -> pisos só deste grupo (grupos de ofertas gerais:
+#                             25% e R$ 25 se não informar; os outros usam os de filtros)
 grupos:
   mulher:
     nome: Achadinhos da Gabi 💄

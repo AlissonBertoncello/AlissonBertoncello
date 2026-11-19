@@ -53,6 +53,12 @@ _em_alta: dict[str, tuple[float, list[str]]] = {}  # categoria ("" = geral) -> (
 _rodizio_alta: dict[str, int] = {}       # grupo -> próximo termo em alta
 _em_alta_recusada: list[str] = []        # motivo, se o ML recusou a lista (não tenta mais nesta execução)
 VALIDADE_EM_ALTA_H = 6                   # termos mais buscados: relidos a cada 6 h
+# termos em alta que não viram boa oferta: datas, festa, infantil, obra… (sem acento)
+_TERMOS_FRACOS = ("black friday", "natal", "papai noel", "advento", "halloween", "pascoa", "carnaval",
+                  "festa", "aniversario", "lembranca", "brinde", "bandeira", "bexiga", "balao",
+                  "decoracao", "enfeite", "arvore", "presepio", "fantasia", "dia das maes", "dia dos pais",
+                  "dia das criancas", "copa do mundo", "snoopy", "funko", "croche", "verniz", "graxa",
+                  "pote misterioso", "misterioso", "kit sobrevivencia", "personalizado")
 
 
 def _opcoes() -> dict:
@@ -367,7 +373,8 @@ def termos_em_alta(g: Grupo, cliente, agora: float | None = None) -> list[str]:
         return []
     agora = agora or time.time()
     listas = []
-    for cid in [*_departamentos_unicos(g, cliente), ""]:
+    # só os departamentos de varejo do grupo: a lista geral mistura datas, games, festa…
+    for cid in _departamentos_unicos(g, cliente):
         lida, termos = _em_alta.get(cid, (0.0, []))
         if agora - lida > VALIDADE_EM_ALTA_H * 3600:
             try:
@@ -387,8 +394,24 @@ def termos_em_alta(g: Grupo, cliente, agora: float | None = None) -> list[str]:
         for termos in listas:
             if i < len(termos) and termos[i].lower() not in vistos:
                 vistos.add(termos[i].lower())
-                saida.append(termos[i])
+                if termo_bom(termos[i], g):
+                    saida.append(termos[i])
     return saida
+
+
+def termo_bom(termo: str, g: Grupo) -> bool:
+    """Termo em alta que vale procurar: duas palavras ou mais (ou uma marca conhecida),
+    sem data comemorativa/festa/infantil e sem palavra bloqueada do grupo ou geral."""
+    from ..pipeline import tem_palavra_bloqueada
+    from ..qualidade import e_marca
+    t = _sem_acento(termo).strip()
+    if not t:
+        return False
+    if len(t.split()) < 2 and not e_marca(t):
+        return False
+    if any(f in t for f in _TERMOS_FRACOS):
+        return False
+    return not tem_palavra_bloqueada(termo, g.bloquear)
 
 
 def _departamentos_unicos(g: Grupo, cliente) -> list[str]:

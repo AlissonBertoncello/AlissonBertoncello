@@ -33,6 +33,7 @@ Ideias levantadas a partir de grupos concorrentes. Cada item depende de aprovaç
 | IA1 | IA (Claude com pesquisa na web) acha ofertas do ML; cada uma é conferida na API do ML antes de ir ao estoque; chave, modelo, buscas por dia, teto de gasto e custo estimado no painel (aba Contas) |
 | Teste | `TESTAR_FONTES.bat` agora testa A, B, D1 e F (IA, só se ligada) |
 | IA1b | IA: além da lista final, aproveita os links de produto do ML que vieram nas pesquisas (já pagas); sem lista e sem links, pede só a lista uma vez; resposta guardada para diagnóstico |
+| Q1–Q5 | Produtos bons: rankings primeiro (em alta só de reserva, filtrado), nota de qualidade (marca, desconto, ranking, preço) nos grupos de ofertas gerais, pisos por grupo (25% / R$ 25 nos de ofertas gerais), lista de marcas no painel, log sem a linha do estoque vazio |
 | G1/G2 | Em alta no ML (grátis): termos mais buscados agora (geral e por departamento) procurados no catálogo, antes dos rankings; teste G no TESTAR_FONTES. IA: a pesquisa na web só trouxe páginas de busca do ML, sem produto — fica desligada |
 
 ---

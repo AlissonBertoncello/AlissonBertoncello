@@ -44,7 +44,7 @@ CAMPOS_ENV = {
 }
 # sobe quando a tela passa a precisar de campos novos: a tela compara com a dela e avisa
 # se quem responde é um painel antigo que ficou aberto desde antes da atualização
-VERSAO_PAINEL = 4
+VERSAO_PAINEL = 5
 _RE_CHAVE = re.compile(r"^[a-z0-9_]{1,30}$")
 _RE_HORA = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 _RE_CAT = re.compile(r"^MLB\d{1,10}$")
@@ -98,7 +98,12 @@ def _lista(valor) -> list[str]:
     return [str(v).strip() for v in itens if v is not None and str(v).strip()]
 
 
+def _numero(v):
+    return int(v) if isinstance(v, float) and v.is_integer() else v
+
+
 def ler_tudo() -> dict:
+    from .config import pisos_do_grupo
     y = _carregar()
     geral = y.get("geral") or {}
     filtros = y.get("filtros") or {}
@@ -133,6 +138,8 @@ def ler_tudo() -> dict:
             "departamentos": [{"id": str(k), "nome": str(v)} for k, v in deps.items()],
             "sem_desconto": bool(g.get("sem_desconto", False)),
             "etiqueta_ml": str(g.get("etiqueta_ml") or ""),
+            "desconto_minimo": pisos_do_grupo(g)[0],
+            "preco_minimo": _numero(pisos_do_grupo(g)[1]),
         })
     env = ler_env()
     return {
@@ -149,6 +156,7 @@ def ler_tudo() -> dict:
             "preco_minimo": float(filtros.get("preco_minimo", 0) or 0),
             "preco_maximo": float(filtros.get("preco_maximo", 0) or 0),
             "palavras_bloqueadas": _lista(filtros.get("palavras_bloqueadas")),
+            "marcas_boas": _lista(filtros.get("marcas_boas")),
         },
         "fontes": {
             "mercadolivre": bool((fontes.get("mercadolivre") or {}).get("ativa", True)),
@@ -259,6 +267,11 @@ def validar(d: dict) -> list[str]:
         for c in [*(gr.get("categorias") or []), *(gr.get("departamentos") or [])]:
             if not _RE_CAT.match(str(c.get("id", ""))):
                 erros.append(f"{nome}: categoria '{c.get('id')}' inválida (formato MLB123)")
+        dmin, pmin = gr.get("desconto_minimo"), gr.get("preco_minimo")
+        if dmin is not None and (isinstance(dmin, bool) or not isinstance(dmin, int) or not 0 <= dmin <= 99):
+            erros.append(f"{nome}: o desconto mínimo do grupo precisa ser de 0 a 99 (ou vazio)")
+        if pmin is not None and (isinstance(pmin, bool) or not isinstance(pmin, (int, float)) or pmin < 0):
+            erros.append(f"{nome}: o preço mínimo do grupo precisa ser 0 ou mais (ou vazio)")
         if not re.match(r"^[A-Za-z0-9_.-]{0,60}$", str(gr.get("etiqueta_ml") or "")):
             erros.append(f"{nome}: a etiqueta do ML não pode ter espaços nem acentos")
         if gr.get("ativo"):
@@ -406,6 +419,15 @@ def _aplicar_grupo(m: CommentedMap, gr: dict) -> None:
     etq = (gr.get("etiqueta_ml") or "").strip()
     if etq or "etiqueta_ml" in m:
         _set(m, "etiqueta_ml", etq)
+    from .config import PISOS_OFERTAS_GERAIS
+    padroes = PISOS_OFERTAS_GERAIS if gr.get("ofertas_gerais") else (None, None)
+    for campo, padrao in zip(("desconto_minimo", "preco_minimo"), padroes):
+        v = gr.get(campo)
+        if v is None:
+            if campo in m:
+                del m[campo]
+        elif campo in m or v != padrao:
+            _set(m, campo, int(v) if float(v).is_integer() else float(v))
 
 
 def aplicar(y: CommentedMap, d: dict) -> CommentedMap:
@@ -422,6 +444,9 @@ def aplicar(y: CommentedMap, d: dict) -> CommentedMap:
     pal = [p.strip() for p in d["filtros"]["palavras_bloqueadas"] if p.strip()]
     if pal != _lista(filtros.get("palavras_bloqueadas")):
         filtros["palavras_bloqueadas"] = _flow(pal)
+    marcas = [m.strip() for m in d["filtros"].get("marcas_boas") or [] if m.strip()]
+    if (marcas or "marcas_boas" in filtros) and marcas != _lista(filtros.get("marcas_boas")):
+        filtros["marcas_boas"] = _flow(marcas)
     fontes = y.setdefault("fontes", CommentedMap())
     for loja in ("mercadolivre", "shopee"):
         _set(fontes.setdefault(loja, CommentedMap()), "ativa", bool(d["fontes"][loja]))

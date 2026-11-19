@@ -154,6 +154,13 @@ def _imagem(item: dict) -> str | None:
     return img.replace("-I.jpg", "-O.jpg")  # thumbnail pequena -> versão grande
 
 
+def _marca(dados: dict) -> str | None:
+    for a in dados.get("attributes") or []:
+        if isinstance(a, dict) and a.get("id") == "BRAND" and a.get("value_name"):
+            return str(a["value_name"]).strip()
+    return None
+
+
 def item_para_oferta(item: dict) -> Oferta | None:
     """Converte um resultado da busca da API em Oferta."""
     if not (item.get("id") and item.get("title") and item.get("permalink")):
@@ -178,6 +185,7 @@ def item_para_oferta(item: dict) -> Oferta | None:
         preco_original=float(original) if original else None,
         imagem=_imagem(item),
         extra=" · ".join(partes) or None,
+        marca=_marca(item),
     )
 
 
@@ -202,6 +210,7 @@ def produto_para_oferta(produto: dict, anuncio: dict | None = None) -> Oferta | 
         preco_original=float(original) if original else None,
         imagem=(fotos[0].get("secure_url") or fotos[0].get("url")) if fotos else None,
         extra=" · ".join(partes) or None,
+        marca=_marca(produto),
     )
 
 
