@@ -327,3 +327,82 @@ def test_tela_mostra_custo_antes_de_ligar():
     html = painel.ARQ_HTML.read_text(encoding="utf-8")
     assert 'id="ia-custo"' in html and "Ligar a IA? Custo estimado" in html
     assert "ANTHROPIC_API_KEY" in html
+
+
+# ── IA: aproveitar os links que vieram nas pesquisas (correção do teste F de 19/11) ──
+
+def _mensagem_real(stop_reason="end_turn", com_links=True, texto="Pesquisei, mas não montei a lista."):
+    """Resposta no formato real do SDK (BetaMessage), como a API devolve."""
+    from anthropic.types.beta import BetaMessage
+    resultados = [{"type": "web_search_result", "url": "https://lista.mercadolivre.com.br/tenis-nike",
+                   "title": "Tênis Nike", "encrypted_content": "x", "page_age": None}]
+    if com_links:
+        resultados.insert(0, {"type": "web_search_result", "title": "Tênis Nike Revolution | Mercado Livre",
+                              "url": "https://produto.mercadolivre.com.br/MLB-1234567890-tenis-nike-revolution-_JM",
+                              "encrypted_content": "x", "page_age": None})
+    return BetaMessage.model_validate({
+        "id": "msg_1", "type": "message", "role": "assistant", "model": "claude-opus-5-5",
+        "stop_reason": stop_reason, "stop_sequence": None,
+        "usage": {"input_tokens": 40000, "output_tokens": 3000,
+                  "server_tool_use": {"web_search_requests": 5, "web_fetch_requests": 0}},
+        "content": [
+            {"type": "server_tool_use", "id": "srvtoolu_1", "name": "web_search",
+             "input": {"query": "tênis nike oferta mercado livre"}},
+            {"type": "web_search_tool_result", "tool_use_id": "srvtoolu_1", "content": resultados},
+            {"type": "text", "text": texto, "citations": [
+                {"type": "web_search_result_location", "title": "Relógio Casio",
+                 "url": "https://www.mercadolivre.com.br/relogio-casio/p/MLB22334455",
+                 "encrypted_index": "x", "cited_text": "..."}] if com_links else None}]})
+
+
+def test_sem_lista_da_ia_usa_os_links_das_pesquisas(monkeypatch):
+    _ligar_ia(monkeypatch)
+    claude = Claude([_mensagem_real()])
+    monkeypatch.setattr(ia, "_cliente", lambda: claude)
+    sugestoes, uso = ia.pedir_sugestoes()
+    assert len(claude.pedidos) == 1  # já tinha links: não pede de novo
+    assert uso["da_lista"] == 0 and uso["das_pesquisas"] == 2
+    ofertas, descartadas = ia.conferir(sugestoes, ClienteML())
+    assert {o.id_produto for o in ofertas} == {"MLB1234567890", "MLB22334455"} and descartadas == 0
+    diag = ia.ARQ_ULTIMA_RESPOSTA.read_text(encoding="utf-8")
+    assert "lista da IA (entregar_ofertas): não veio" in diag and "MLB-1234567890" in diag
+
+
+def test_sem_lista_e_sem_links_pede_so_a_lista_uma_vez(monkeypatch):
+    _ligar_ia(monkeypatch)
+    claude = Claude([_mensagem_real(com_links=False), _mensagem_real(com_links=False)])
+    monkeypatch.setattr(ia, "_cliente", lambda: claude)
+    sugestoes, uso = ia.pedir_sugestoes()
+    assert sugestoes == [] and len(claude.pedidos) == 2  # uma vez só
+    segundo = claude.pedidos[1]
+    assert segundo["messages"][-1] == {"role": "user", "content": ia._PEDIDO_LISTA}
+    assert next(t for t in segundo["tools"] if t["name"] == "web_search")["max_uses"] == 1
+
+
+def test_lista_da_ia_e_links_das_pesquisas_somam_sem_repetir(monkeypatch):
+    _ligar_ia(monkeypatch)
+    m = _mensagem_real(stop_reason="tool_use")
+    from anthropic.types.beta import BetaToolUseBlock
+    m.content.append(BetaToolUseBlock(type="tool_use", id="toolu_1", name="entregar_ofertas", input={"ofertas": [
+        {"url": "https://www.mercadolivre.com.br/relogio-casio/p/MLB22334455", "titulo": "Relógio Casio",
+         "preco": 150, "preco_original": 300}]}))
+    claude = Claude([m])
+    monkeypatch.setattr(ia, "_cliente", lambda: claude)
+    sugestoes, uso = ia.pedir_sugestoes()
+    assert uso["da_lista"] == 1 and uso["das_pesquisas"] == 2
+    from ofertas.afiliado_ml import extrair_id
+    # a lista da IA primeiro; o relógio, que também veio nas pesquisas, não entra duas vezes
+    assert [extrair_id(s["url"]) for s in sugestoes] == ["MLB22334455", "MLB1234567890"]
+
+
+def test_pagina_de_lista_ou_de_outro_site_nao_e_produto():
+    assert ia.links_das_pesquisas([{"url": "https://lista.mercadolivre.com.br/tenis"},
+                                   {"url": "https://www.pelando.com.br/d/tenis-MLB123456789"}]) == []
+
+
+def test_busca_que_nao_termina_aproveita_os_links(monkeypatch):
+    _ligar_ia(monkeypatch)
+    claude = Claude([_mensagem_real(stop_reason="pause_turn")] * (ia.CONTINUAR_MAX + 2))
+    monkeypatch.setattr(ia, "_cliente", lambda: claude)
+    sugestoes, uso = ia.pedir_sugestoes()
+    assert uso["das_pesquisas"] == 2 and len(sugestoes) == 2

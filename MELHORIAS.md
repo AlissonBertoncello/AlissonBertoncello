@@ -32,6 +32,7 @@ Ideias levantadas a partir de grupos concorrentes. Cada item depende de aprovaç
 | P2 | Ofertas gerais: departamentos de varejo escolhidos (moda e calçados com peso 2; sem comida, bebida, livros), ranking lido no nível que tem ranking e subcategoria sem ranking anotada |
 | IA1 | IA (Claude com pesquisa na web) acha ofertas do ML; cada uma é conferida na API do ML antes de ir ao estoque; chave, modelo, buscas por dia, teto de gasto e custo estimado no painel (aba Contas) |
 | Teste | `TESTAR_FONTES.bat` agora testa A, B, D1 e F (IA, só se ligada) |
+| IA1b | IA: além da lista final, aproveita os links de produto do ML que vieram nas pesquisas (já pagas); sem lista e sem links, pede só a lista uma vez; resposta guardada para diagnóstico |
 
 ---
 

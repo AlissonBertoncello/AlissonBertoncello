@@ -27,4 +27,5 @@ def isolar(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "anthropic_api_key", "")
     monkeypatch.setattr(config, "fonte_ia", {"ativa": False})
     monkeypatch.setattr(ia_ofertas, "ARQ_ESTADO", tmp_path / "ia_ofertas.json")
+    monkeypatch.setattr(ia_ofertas, "ARQ_ULTIMA_RESPOSTA", tmp_path / "ia_ultima_resposta.txt")
     monkeypatch.setattr(ia_ofertas, "_cliente", lambda: (_ for _ in ()).throw(AssertionError("chamou a IA")))

@@ -41,6 +41,12 @@ TOKENS_ENTRADA_POR_PESQUISA = 8000
 TOKENS_SAIDA = 4000
 DOMINIOS_PADRAO = ["mercadolivre.com.br", "pelando.com.br", "promobit.com.br"]
 CONTINUAR_MAX = 3  # vezes que o bot deixa a IA continuar uma busca longa (pause_turn)
+LINKS_DAS_PESQUISAS_MAX = 40  # links de produto achados nas pesquisas conferidos por busca
+ARQ_ULTIMA_RESPOSTA = DATA_DIR / "ia_ultima_resposta.txt"  # diagnóstico da última busca
+# link de produto do ML: anúncio (produto.mercadolivre.com.br/MLB-123…) ou catálogo (/p/MLB123)
+_RE_LINK_ML = re.compile(
+    r"https?://(?:produto\.mercadolivre\.com\.br/MLB-?\d{6,}[^\s\"'<>()\]]*"
+    r"|(?:www\.)?mercadolivre\.com\.br/[^\s\"'<>()\]]*?/p/MLB\d{6,}[^\s\"'<>()\]]*)", re.I)
 
 
 class ErroIA(RuntimeError):
@@ -184,18 +190,27 @@ FERRAMENTA_ENTREGA = {
 def _pedido(op: dict) -> str:
     hoje = dt.date.today().strftime("%d/%m/%Y")
     return (
-        f"Hoje é {hoje}. Pesquise na web as melhores ofertas do Mercado Livre Brasil que estão "
-        "valendo agora, para um grupo de promoções no WhatsApp com homens e mulheres. "
-        "Prefira produtos de marca conhecida com 30% de desconto ou mais e que vendem bem: "
-        "tênis e calçados, roupas e bolsas, perfumes e beleza, relógios e acessórios, "
-        "celulares e eletrônicos, informática, ferramentas, casa e cozinha, esportes e fitness. "
-        "Evite comida, bebida alcoólica, livros, peças de carro, réplicas e produtos de bebê. "
-        "Sites de promoções (Pelando, Promobit) ajudam a achar o que está em alta, mas o link "
-        "entregue precisa ser do próprio produto no mercadolivre.com.br (com o código MLB). "
-        f"Entregue até {op['produtos_por_busca']} produtos diferentes chamando a ferramenta "
-        "entregar_ofertas uma única vez, no fim. Não invente link nem preço: se não tiver "
-        "certeza do link de um produto, deixe-o de fora."
+        f"Hoje é {hoje}. Pesquise na web produtos em oferta no Mercado Livre Brasil agora, para "
+        "um grupo de promoções no WhatsApp com homens e mulheres. Foque em produtos de marca "
+        "conhecida com bom desconto e que vendem bem: tênis e calçados, roupas e bolsas, "
+        "perfumes e beleza, relógios e acessórios, celulares e eletrônicos, informática, "
+        "ferramentas, casa e cozinha, esportes e fitness. Evite comida, bebida alcoólica, livros, "
+        "peças de carro, réplicas e produtos de bebê.\n\n"
+        "Faça pesquisas que tragam páginas de PRODUTO do Mercado Livre (endereços "
+        "produto.mercadolivre.com.br/MLB-... ou mercadolivre.com.br/.../p/MLB...), por exemplo "
+        "com a marca e o tipo de produto (\"tênis Nike oferta mercado livre\", \"perfume importado "
+        "promoção mercado livre\"). Sites de promoções (Pelando, Promobit) mostram o que está em alta.\n\n"
+        "Um programa confere cada produto na API oficial do Mercado Livre (preço de agora, preço "
+        "antigo, se existe) e descarta o que não bater. Por isso: não descarte um produto por "
+        "dúvida no preço — informe o preço que viu (ou 0 se não viu). Copie o link exatamente "
+        "como apareceu nos resultados da pesquisa; nunca monte um link.\n\n"
+        f"No fim, chame a ferramenta entregar_ofertas uma única vez com até "
+        f"{op['produtos_por_busca']} produtos diferentes que você encontrou."
     )
+
+
+_PEDIDO_LISTA = ("Agora, sem pesquisar de novo, chame a ferramenta entregar_ofertas com os produtos "
+                 "do Mercado Livre que apareceram nas suas pesquisas (link exatamente como apareceu).")
 
 
 def _ferramenta_pesquisa(op: dict) -> dict:
@@ -240,19 +255,97 @@ def _sugestoes_da_resposta(resposta) -> list[dict] | None:
     return None
 
 
+def _achatar(obj, saida: list | None = None) -> list:
+    """Todos os valores de um bloco da resposta (dicts, listas, objetos do SDK), para achar
+    os links que vieram nas pesquisas, em qualquer formato."""
+    saida = [] if saida is None else saida
+    if hasattr(obj, "model_dump"):
+        obj = obj.model_dump()
+    elif hasattr(obj, "__dict__") and not isinstance(obj, (str, bytes)):
+        obj = vars(obj)
+    if isinstance(obj, dict):
+        if isinstance(obj.get("url"), str):
+            saida.append((obj["url"], str(obj.get("title") or obj.get("titulo") or "")))
+        for v in obj.values():
+            _achatar(v, saida)
+    elif isinstance(obj, (list, tuple)):
+        for v in obj:
+            _achatar(v, saida)
+    elif isinstance(obj, str):
+        saida.extend((m.group(0), "") for m in _RE_LINK_ML.finditer(obj))
+    return saida
+
+
+def links_das_pesquisas(conteudo) -> list[dict]:
+    """Links de produto do ML que apareceram nos resultados das pesquisas e no texto da IA
+    (endereços de verdade, vindos da internet), sem repetir o mesmo produto."""
+    from ..afiliado_ml import extrair_id
+    vistos, links = set(), []
+    for url, titulo in _achatar(list(conteudo)):
+        m = _RE_LINK_ML.match(url.strip())
+        ident = extrair_id(url) if m else None
+        if ident and ident not in vistos:
+            vistos.add(ident)
+            links.append({"url": m.group(0), "titulo": titulo, "preco": 0, "preco_original": 0})
+    return links
+
+
+def _juntar(lista: list[dict], achados: list[dict]) -> list[dict]:
+    """Lista da IA primeiro; depois os links das pesquisas que não estão nela."""
+    from ..afiliado_ml import extrair_id
+    vistos = {extrair_id(str(s.get("url") or "")) for s in lista} - {None}
+    extras = [a for a in achados if extrair_id(a["url"]) not in vistos]
+    return list(lista) + extras[:LINKS_DAS_PESQUISAS_MAX]
+
+
+def _texto_diagnostico(resposta, lista, achados, uso) -> str:
+    linhas = [f"stop_reason: {getattr(resposta, 'stop_reason', '?')}",
+              f"pesquisas: {uso['pesquisas']} · tokens lidos: {uso['entrada']} · escritos: {uso['saida']}",
+              f"lista da IA (entregar_ofertas): {'não veio' if lista is None else len(lista)}",
+              f"links de produto do ML achados nas pesquisas: {len(achados)}"]
+    linhas += [f"  {a['url']}" for a in achados[:60]]
+    for b in getattr(resposta, "content", []) or []:
+        tipo = getattr(b, "type", "")
+        if tipo == "text":
+            linhas.append("texto: " + getattr(b, "text", "")[:1500])
+        elif tipo == "server_tool_use":
+            linhas.append(f"pesquisa: {json.dumps(getattr(b, 'input', {}), ensure_ascii=False)[:200]}")
+        elif tipo.endswith("tool_result"):
+            urls = [u for u, _ in _achatar(b) if u.startswith("http")]
+            linhas.append(f"{tipo}: {len(urls)} páginas — " + " | ".join(urls[:12]))
+    return "\n".join(linhas) + "\n"
+
+
+def _guardar_diagnostico(texto: str) -> None:
+    try:
+        ARQ_ULTIMA_RESPOSTA.write_text(texto, encoding="utf-8")
+    except OSError:
+        pass
+
+
 def pedir_sugestoes(op: dict | None = None) -> tuple[list[dict], dict]:
-    """Pergunta ao Claude. Devolve (sugestões cruas, uso: tokens, pesquisas, custo)."""
+    """Pergunta ao Claude. Devolve (sugestões cruas, uso: tokens, pesquisas, custo).
+
+    Sugestões = a lista que a IA entrega + todos os links de produto do ML que vieram nas
+    pesquisas (já pagas), para a conferência na API do ML. Se a IA terminar sem a lista e as
+    pesquisas não tiverem link de produto, o bot pede só a lista, uma vez, sem pesquisar de novo."""
     import anthropic
     op = op or opcoes()
     cliente = _cliente()
     mensagens: list[dict] = [{"role": "user", "content": _pedido(op)}]
-    uso = {"entrada": 0, "saida": 0, "cache_escrita": 0, "cache_lida": 0, "pesquisas": 0}
-    sugestoes: list[dict] | None = None
+    uso = {"entrada": 0, "saida": 0, "cache_escrita": 0, "cache_lida": 0, "pesquisas": 0,
+           "da_lista": 0, "das_pesquisas": 0, "diagnostico": ""}
+    sugestoes: list[dict] = []
+    conteudo: list = []  # tudo o que a IA respondeu (inclui os resultados das pesquisas)
+    pediu_lista = False
     try:
-        for _ in range(CONTINUAR_MAX + 1):
+        for _ in range(CONTINUAR_MAX + 2):
+            pesquisa = _ferramenta_pesquisa(op)
+            if pediu_lista:
+                pesquisa["max_uses"] = 1  # pedido só da lista: no máximo 1 pesquisa extra
             pedido = dict(
                 model=op["modelo"], max_tokens=16000,
-                tools=[_ferramenta_pesquisa(op), FERRAMENTA_ENTREGA],
+                tools=[pesquisa, FERRAMENTA_ENTREGA],
                 messages=mensagens,
                 output_config={"effort": op["esforco"]},
             )
@@ -263,13 +356,28 @@ def pedir_sugestoes(op: dict | None = None) -> tuple[list[dict], dict]:
             else:
                 resposta = cliente.messages.create(**pedido)
             _somar_uso(uso, resposta.usage)
+            conteudo += list(resposta.content)
             if resposta.stop_reason == "pause_turn":  # pesquisa longa: deixa continuar
                 mensagens.append({"role": "assistant", "content": resposta.content})
                 continue
             if resposta.stop_reason == "refusal":
                 raise ErroIA("o modelo recusou o pedido")
-            sugestoes = _sugestoes_da_resposta(resposta)
+            lista = _sugestoes_da_resposta(resposta)
+            achados = links_das_pesquisas(conteudo)
+            uso["diagnostico"] = _texto_diagnostico(resposta, lista, achados, uso)
+            if not lista and not achados and not pediu_lista and uso["pesquisas"] \
+                    and resposta.stop_reason != "tool_use":
+                pediu_lista = True
+                mensagens.append({"role": "assistant", "content": resposta.content})
+                mensagens.append({"role": "user", "content": _PEDIDO_LISTA})
+                continue
+            uso["da_lista"], uso["das_pesquisas"] = len(lista or []), len(achados)
+            sugestoes = _juntar(lista or [], achados)
             break
+        else:  # a busca não terminou (pausas demais): aproveita os links que já vieram
+            achados = links_das_pesquisas(conteudo)
+            uso["das_pesquisas"] = len(achados)
+            sugestoes = achados[:LINKS_DAS_PESQUISAS_MAX]
     except anthropic.AuthenticationError as e:
         raise ErroIA("chave ANTHROPIC_API_KEY inválida") from e
     except anthropic.PermissionDeniedError as e:
@@ -288,7 +396,9 @@ def pedir_sugestoes(op: dict | None = None) -> tuple[list[dict], dict]:
     finally:
         uso["custo"] = custo_real(op["modelo"], uso["entrada"], uso["saida"], uso["pesquisas"],
                                   uso["cache_escrita"], uso["cache_lida"])
-    return sugestoes or [], uso
+        if uso["diagnostico"]:
+            _guardar_diagnostico(uso["diagnostico"] + f"custo: US$ {uso['custo']:.3f}\n")
+    return sugestoes, uso
 
 
 # ── conferência na API do ML ─────────────────────────────────────────
@@ -363,7 +473,9 @@ def buscar(agora: float | None = None, forcar: bool = False) -> list[Oferta]:
     ml_geral.guardar(ml_geral.FONTE_IA, ofertas, agora)
     mes = gasto_do_mes(estado, dt.date.fromtimestamp(agora))
     teto = f" de {op['gasto_max_mes_usd']:.2f}" if op["gasto_max_mes_usd"] else ""
-    log.info("IA: %d sugeridas, %d conferidas no ML (%d descartadas) · %d pesquisas · "
-             "US$ %.3f (mês: US$ %.2f%s)", len(sugestoes), len(ofertas), descartadas,
-             uso.get("pesquisas", 0), uso["custo"], mes, teto)
+    log.info("IA: %d da lista da IA + %d links das pesquisas, %d conferidas no ML (%d descartadas) · "
+             "%d pesquisas · US$ %.3f (mês: US$ %.2f%s)", uso.get("da_lista", 0), uso.get("das_pesquisas", 0),
+             len(ofertas), descartadas, uso.get("pesquisas", 0), uso["custo"], mes, teto)
+    if not ofertas:
+        log.warning("IA: nenhuma oferta conferida nesta busca — detalhes em data/ia_ultima_resposta.txt")
     return ofertas

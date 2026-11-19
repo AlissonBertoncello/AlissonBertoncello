@@ -111,13 +111,27 @@ def _f_ia() -> bool:
     if op["gasto_max_mes_usd"] and ia.gasto_do_mes() >= op["gasto_max_mes_usd"]:
         _p(f"   ⚪ gasto do mês já chegou no teto (US$ {op['gasto_max_mes_usd']:.2f})")
         return False
-    sugestoes, uso = ia.pedir_sugestoes(op)
+    try:
+        sugestoes, uso = ia.pedir_sugestoes(op)
+    finally:
+        _copiar_diagnostico_ia()
     ia._registrar_busca(uso["custo"], time.time())
     ofertas, descartadas = ia.conferir(sugestoes)
-    _p(f"   {'✅' if ofertas else '❌'} {len(sugestoes)} sugeridas pela IA, {len(ofertas)} conferidas na API "
-       f"do ML, {descartadas} descartadas · {uso['pesquisas']} pesquisas · custo US$ {uso['custo']:.3f}")
+    _p(f"   {'✅' if ofertas else '❌'} {uso['da_lista']} da lista da IA + {uso['das_pesquisas']} links achados "
+       f"nas pesquisas → {len(ofertas)} conferidas na API do ML, {descartadas} descartadas · "
+       f"{uso['pesquisas']} pesquisas · custo US$ {uso['custo']:.3f}")
     _p(f"        {_resumo(ofertas)}")
+    _p("   (resposta da IA em data/teste_fontes/f_ia_resposta.txt)")
     return bool(ofertas)
+
+
+def _copiar_diagnostico_ia() -> None:
+    from .sources import ia_ofertas as ia
+    try:
+        (PASTA / "f_ia_resposta.txt").write_text(ia.ARQ_ULTIMA_RESPOSTA.read_text(encoding="utf-8"),
+                                                 encoding="utf-8")
+    except OSError:
+        pass
 
 
 def rodar() -> None:
