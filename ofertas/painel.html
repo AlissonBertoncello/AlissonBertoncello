@@ -54,6 +54,8 @@
   button.bt.prim { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
   button.bt.perigo { color: var(--bad); }
   button.bt.peq { padding: 4px 10px; font-size: 13px; }
+  button.bt:disabled { opacity: .45; cursor: not-allowed; }
+  #bt-salvar-topo { padding: 6px 14px; }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px; border: 1px solid var(--line); border-radius: 8px;
            background: var(--bg); min-height: 42px; align-items: center; }
   .chip { background: var(--chip); border-radius: 99px; padding: 3px 4px 3px 10px; font-size: 14px; display: inline-flex; align-items: center; gap: 4px; }
@@ -128,6 +130,7 @@
   <div class="topo">
     <h1>🛍️ Painel do Bot de Ofertas</h1>
     <span id="st-bot" class="badge">verificando…</span>
+    <button class="bt prim" id="bt-salvar-topo" disabled title="Nada para salvar">💾 Salvar</button>
   </div>
   <nav id="abas">
     <button data-aba="inicio" class="ativo">Início</button>
@@ -324,7 +327,19 @@ const SUGESTOES = {
     "CORRE QUE ESSE PREÇO NÃO DURA!", "O PARCEIRO VAI PERGUNTAR ONDE VOCÊ ACHOU", "MANUTENÇÃO EM DIA SEM ESVAZIAR A CARTEIRA",
     "UPGRADE QUE CABE NO BOLSO 💪", "PROMOÇÃO DE RESPEITO, PATRÃO!", "SÓ QUEM TEM CARRO SABE O VALOR DISSO"] },
 };
-let original = null, dados = null, gruposWA = [], grupoDaCategoria = null;
+let original = null, dados = null, gruposWA = [], grupoDaCategoria = null, painelAntigo = false;
+const VERSAO_PAINEL = 3;  // a mesma de painel.py
+// campos que versões antigas do painel não mandam: assim a tela não quebra
+function completar(d) {
+  d.geral.aviso_preco ??= true;
+  d.cupons ??= { horarios: ["10:00", "15:00", "20:00"], shopee_campanhas: false, grupos_campanhas: [], lista: [] };
+  for (const g of d.grupos) {
+    g.departamentos ??= []; g.ofertas_gerais ??= false; g.sem_desconto ??= false; g.etiqueta_ml ??= "";
+    g.ganchos ??= []; g.bloquear ??= []; g.shopee ??= []; g.whatsapp ??= []; g.categorias ??= [];
+    g.chamada ??= ""; g.chamada_compra ??= ""; g.peso_ml ??= 1; g.peso_shopee ??= 1;
+  }
+  return d;
+}
 const marcadas = new Map();  // categorias marcadas na janela: id -> nome
 
 // ── utilidades ──
@@ -358,6 +373,10 @@ function slug(t) {
 function mudou() {
   const sujo = JSON.stringify(dados) !== JSON.stringify(original);
   $("#barra").classList.toggle("visivel", sujo);
+  const topo = $("#bt-salvar-topo");
+  topo.disabled = !sujo || painelAntigo;
+  topo.title = painelAntigo ? "Painel de versão antiga: feche o CONFIGURAR.bat e abra de novo"
+    : sujo ? "Salvar as alterações" : "Nada para salvar";
   $("#barra-msg").textContent = "Alterações não salvas";
   estimativa();
 }
@@ -782,18 +801,20 @@ function desenharContas() {
 }
 
 // ── salvar ──
+$("#bt-salvar-topo").onclick = () => $("#bt-salvar").click();
 $("#bt-salvar").onclick = async () => {
+  if (painelAntigo) { avisarPainelAntigo(); return; }
   const corpo = clone(dados);
   corpo.env = corpo.envNovo || {}; delete corpo.envNovo;
   corpo.grupos.forEach(g => delete g._novo);
-  $("#bt-salvar").disabled = true;
+  $("#bt-salvar").disabled = $("#bt-salvar-topo").disabled = true;
   try {
     const r = await api("/api/config", { method: "POST", headers: { "Content-Type": "application/json", "X-Painel": "1" }, body: JSON.stringify(corpo) });
     if (!r.ok) { mostrarAviso("bad", "Não salvei — corrija:", r.erros); return; }
     mostrarAviso("ok", r.rodando ? "✅ Salvo! O bot em execução aplica as mudanças em até 10 segundos." : "✅ Salvo! As mudanças valem quando o bot for iniciado.");
     await carregar();
   } catch (e) { mostrarAviso("bad", "Erro ao salvar: " + e.message); }
-  finally { $("#bt-salvar").disabled = false; }
+  finally { $("#bt-salvar").disabled = false; mudou(); }
 };
 $("#bt-desfazer").onclick = () => { dados = clone(original); desenharTudo(); mudou(); };
 
@@ -831,9 +852,17 @@ $("#abas").addEventListener("click", e => {
 });
 
 function desenharTudo() { ligarCampos(); desenharGrupos(); desenharCupons(); desenharContas(); estimativa(); }
+function avisarPainelAntigo() {
+  mostrarAviso("bad", "O painel aberto é de uma versão antiga (ficou aberto desde antes da atualização). "
+    + "Feche todas as janelas pretas do CONFIGURAR.bat (ou finalize o Python no Gerenciador de Tarefas), "
+    + "abra o CONFIGURAR.bat de novo e recarregue esta página (F5). Nada foi salvo.");
+}
 async function carregar() {
   original = await api("/api/config");
+  painelAntigo = original.versao !== VERSAO_PAINEL;
+  completar(original);
   dados = clone(original);
+  if (painelAntigo) avisarPainelAntigo();
   desenharTudo(); mudou(); atualizarStatus();
 }
 window.addEventListener("beforeunload", e => { if (JSON.stringify(dados) !== JSON.stringify(original)) { e.preventDefault(); e.returnValue = ""; } });

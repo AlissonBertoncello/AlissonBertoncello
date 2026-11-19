@@ -290,3 +290,10 @@ def test_config_antigo_sem_cupons_continua_igual(arquivos):
     d["env"] = {}
     assert painel.salvar(d) == []
     assert (arquivos / "config.yaml").read_text(encoding="utf-8") == antes
+
+
+def test_painel_informa_a_versao_e_a_tela_confere(arquivos):
+    assert painel.ler_tudo()["versao"] == painel.VERSAO_PAINEL
+    html = painel.ARQ_HTML.read_text(encoding="utf-8")
+    assert f"const VERSAO_PAINEL = {painel.VERSAO_PAINEL};" in html  # tela e servidor na mesma versão
+    assert 'id="bt-salvar-topo"' in html

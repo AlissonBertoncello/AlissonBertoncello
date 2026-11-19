@@ -41,6 +41,9 @@ CAMPOS_ENV = {
     "SHOPEE_APP_ID": False,
     "SHOPEE_APP_SECRET": True,
 }
+# sobe quando a tela passa a precisar de campos novos: a tela compara com a dela e avisa
+# se quem responde é um painel antigo que ficou aberto desde antes da atualização
+VERSAO_PAINEL = 3
 _RE_CHAVE = re.compile(r"^[a-z0-9_]{1,30}$")
 _RE_HORA = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 _RE_CAT = re.compile(r"^MLB\d{1,10}$")
@@ -150,6 +153,7 @@ def ler_tudo() -> dict:
             "mercadolivre": bool((fontes.get("mercadolivre") or {}).get("ativa", True)),
             "shopee": bool((fontes.get("shopee") or {}).get("ativa", False)),
         },
+        "versao": VERSAO_PAINEL,
         "destino": str(y.get("destino") or "console"),
         "grupos": grupos,
         "cupons": _ler_cupons(y.get("cupons")),
@@ -422,6 +426,7 @@ def salvar(d: dict) -> list[str]:
     erros = validar(d)
     if erros:
         return erros
+    d.pop("versao", None)
     y = aplicar(_carregar(), d)
     texto = StringIO()
     _yaml().dump(y, texto)
