@@ -6,6 +6,8 @@ A. Mercado Livre pela API: mais vendidos e catálogo das subcategorias, automát
 B. Shopee: lista de mais vendidos sem palavra-chave (e uma busca por palavra, para comparar)
 D1. Busca completa da API do ML com a chave do app (hoje responde 403)
 G. Em alta no ML: termos mais buscados agora (lista oficial, grátis) procurados no catálogo
+H. Moda no grupo de ofertas gerais: rankings das categorias de moda do grupo, com os filtros
+   e a nota de qualidade — mostra os 10 que o bot mandaria e o que foi cortado (e por quê)
 F. IA (Claude) pesquisando ofertas, cada uma conferida na API do ML — só com a IA ligada
    no painel, porque é paga (o custo aparece no resultado)
 
@@ -125,6 +127,87 @@ def _g_em_alta() -> bool:
     return total > 0
 
 
+# categorias de moda (pelo nome): roupa, calçado e acessório
+_RE_MODA = r"t[êe]nis|cal[çc]ad|sand[áa]li|chinel|bota|sapat|camis|camiset|regata|blus|cal[çc]a|bermud|short|" \
+           r"agasalh|moletom|jaquet|vestid|roupa|moda|polo|meia|bon[ée]|rel[óo]gio|bolsa|mochila|[óo]culos|cinto|carteira"
+
+
+def _grupo_do_teste() -> Grupo:
+    """O primeiro grupo de ofertas gerais do config (o Clube), ou um grupo de exemplo."""
+    return next((g for g in config.grupos if g.ofertas_gerais), None) or \
+        Grupo("teste_fontes", "Teste", ofertas_gerais=True, desconto_minimo=25, preco_minimo=25)
+
+
+def _categorias_de_moda(g: Grupo, cliente) -> list[tuple[str, str]]:
+    import re
+    cats = [(cid, nome) for cid, nome in g.categorias.items() if re.search(_RE_MODA, nome, re.I)]
+    if cats:
+        return cats
+    from .sources import ml_geral  # sem categorias de moda no grupo: as do departamento de moda do ML
+    raiz = cliente.categorias_raiz(str(config.fonte_ml.get("site") or "MLB"))
+    dep = next((c["id"] for c in raiz if ml_geral._sem_acento(c.get("name", "")).startswith("calcados, roupas")), None)
+    if not dep:
+        return []
+    return [(c["id"], c["name"]) for c in cliente.categoria(dep).get("children_categories") or []][:8]
+
+
+def _h_moda() -> bool:
+    """O que o bot mandaria de moda no grupo de ofertas gerais: rankings das categorias de moda
+    (ou o catálogo pelo nome, se a categoria não tiver ranking), com os filtros e a nota de
+    qualidade do grupo. Não envia nada."""
+    import re
+    from collections import Counter
+
+    from . import pipeline, qualidade
+    from .sources import ml_geral
+    from .sources.mercadolivre import cliente_padrao
+    cliente = cliente_padrao()
+    g = _grupo_do_teste()
+    _p(f"   Grupo: {g.nome} · desconto mínimo {g.desconto_minimo if g.desconto_minimo is not None else config.desconto_minimo}% "
+       f"· preço mínimo R$ {g.preco_minimo if g.preco_minimo is not None else config.preco_minimo:.0f}")
+    bloqueadas = [*config.palavras_bloqueadas, *g.bloquear]
+    _p(f"   Palavras bloqueadas (geral + grupo): {', '.join(bloqueadas) or 'nenhuma'}")
+    cats = _categorias_de_moda(g, cliente)
+    if not cats:
+        _p("   ❌ não achei categorias de moda")
+        return False
+    todas: list[Oferta] = []
+    for cid, nome in cats:
+        try:
+            achadas = ml_geral.mais_vendidos(cid, cliente)
+            origem = "ranking"
+            if not achadas:
+                achadas, origem = ml_geral.catalogo(nome, cliente, limite=30), "catálogo"
+        except Exception as e:
+            _p(f"   ❌ {nome}: {str(e)[:120]}")
+            continue
+        boas = [o for o in achadas if (o.desconto or 0) >= 25]
+        _p(f"   {'✅' if boas else '⚪'} {nome} ({origem}): {len(achadas)} produtos, {len(boas)} com 25% ou mais")
+        todas += achadas
+    motivos = Counter()
+    passam = pipeline.filtrar_do_grupo(g, todas, motivos)
+    palavras = Counter()
+    for o in todas:
+        for b in bloqueadas:
+            if b and re.search(rf"(?<!\w){re.escape(b.lower())}(?!\w)", o.titulo.lower()):
+                palavras[b] += 1
+    _p(f"\n   Total: {len(todas)} produtos de moda · {len(passam)} passam nos filtros do grupo")
+    if motivos:
+        _p("   Cortados: " + ", ".join(f"{n} {m}" for m, n in motivos.most_common()))
+    if palavras:
+        _p("   Palavras bloqueadas que mais cortaram: " + ", ".join(f"{w} ({n})" for w, n in palavras.most_common(8)))
+    top = pipeline.escolher(passam, 10, por_nota=True)
+    if top:
+        _p("\n   Os 10 que o bot mandaria primeiro (pela nota):")
+    for o in top:
+        marca = qualidade.marca_boa(o)
+        _p(f"     {qualidade.nota(o):3.0f} · {o.titulo[:58]} — R$ {o.preco:.2f}"
+           + (f" (-{o.desconto}%)" if o.desconto else "") + (f" · {marca}" if marca else ""))
+    com_marca = sum(1 for o in passam if qualidade.marca_boa(o))
+    _p(f"\n   De marca conhecida entre os que passam: {com_marca} de {len(passam)}")
+    return bool(top)
+
+
 def _d_api_app() -> bool:
     from .sources.mercadolivre import cliente_padrao
     itens = cliente_padrao().buscar(str(config.fonte_ml.get("site") or "MLB"), q="tênis", limite=5)
@@ -187,6 +270,7 @@ def _rodar() -> None:
     res = {"A": _teste("A. Mercado Livre pela API (mais vendidos + catálogo, automático)", _a_mercado_livre),
            "B": _teste("B. Shopee (listas prontas, sem palavra-chave)", _b_shopee),
            "D1": _teste("D1. Busca da API do ML com a chave do app", _d_api_app)}
+    res["H"] = _teste("H. Moda no grupo de ofertas gerais: o que o bot mandaria (rankings + filtros + nota)", _h_moda)
     res["G"] = _teste("G. Em alta no ML (mais buscados agora, grátis) + catálogo", _g_em_alta)
     res["F"] = _teste("F. IA (Claude) pesquisando ofertas + conferência na API do ML", _f_ia)
     _p("\n══ Resumo: " + " · ".join(f"{k} {'✅' if v else '❌'}" for k, v in res.items()))

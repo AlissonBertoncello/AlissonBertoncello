@@ -596,3 +596,23 @@ def test_painel_valida_os_pisos(arquivos):
     d["grupos"][0]["preco_minimo"] = -1
     erros = painel.salvar(d)
     assert any("desconto mínimo do grupo" in e for e in erros) and any("preço mínimo do grupo" in e for e in erros)
+
+
+def test_teste_h_mostra_o_que_seria_mandado_e_o_que_foi_cortado(monkeypatch, tmp_path):
+    from ofertas import teste_fontes
+    g = Grupo("clube", "Clube", {"MLB23332": "Tênis", "MLB1": "Limpeza Automotiva"}, ofertas_gerais=True,
+              desconto_minimo=25, preco_minimo=25)
+    monkeypatch.setattr(config, "grupos", [g])
+    monkeypatch.setattr(config, "palavras_bloqueadas", ["masculino"])
+    monkeypatch.setattr(mercadolivre, "cliente_padrao", lambda: object())
+    pedidos = []
+    monkeypatch.setattr(ml_geral, "mais_vendidos", lambda cid, c: pedidos.append(cid) or [
+        _o("A", "Tênis Nike Revolution 7 Masculino", 199.9, 399.9, 1),
+        _o("B", "Tênis Olympikus Corre 3 Feminino", 229.9, 399.9, 2),
+        _o("C", "Tênis Casual Básico Feminino", 59.9, 119.9, 3)])
+    teste_fontes._linhas.clear()
+    assert teste_fontes._h_moda()
+    texto = "\n".join(teste_fontes._linhas)
+    assert pedidos == ["MLB23332"]  # só a categoria de moda do grupo
+    assert "1 palavra bloqueada" in texto and "masculino (1)" in texto
+    assert texto.index("Olympikus") < texto.index("Tênis Casual")  # marca na frente
