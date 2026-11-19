@@ -1,0 +1,9 @@
+:root{--navy:#0E1A3A;--navy2:#1B2C5E;--amarelo:#FFD23F;--laranja:#FF5A1F;--verde:#25D366;--branco:#FFFFFF;--cinza:#C9D2E8}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:Inter,"Noto Color Emoji",sans-serif;background:var(--navy);color:var(--branco);overflow:hidden}
+.logo{display:inline-flex;align-items:center;gap:18px;background:rgba(255,255,255,.08);border:2px solid rgba(255,255,255,.18);border-radius:999px;padding:16px 34px 16px 18px;font-weight:900;letter-spacing:.06em;font-size:34px}
+.logo .tag{width:58px;height:58px;border-radius:50%;background:var(--amarelo);display:grid;place-items:center;color:var(--navy);font-size:30px;font-weight:900}
+.cta{flex-shrink:0;display:flex;align-items:center;justify-content:center;gap:18px;background:var(--verde);color:#06321A;font-weight:900;border-radius:28px;box-shadow:0 14px 0 #179A4A}
+.chip{background:rgba(255,255,255,.1);border:2px solid rgba(255,255,255,.2);border-radius:999px;padding:14px 28px;font-weight:700;font-size:32px}
+.amarelo{color:var(--amarelo)}
+.selo{background:var(--laranja);color:#fff;font-weight:900;border-radius:18px;transform:rotate(-4deg);display:inline-block}
