@@ -148,9 +148,18 @@ def _e_pagina_geral() -> bool:
 
 
 def rodar() -> None:
+    log = logging.getLogger("ofertas")
+    nivel = log.level
+    log.setLevel(logging.WARNING)  # só o resultado na tela
+    try:
+        _rodar()
+    finally:
+        log.setLevel(nivel)
+
+
+def _rodar() -> None:
     PASTA.mkdir(parents=True, exist_ok=True)
     _linhas.clear()
-    logging.getLogger("ofertas").setLevel(logging.WARNING)  # só o resultado na tela
     _p("Teste das fontes de ofertas — nada é enviado aos grupos")
     _p(time.strftime("%d/%m/%Y %H:%M"))
     res = {"A": _teste("A. Mercado Livre pela API (mais vendidos + catálogo, automático)", _a_mercado_livre),
