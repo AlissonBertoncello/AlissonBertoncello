@@ -357,7 +357,9 @@ def _erro_da_api(e) -> ErroIA:
     if isinstance(e, openai.PermissionDeniedError):
         return ErroIA(f"a chave não tem permissão: {texto}")
     if isinstance(e, openai.RateLimitError):
-        if getattr(e, "code", None) == "insufficient_quota" or "quota" in texto.lower():
+        codigo = str(getattr(e, "code", None) or "")
+        if codigo == "insufficient_quota" or codigo.startswith("credit") \
+                or "quota" in texto.lower() or "no credits" in texto.lower():
             return ErroIA("sem créditos na conta da OpenAI (platform.openai.com > Billing). "
                           f"Resposta da OpenAI: {texto}")
         return ErroIA(f"limite de uso da API atingido. Resposta da OpenAI: {texto}")
