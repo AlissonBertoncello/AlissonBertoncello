@@ -340,17 +340,27 @@ def _guardar_diagnostico(texto: str) -> None:
         pass
 
 
+def _mensagem_da_openai(e) -> str:
+    """O texto que a OpenAI mandou no erro (o 'message' do corpo), sem o resto."""
+    corpo = getattr(e, "body", None)
+    if isinstance(corpo, dict) and corpo.get("message"):
+        codigo = f" [{corpo['code']}]" if corpo.get("code") else ""
+        return str(corpo["message"])[:300] + codigo
+    return str(getattr(e, "message", e))[:300]
+
+
 def _erro_da_api(e) -> ErroIA:
     import openai
-    texto = str(getattr(e, "message", e))[:200]
+    texto = _mensagem_da_openai(e)
     if isinstance(e, openai.AuthenticationError):
         return ErroIA("chave OPENAI_API_KEY inválida")
     if isinstance(e, openai.PermissionDeniedError):
         return ErroIA(f"a chave não tem permissão: {texto}")
     if isinstance(e, openai.RateLimitError):
         if getattr(e, "code", None) == "insufficient_quota" or "quota" in texto.lower():
-            return ErroIA("sem créditos na conta da OpenAI (platform.openai.com > Billing)")
-        return ErroIA("limite de uso da API atingido (tente mais tarde)")
+            return ErroIA("sem créditos na conta da OpenAI (platform.openai.com > Billing). "
+                          f"Resposta da OpenAI: {texto}")
+        return ErroIA(f"limite de uso da API atingido. Resposta da OpenAI: {texto}")
     if isinstance(e, openai.BadRequestError):
         return ErroIA(f"pedido recusado pela API: {texto}")
     if isinstance(e, openai.APIStatusError):

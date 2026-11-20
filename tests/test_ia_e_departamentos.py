@@ -323,7 +323,8 @@ def test_sem_creditos_explica_o_que_fazer():
     import openai
     e = _erro_http(openai.RateLimitError, 429, {"code": "insufficient_quota", "message": "quota"})
     assert "sem créditos na conta da OpenAI" in str(ia._erro_da_api(e))
-    assert "tente mais tarde" in str(ia._erro_da_api(_erro_http(openai.RateLimitError, 429)))
+    e = _erro_http(openai.RateLimitError, 429, {"code": "rate_limit_exceeded", "message": "Rate limit reached for gpt-5-mini"})
+    assert "Resposta da OpenAI: Rate limit reached for gpt-5-mini [rate_limit_exceeded]" in str(ia._erro_da_api(e))
 
 
 # ── painel ──────────────────────────────────────────────────────────
