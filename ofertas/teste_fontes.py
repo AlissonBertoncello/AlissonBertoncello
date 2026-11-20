@@ -8,7 +8,7 @@ D1. Busca completa da API do ML com a chave do app (hoje responde 403)
 G. Em alta no ML: termos mais buscados agora (lista oficial, grátis) procurados no catálogo
 H. Moda no grupo de ofertas gerais: rankings das categorias de moda do grupo, com os filtros
    e a nota de qualidade — mostra os 10 que o bot mandaria e o que foi cortado (e por quê)
-F. IA (Claude) pesquisando ofertas, cada uma conferida na API do ML — só com a IA ligada
+F. IA (ChatGPT) pesquisando ofertas, cada uma conferida na API do ML — só com a IA ligada
    no painel, porque é paga (o custo aparece no resultado)
 
 (A página de ofertas do ML não é mais testada: nos testes de 19/11 ela barrou todo acesso
@@ -216,11 +216,11 @@ def _d_api_app() -> bool:
 
 
 def _f_ia() -> bool:
-    """IA (Claude) + conferência na API do ML. Só roda com a IA ligada no painel (é paga)."""
+    """IA (ChatGPT) + conferência na API do ML. Só roda com a IA ligada no painel (é paga)."""
     from .sources import ia_ofertas as ia
     op = ia.opcoes()
-    if not config.anthropic_api_key:
-        _p("   ⚪ sem ANTHROPIC_API_KEY no .env (aba Contas do painel)")
+    if not config.openai_api_key:
+        _p("   ⚪ sem OPENAI_API_KEY no .env (aba Contas do painel)")
         return False
     if not op["ativa"]:
         c = ia.estimativa(op)
@@ -272,7 +272,7 @@ def _rodar() -> None:
            "D1": _teste("D1. Busca da API do ML com a chave do app", _d_api_app)}
     res["H"] = _teste("H. Moda no grupo de ofertas gerais: o que o bot mandaria (rankings + filtros + nota)", _h_moda)
     res["G"] = _teste("G. Em alta no ML (mais buscados agora, grátis) + catálogo", _g_em_alta)
-    res["F"] = _teste("F. IA (Claude) pesquisando ofertas + conferência na API do ML", _f_ia)
+    res["F"] = _teste("F. IA (ChatGPT) pesquisando ofertas + conferência na API do ML", _f_ia)
     _p("\n══ Resumo: " + " · ".join(f"{k} {'✅' if v else '❌'}" for k, v in res.items()))
     (PASTA / "resultado.txt").write_text("\n".join(_linhas) + "\n", encoding="utf-8")
     print(f"\nResultado salvo em {PASTA / 'resultado.txt'} — mande esse arquivo (ou um print desta tela).")

@@ -1,18 +1,19 @@
-"""Ofertas do Mercado Livre achadas por IA (Claude, com pesquisa na web).
+"""Ofertas do Mercado Livre achadas por IA (ChatGPT, com pesquisa na web).
 
-Como o amigo faz com o ChatGPT, mas sem confiar no que a IA diz:
-1. De tempos em tempos (no máximo `buscas_por_dia`), o bot pede ao Claude que pesquise
-   na web as melhores ofertas do Mercado Livre de agora (marcas, moda, calçados,
-   perfumes, relógios, eletrônicos, ferramentas, casa, fitness…).
+Sem confiar no que a IA diz:
+1. De tempos em tempos (no máximo `buscas_por_dia`), o bot pede ao ChatGPT (API da
+   OpenAI) que pesquise na web as melhores ofertas do Mercado Livre de agora (marcas,
+   moda, calçados, perfumes, relógios, eletrônicos, ferramentas, casa, fitness…).
 2. Cada produto sugerido é conferido na API oficial do ML (preço de agora, preço
    antigo, foto, se existe). O que não for achado na API é descartado: preço inventado
    ou produto que não existe nunca chega ao grupo.
 3. O que passou entra no estoque das ofertas gerais (fonte "ia") e segue o caminho
    normal: filtros, sem repetir, link de afiliado e envio.
 
-É pago por uso (tokens + pesquisas na web). Fica desligado até ter a chave
-ANTHROPIC_API_KEY no .env e "ativa: true" em fontes.ia. Limites: buscas por dia e gasto
-máximo por mês (conta o gasto real de cada busca em data/ia_ofertas.json).
+É pago por uso (tokens + pesquisas na web), cobrado pela OpenAI — a assinatura do
+ChatGPT Plus não inclui a API. Fica desligado até ter a chave OPENAI_API_KEY no .env e
+"ativa: true" em fontes.ia. Limites: buscas por dia e gasto máximo por mês (conta o
+gasto real de cada busca em data/ia_ofertas.json).
 """
 import datetime as dt
 import json
@@ -26,21 +27,20 @@ from ..models import Oferta
 log = logging.getLogger("ofertas.ia")
 
 ARQ_ESTADO = DATA_DIR / "ia_ofertas.json"
-MODELO_PADRAO = "claude-opus-5-5"
-# US$ por milhão de tokens (entrada, saída) — tabela oficial da Anthropic (nov/2026)
+MODELO_PADRAO = "gpt-5-mini"
+# US$ por milhão de tokens (entrada, saída) — confira em platform.openai.com/docs/pricing
 PRECOS = {
-    "claude-opus-5-5": (4.00, 20.00),
-    "claude-sonnet-5-5": (2.00, 10.00),
-    "claude-haiku-5-5": (0.10, 0.50),
+    "gpt-5": (1.25, 10.00),
+    "gpt-5-mini": (0.25, 2.00),
 }
+FATOR_CACHE = 0.1               # tokens de entrada repetidos (cache) custam 10%
 PRECO_PESQUISA = 10.00 / 1000   # US$ 10 a cada 1.000 pesquisas na web
 # estimativa por busca (para mostrar o custo antes de ligar): tokens lidos por pesquisa
 # (resultados das páginas) + o pedido, e tokens escritos (raciocínio + a lista)
 TOKENS_ENTRADA_BASE = 3000
 TOKENS_ENTRADA_POR_PESQUISA = 8000
-TOKENS_SAIDA = 4000
+TOKENS_SAIDA = 6000
 DOMINIOS_PADRAO = ["mercadolivre.com.br", "pelando.com.br", "promobit.com.br"]
-CONTINUAR_MAX = 3  # vezes que o bot deixa a IA continuar uma busca longa (pause_turn)
 LINKS_DAS_PESQUISAS_MAX = 40  # links de produto achados nas pesquisas conferidos por busca
 ARQ_ULTIMA_RESPOSTA = DATA_DIR / "ia_ultima_resposta.txt"  # diagnóstico da última busca
 # link de produto do ML: anúncio (produto.mercadolivre.com.br/MLB-123…) ou catálogo (/p/MLB123)
@@ -53,11 +53,17 @@ class ErroIA(RuntimeError):
     pass
 
 
+def _modelo(valor) -> str:
+    m = str(valor or "").strip()
+    # config antiga (Claude) ou vazia: volta para o padrão do ChatGPT
+    return m if m and not m.lower().startswith("claude") else MODELO_PADRAO
+
+
 def opcoes() -> dict:
     o = config.fonte_ia or {}
     return {
         "ativa": bool(o.get("ativa", False)),
-        "modelo": str(o.get("modelo") or MODELO_PADRAO),
+        "modelo": _modelo(o.get("modelo")),
         "buscas_por_dia": max(0, int(o.get("buscas_por_dia", 1))),
         "intervalo_horas": max(1.0, float(o.get("intervalo_horas", 4))),
         "pesquisas_por_busca": min(20, max(1, int(o.get("pesquisas_por_busca", 5)))),
@@ -69,7 +75,7 @@ def opcoes() -> dict:
 
 
 def ligada() -> bool:
-    return opcoes()["ativa"] and bool(config.anthropic_api_key)
+    return opcoes()["ativa"] and bool(config.openai_api_key)
 
 
 # ── custo ────────────────────────────────────────────────────────────
@@ -78,10 +84,11 @@ def _precos(modelo: str) -> tuple[float, float]:
     return PRECOS.get(modelo, PRECOS[MODELO_PADRAO])
 
 
-def custo_real(modelo: str, entrada: int, saida: int, pesquisas: int,
-               cache_escrita: int = 0, cache_lida: int = 0) -> float:
+def custo_real(modelo: str, entrada: int, saida: int, pesquisas: int, cache_lida: int = 0) -> float:
+    """`entrada` é o total de tokens lidos (a OpenAI conta os do cache dentro dele)."""
     pe, ps = _precos(modelo)
-    return (entrada * pe + cache_escrita * pe * 1.25 + cache_lida * pe * 0.1 + saida * ps) / 1e6 \
+    cache_lida = min(cache_lida, entrada)
+    return ((entrada - cache_lida) * pe + cache_lida * pe * FATOR_CACHE + saida * ps) / 1e6 \
         + pesquisas * PRECO_PESQUISA
 
 
@@ -126,8 +133,8 @@ def motivo_para_nao_buscar(agora: float | None = None) -> str | None:
     op = opcoes()
     if not op["ativa"]:
         return "desligada"
-    if not config.anthropic_api_key:
-        return "sem ANTHROPIC_API_KEY no .env"
+    if not config.openai_api_key:
+        return "sem OPENAI_API_KEY no .env"
     agora = agora or time.time()
     hoje = dt.date.fromtimestamp(agora)
     e = ler_estado()
@@ -156,14 +163,13 @@ def _registrar_busca(custo: float, agora: float) -> dict:
     return e
 
 
-# ── pedido ao Claude ─────────────────────────────────────────────────
+# ── pedido ao ChatGPT ────────────────────────────────────────────────
 
-FERRAMENTA_ENTREGA = {
-    "name": "entregar_ofertas",
-    "description": "Entrega a lista final de ofertas do Mercado Livre encontradas na pesquisa. "
-                   "Chame uma vez, no fim.",
+FORMATO_LISTA = {
+    "type": "json_schema",
+    "name": "ofertas",
     "strict": True,
-    "input_schema": {
+    "schema": {
         "type": "object",
         "properties": {
             "ofertas": {
@@ -193,59 +199,69 @@ def _pedido(op: dict) -> str:
         f"Hoje é {hoje}. Pesquise na web produtos em oferta no Mercado Livre Brasil agora, para "
         "um grupo de promoções no WhatsApp com homens e mulheres. Foque em produtos de marca "
         "conhecida com bom desconto e que vendem bem: tênis e calçados, roupas e bolsas, "
-        "perfumes e beleza, relógios e acessórios, celulares e eletrônicos, informática, "
-        "ferramentas, casa e cozinha, esportes e fitness. Evite comida, bebida alcoólica, livros, "
-        "peças de carro, réplicas e produtos de bebê.\n\n"
+        "moda fitness, perfumes e beleza, relógios e acessórios, celulares e eletrônicos, "
+        "informática, ferramentas, casa e cozinha, esportes. Evite comida, bebida alcoólica, "
+        "livros, peças de carro, réplicas e produtos de bebê.\n\n"
         "Faça pesquisas que tragam páginas de PRODUTO do Mercado Livre (endereços "
         "produto.mercadolivre.com.br/MLB-... ou mercadolivre.com.br/.../p/MLB...), por exemplo "
-        "com a marca e o tipo de produto (\"tênis Nike oferta mercado livre\", \"perfume importado "
+        "com a marca e o tipo de produto (\"tênis Nike oferta mercado livre\", \"legging fitness "
         "promoção mercado livre\"). Sites de promoções (Pelando, Promobit) mostram o que está em alta.\n\n"
         "Um programa confere cada produto na API oficial do Mercado Livre (preço de agora, preço "
         "antigo, se existe) e descarta o que não bater. Por isso: não descarte um produto por "
         "dúvida no preço — informe o preço que viu (ou 0 se não viu). Copie o link exatamente "
         "como apareceu nos resultados da pesquisa; nunca monte um link.\n\n"
-        f"No fim, chame a ferramenta entregar_ofertas uma única vez com até "
-        f"{op['produtos_por_busca']} produtos diferentes que você encontrou."
+        f"Responda só com a lista (formato JSON pedido), com até {op['produtos_por_busca']} "
+        "produtos diferentes que você encontrou."
     )
 
 
-_PEDIDO_LISTA = ("Agora, sem pesquisar de novo, chame a ferramenta entregar_ofertas com os produtos "
-                 "do Mercado Livre que apareceram nas suas pesquisas (link exatamente como apareceu).")
+_PEDIDO_LISTA = ("Agora, sem pesquisar de novo, responda com a lista dos produtos do Mercado Livre "
+                 "que apareceram nas suas pesquisas (link exatamente como apareceu).")
 
 
 def _ferramenta_pesquisa(op: dict) -> dict:
-    # Haiku usa a versão básica da pesquisa; os demais, a versão com filtro dinâmico
-    tipo = "web_search_20250305" if "haiku" in op["modelo"] else "web_search_20260209"
-    t = {"type": tipo, "name": "web_search", "max_uses": op["pesquisas_por_busca"],
-         "user_location": {"type": "approximate", "country": "BR"}}
+    t = {"type": "web_search", "user_location": {"type": "approximate", "country": "BR"}}
     if op["dominios"]:
-        t["allowed_domains"] = op["dominios"]
+        t["filters"] = {"allowed_domains": op["dominios"]}
     return t
 
 
 def _cliente():
-    import anthropic
-    return anthropic.Anthropic(api_key=config.anthropic_api_key, max_retries=2, timeout=600)
+    import openai
+    return openai.OpenAI(api_key=config.openai_api_key, max_retries=2, timeout=600)
 
 
-def _somar_uso(total: dict, uso) -> None:
-    if uso is None:
-        return
-    total["entrada"] += getattr(uso, "input_tokens", 0) or 0
-    total["saida"] += getattr(uso, "output_tokens", 0) or 0
-    total["cache_escrita"] += getattr(uso, "cache_creation_input_tokens", 0) or 0
-    total["cache_lida"] += getattr(uso, "cache_read_input_tokens", 0) or 0
-    stu = getattr(uso, "server_tool_use", None)
-    total["pesquisas"] += (getattr(stu, "web_search_requests", 0) or 0) if stu else 0
+def _somar_uso(total: dict, resposta) -> None:
+    uso = getattr(resposta, "usage", None)
+    if uso is not None:
+        total["entrada"] += getattr(uso, "input_tokens", 0) or 0
+        total["saida"] += getattr(uso, "output_tokens", 0) or 0
+        det = getattr(uso, "input_tokens_details", None)
+        total["cache_lida"] += (getattr(det, "cached_tokens", 0) or 0) if det else 0
+    total["pesquisas"] += sum(1 for item in (getattr(resposta, "output", None) or [])
+                              if getattr(item, "type", "") == "web_search_call")
+
+
+def _texto(resposta) -> str:
+    texto = getattr(resposta, "output_text", None)
+    if isinstance(texto, str) and texto:
+        return texto
+    partes = []
+    for item in getattr(resposta, "output", None) or []:
+        if getattr(item, "type", "") == "message":
+            partes += [getattr(c, "text", "") or "" for c in getattr(item, "content", None) or []
+                       if getattr(c, "type", "") == "output_text"]
+    return "".join(partes)
+
+
+def _recusou(resposta) -> bool:
+    return any(getattr(c, "type", "") == "refusal"
+               for item in getattr(resposta, "output", None) or [] if getattr(item, "type", "") == "message"
+               for c in getattr(item, "content", None) or [])
 
 
 def _sugestoes_da_resposta(resposta) -> list[dict] | None:
-    for bloco in resposta.content:
-        if getattr(bloco, "type", "") == "tool_use" and getattr(bloco, "name", "") == "entregar_ofertas":
-            entrada = bloco.input if isinstance(bloco.input, dict) else {}
-            return list(entrada.get("ofertas") or [])
-    # sem a ferramenta: tenta achar um JSON no texto
-    texto = "".join(getattr(b, "text", "") for b in resposta.content if getattr(b, "type", "") == "text")
+    texto = _texto(resposta)
     m = re.search(r"\{.*\}", texto, re.S)
     if m:
         try:
@@ -256,7 +272,7 @@ def _sugestoes_da_resposta(resposta) -> list[dict] | None:
 
 
 def _achatar(obj, saida: list | None = None) -> list:
-    """Todos os valores de um bloco da resposta (dicts, listas, objetos do SDK), para achar
+    """Todos os valores de um item da resposta (dicts, listas, objetos do SDK), para achar
     os links que vieram nas pesquisas, em qualquer formato."""
     saida = [] if saida is None else saida
     if hasattr(obj, "model_dump"):
@@ -299,20 +315,21 @@ def _juntar(lista: list[dict], achados: list[dict]) -> list[dict]:
 
 
 def _texto_diagnostico(resposta, lista, achados, uso) -> str:
-    linhas = [f"stop_reason: {getattr(resposta, 'stop_reason', '?')}",
+    linhas = [f"status: {getattr(resposta, 'status', '?')}",
               f"pesquisas: {uso['pesquisas']} · tokens lidos: {uso['entrada']} · escritos: {uso['saida']}",
-              f"lista da IA (entregar_ofertas): {'não veio' if lista is None else len(lista)}",
+              f"lista da IA: {'não veio' if lista is None else len(lista)}",
               f"links de produto do ML achados nas pesquisas: {len(achados)}"]
     linhas += [f"  {a['url']}" for a in achados[:60]]
-    for b in getattr(resposta, "content", []) or []:
-        tipo = getattr(b, "type", "")
-        if tipo == "text":
-            linhas.append("texto: " + getattr(b, "text", "")[:1500])
-        elif tipo == "server_tool_use":
-            linhas.append(f"pesquisa: {json.dumps(getattr(b, 'input', {}), ensure_ascii=False)[:200]}")
-        elif tipo.endswith("tool_result"):
-            urls = [u for u, _ in _achatar(b) if u.startswith("http")]
-            linhas.append(f"{tipo}: {len(urls)} páginas — " + " | ".join(urls[:12]))
+    for item in getattr(resposta, "output", None) or []:
+        tipo = getattr(item, "type", "")
+        if tipo == "web_search_call":
+            acao = getattr(item, "action", None)
+            consulta = getattr(acao, "query", None) or getattr(acao, "url", None) or ""
+            urls = [u for u, _ in _achatar(acao) if u.startswith("http")] if acao is not None else []
+            linhas.append(f"pesquisa: {consulta[:200]} — {len(urls)} páginas " + " | ".join(urls[:12]))
+    texto = _texto(resposta)
+    if texto:
+        linhas.append("texto: " + texto[:1500])
     return "\n".join(linhas) + "\n"
 
 
@@ -323,79 +340,70 @@ def _guardar_diagnostico(texto: str) -> None:
         pass
 
 
+def _erro_da_api(e) -> ErroIA:
+    import openai
+    texto = str(getattr(e, "message", e))[:200]
+    if isinstance(e, openai.AuthenticationError):
+        return ErroIA("chave OPENAI_API_KEY inválida")
+    if isinstance(e, openai.PermissionDeniedError):
+        return ErroIA(f"a chave não tem permissão: {texto}")
+    if isinstance(e, openai.RateLimitError):
+        if getattr(e, "code", None) == "insufficient_quota" or "quota" in texto.lower():
+            return ErroIA("sem créditos na conta da OpenAI (platform.openai.com > Billing)")
+        return ErroIA("limite de uso da API atingido (tente mais tarde)")
+    if isinstance(e, openai.BadRequestError):
+        return ErroIA(f"pedido recusado pela API: {texto}")
+    if isinstance(e, openai.APIStatusError):
+        return ErroIA(f"erro da API ({e.status_code}): {texto}")
+    return ErroIA("sem conexão com a API da OpenAI")
+
+
 def pedir_sugestoes(op: dict | None = None) -> tuple[list[dict], dict]:
-    """Pergunta ao Claude. Devolve (sugestões cruas, uso: tokens, pesquisas, custo).
+    """Pergunta ao ChatGPT. Devolve (sugestões cruas, uso: tokens, pesquisas, custo).
 
     Sugestões = a lista que a IA entrega + todos os links de produto do ML que vieram nas
     pesquisas (já pagas), para a conferência na API do ML. Se a IA terminar sem a lista e as
     pesquisas não tiverem link de produto, o bot pede só a lista, uma vez, sem pesquisar de novo."""
-    import anthropic
+    import openai
     op = op or opcoes()
     cliente = _cliente()
-    mensagens: list[dict] = [{"role": "user", "content": _pedido(op)}]
-    uso = {"entrada": 0, "saida": 0, "cache_escrita": 0, "cache_lida": 0, "pesquisas": 0,
+    uso = {"entrada": 0, "saida": 0, "cache_lida": 0, "pesquisas": 0,
            "da_lista": 0, "das_pesquisas": 0, "diagnostico": ""}
     sugestoes: list[dict] = []
-    conteudo: list = []  # tudo o que a IA respondeu (inclui os resultados das pesquisas)
-    pediu_lista = False
     try:
-        for _ in range(CONTINUAR_MAX + 2):
-            pesquisa = _ferramenta_pesquisa(op)
-            if pediu_lista:
-                pesquisa["max_uses"] = 1  # pedido só da lista: no máximo 1 pesquisa extra
-            pedido = dict(
-                model=op["modelo"], max_tokens=16000,
-                tools=[pesquisa, FERRAMENTA_ENTREGA],
-                messages=mensagens,
-                output_config={"effort": op["esforco"]},
+        resposta = cliente.responses.create(
+            model=op["modelo"], input=_pedido(op),
+            tools=[_ferramenta_pesquisa(op)], max_tool_calls=op["pesquisas_por_busca"],
+            include=["web_search_call.action.sources"],
+            reasoning={"effort": op["esforco"]},
+            text={"format": FORMATO_LISTA}, max_output_tokens=16000,
+        )
+        _somar_uso(uso, resposta)
+        conteudo = list(getattr(resposta, "output", None) or [])
+        if _recusou(resposta):
+            raise ErroIA("o modelo recusou o pedido")
+        lista = _sugestoes_da_resposta(resposta)
+        achados = links_das_pesquisas(conteudo)
+        uso["diagnostico"] = _texto_diagnostico(resposta, lista, achados, uso)
+        if not lista and not achados and uso["pesquisas"]:
+            # pesquisou mas não entregou a lista: pede só a lista, sem pesquisar de novo
+            resposta = cliente.responses.create(
+                model=op["modelo"], previous_response_id=resposta.id, input=_PEDIDO_LISTA,
+                reasoning={"effort": op["esforco"]}, text={"format": FORMATO_LISTA},
+                max_output_tokens=16000,
             )
-            if "haiku" not in op["modelo"]:
-                # se o modelo recusar o pedido, a Anthropic tenta de novo em outro modelo
-                pedido.update(betas=["server-side-fallback-2026-07-01"], fallbacks="default")
-                resposta = cliente.beta.messages.create(**pedido)
-            else:
-                resposta = cliente.messages.create(**pedido)
-            _somar_uso(uso, resposta.usage)
-            conteudo += list(resposta.content)
-            if resposta.stop_reason == "pause_turn":  # pesquisa longa: deixa continuar
-                mensagens.append({"role": "assistant", "content": resposta.content})
-                continue
-            if resposta.stop_reason == "refusal":
-                raise ErroIA("o modelo recusou o pedido")
+            _somar_uso(uso, resposta)
+            conteudo += list(getattr(resposta, "output", None) or [])
             lista = _sugestoes_da_resposta(resposta)
             achados = links_das_pesquisas(conteudo)
-            uso["diagnostico"] = _texto_diagnostico(resposta, lista, achados, uso)
-            if not lista and not achados and not pediu_lista and uso["pesquisas"] \
-                    and resposta.stop_reason != "tool_use":
-                pediu_lista = True
-                mensagens.append({"role": "assistant", "content": resposta.content})
-                mensagens.append({"role": "user", "content": _PEDIDO_LISTA})
-                continue
-            uso["da_lista"], uso["das_pesquisas"] = len(lista or []), len(achados)
-            sugestoes = _juntar(lista or [], achados)
-            break
-        else:  # a busca não terminou (pausas demais): aproveita os links que já vieram
-            achados = links_das_pesquisas(conteudo)
-            uso["das_pesquisas"] = len(achados)
-            sugestoes = achados[:LINKS_DAS_PESQUISAS_MAX]
-    except anthropic.AuthenticationError as e:
-        raise ErroIA("chave ANTHROPIC_API_KEY inválida") from e
-    except anthropic.PermissionDeniedError as e:
-        raise ErroIA(f"a chave não tem permissão: {e.message}") from e
-    except anthropic.RateLimitError as e:
-        raise ErroIA("limite de uso da API atingido (tente mais tarde)") from e
-    except anthropic.BadRequestError as e:
-        texto = str(e.message)
-        if "credit" in texto.lower() or "billing" in texto.lower():
-            raise ErroIA("sem créditos na conta da Anthropic (console.anthropic.com > Billing)") from e
-        raise ErroIA(f"pedido recusado pela API: {texto[:200]}") from e
-    except anthropic.APIStatusError as e:
-        raise ErroIA(f"erro da API ({e.status_code}): {str(e.message)[:200]}") from e
-    except anthropic.APIConnectionError as e:
-        raise ErroIA("sem conexão com a API da Anthropic") from e
+            uso["diagnostico"] += "── pedido só da lista ──\n" + _texto_diagnostico(resposta, lista, achados, uso)
+        uso["da_lista"], uso["das_pesquisas"] = len(lista or []), len(achados)
+        sugestoes = _juntar(lista or [], achados)
+    except openai.OpenAIError as e:
+        raise _erro_da_api(e) from e
     finally:
         uso["custo"] = custo_real(op["modelo"], uso["entrada"], uso["saida"], uso["pesquisas"],
-                                  uso["cache_escrita"], uso["cache_lida"])
+                                  uso["cache_lida"])
         if uso["diagnostico"]:
             _guardar_diagnostico(uso["diagnostico"] + f"custo: US$ {uso['custo']:.3f}\n")
     return sugestoes, uso

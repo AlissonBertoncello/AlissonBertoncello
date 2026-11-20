@@ -40,7 +40,7 @@ CAMPOS_ENV = {
     "ML_ETIQUETA": False,
     "SHOPEE_APP_ID": False,
     "SHOPEE_APP_SECRET": True,
-    "ANTHROPIC_API_KEY": True,
+    "OPENAI_API_KEY": True,
 }
 # sobe quando a tela passa a precisar de campos novos: a tela compara com a dela e avisa
 # se quem responde é um painel antigo que ficou aberto desde antes da atualização
@@ -173,9 +173,9 @@ def ler_tudo() -> dict:
     }
 
 
-IA_PADRAO = {"ativa": False, "modelo": "claude-opus-5-5", "buscas_por_dia": 1, "intervalo_horas": 4,
+IA_PADRAO = {"ativa": False, "modelo": "gpt-5-mini", "buscas_por_dia": 1, "intervalo_horas": 4,
              "pesquisas_por_busca": 5, "gasto_max_mes_usd": 10}
-MODELOS_IA = ("claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5")
+MODELOS_IA = ("gpt-5-mini", "gpt-5")
 
 
 def _ler_ia(c) -> dict:
@@ -189,6 +189,8 @@ def _ler_ia(c) -> dict:
                       else int(v))
         except (TypeError, ValueError):
             d[k] = padrao
+    if d["modelo"] not in MODELOS_IA:  # config antiga (Claude): passa para o ChatGPT
+        d["modelo"] = IA_PADRAO["modelo"]
     for k in ("intervalo_horas", "gasto_max_mes_usd"):
         if float(d[k]).is_integer():
             d[k] = int(d[k])

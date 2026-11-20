@@ -284,7 +284,7 @@ Dois cliques em **`CONFIGURAR.bat`**: o painel abre no navegador (endereço `htt
 | **Grupos** | ligar/desligar grupos, criar e excluir, **ofertas gerais do Mercado Livre** (todas as categorias — seção 9.2), aceitar mais vendidos sem desconto, etiqueta do ML por grupo, trocar nome, grupos do WhatsApp (o botão **Carregar grupos do WhatsApp** traz os nomes exatos, com emoji — precisa do Docker aberto), link de convite, **categorias do Mercado Livre** — uma por linha, no formato `MLB188063 Limpeza Automotiva` (dá para colar várias de uma vez; apague a linha para remover). O botão *🔎 Procurar categorias no Mercado Livre* abre a lista de categorias e subcategorias com o nº de anúncios: marque quantas quiser (pode entrar e sair das subcategorias) e clique em *Adicionar marcadas*. Se o Mercado Livre não responder, aparece *Tentar de novo*, palavras da Shopee, palavras bloqueadas do grupo, **ganchos** (frases de abertura em caixa alta, em rodízio — há sugestões prontas para Feminino, Mamãe e Bebê e Carro), **chamada de compra** (o texto antes do link do produto; o bot completa com "no Mercado Livre:" / "na Shopee:"), **chamada para compartilhar** (o texto antes do link de convite, ex.: "🤝 Manda pro parceiro que tá precisando!"), **proporção das lojas** (ex.: 3 ofertas do Mercado Livre para 1 da Shopee) e uma **prévia da mensagem** |
 | **Envio e filtros** | intervalo, ofertas por vez, pausa entre mensagens, dias sem repetir, horário de envio (mostra a estimativa de mensagens por dia), desconto/preço mínimo e máximo, palavras bloqueadas de todos os grupos, lojas ligadas e destino |
 | **Cupons** | horários dos posts de cupom, campanhas automáticas da Shopee (liga/desliga e quais grupos recebem) e a sua lista de cupons: descrição, código, link, validade e grupos — com prévia da mensagem. Veja a seção 9.3 |
-| **Contas** | ML_CLIENT_ID/SECRET, ML_ETIQUETA, SHOPEE_APP_ID/SECRET e a **IA para achar ofertas** (chave do Claude, modelo, buscas por dia, gasto máximo por mês e o custo estimado — seção 9.4). Campos secretos nunca aparecem na tela: deixe em branco para manter |
+| **Contas** | ML_CLIENT_ID/SECRET, ML_ETIQUETA, SHOPEE_APP_ID/SECRET e a **IA para achar ofertas** (chave da OpenAI/ChatGPT, modelo, buscas por dia, gasto máximo por mês e o custo estimado — seção 9.4). Campos secretos nunca aparecem na tela: deixe em branco para manter |
 
 - Mude o que quiser e clique em **Salvar** (a barra aparece embaixo quando há alteração). Se algo estiver errado, o painel mostra o que corrigir e **não grava nada**.
 - **Não precisa reiniciar o bot:** com ele rodando, as mudanças valem em até 10 segundos (o log mostra `Configuração atualizada`). Exceção: trocar o destino (WhatsApp/tela) só vale ao reabrir o bot.
@@ -350,21 +350,21 @@ https://meli.la/...
 
 ---
 
-### 9.4 IA para achar ofertas (Claude) — opcional e paga
+### 9.4 IA para achar ofertas (ChatGPT) — opcional e paga
 
-> **Situação em 19/11/2026:** nos testes, a pesquisa na web só trouxe páginas de busca do ML (`lista.mercadolivre.com.br/...`), nenhuma página de produto — então a IA não achou ofertas para conferir. **Deixe a IA desligada**; a fonte grátis *Em alta no ML* (seção 9.2) faz esse papel.
+> **Novidade em 20/11/2026:** a busca por IA passou a usar o **ChatGPT** (API da OpenAI) no lugar do Claude. Antes de deixar ligada, rode o `TESTAR_FONTES.bat` (teste **F**) e veja se vieram ofertas conferidas. Com o Claude, a pesquisa só trazia páginas de busca do ML e nenhuma de produto; se o ChatGPT fizer o mesmo, deixe a IA desligada, porque a fonte grátis *Em alta no ML* (seção 9.2) faz esse papel.
 
-Como o seu amigo faz com o ChatGPT: de tempos em tempos, o **Claude pesquisa na internet** as melhores ofertas do Mercado Livre do momento (marcas, moda, calçados, perfumes, relógios, eletrônicos, ferramentas, casa, fitness). O bot **confere cada produto na API oficial do ML** — preço de agora, preço antigo, foto, se existe — e **descarta o que não bater**: preço inventado ou produto que não existe nunca chega ao grupo. O que passou segue o caminho normal (filtros, sem repetir, link de afiliado, envio). Vale só para os grupos com **Ofertas gerais** ligadas.
+De tempos em tempos, o **ChatGPT pesquisa na internet** as melhores ofertas do Mercado Livre do momento (marcas, moda, calçados, perfumes, relógios, eletrônicos, ferramentas, casa, fitness). O bot **confere cada produto na API oficial do ML** — preço de agora, preço antigo, foto, se existe — e **descarta o que não bater**: preço inventado ou produto que não existe nunca chega ao grupo. O que passou segue o caminho normal (filtros, sem repetir, link de afiliado, envio). Vale só para os grupos com **Ofertas gerais** ligadas.
 
 **Para ligar:**
-1. Crie uma conta em **console.anthropic.com**, cadastre um cartão em *Billing* e coloque créditos (ex.: US$ 10).
-2. Em *API Keys*, crie uma chave (começa com `sk-ant-`).
+1. Entre em **platform.openai.com** (pode usar o mesmo login do ChatGPT), cadastre um cartão em *Billing* e coloque créditos (ex.: US$ 10). ⚠️ A assinatura do **ChatGPT Plus não vale para a API**: são cobranças separadas.
+2. Em *API keys*, crie uma chave (começa com `sk-`).
 3. No painel, aba **Contas**, cartão *IA para achar ofertas*: cole a chave, escolha o modelo, as buscas por dia e o **gasto máximo por mês**. O painel mostra o **custo estimado** — confira antes de ligar.
 4. Ligue a chave **Ligar a IA** (o painel pede confirmação mostrando o custo) e clique em **Salvar**.
 
-**Custo** (preços oficiais da Anthropic, em dólar): cada busca usa as pesquisas na web (US$ 0,01 cada) mais o texto que a IA lê e escreve. Com 5 pesquisas por busca, uma busca fica em torno de **US$ 0,30 no Opus 5.5**, US$ 0,18 no Sonnet 5.5 e US$ 0,06 no Haiku 5.5. Com **1 busca por dia no Opus ≈ US$ 9 por mês**. O **gasto máximo por mês** é um teto de verdade: o bot soma o custo real de cada busca (`data\ia_ofertas.json`) e, chegando no teto, a IA para até o mês seguinte. Além da lista que a IA entrega, o bot aproveita **todo link de produto do ML que apareceu nas pesquisas** (são endereços de verdade, vindos da internet) e confere tudo na API do ML. Cada busca aparece no log, ex.: `IA: 8 da lista da IA + 14 links das pesquisas, 15 conferidas no ML (7 descartadas) · 5 pesquisas · US$ 0.284 (mês: US$ 1.10 de 10.00)`. O que a IA respondeu na última busca fica em `data\ia_ultima_resposta.txt` (no teste, em `data\teste_fontes\f_ia_resposta.txt`). Se o modelo recusar o pedido, a Anthropic tenta de novo em outro modelo automaticamente.
+**Custo** (preços da OpenAI, em dólar; confira em platform.openai.com/docs/pricing): cada busca usa as pesquisas na web (US$ 0,01 cada) mais o texto que a IA lê e escreve. Com 5 pesquisas por busca, uma busca fica em torno de **US$ 0,07 no GPT-5 mini** e US$ 0,16 no GPT-5. Com **1 busca por dia no GPT-5 mini ≈ US$ 2 por mês**. O **gasto máximo por mês** é um teto de verdade: o bot soma o custo real de cada busca (`data\ia_ofertas.json`) e, chegando no teto, a IA para até o mês seguinte. Além da lista que a IA entrega, o bot aproveita **todo link de produto do ML que apareceu nas pesquisas** (são endereços de verdade, vindos da internet) e confere tudo na API do ML. Cada busca aparece no log, ex.: `IA: 8 da lista da IA + 14 links das pesquisas, 15 conferidas no ML (7 descartadas) · 5 pesquisas · US$ 0.284 (mês: US$ 1.10 de 10.00)`. O que a IA respondeu na última busca fica em `data\ia_ultima_resposta.txt` (no teste, em `data\teste_fontes\f_ia_resposta.txt`).
 
-**Mensagens no log:** `IA: chave ANTHROPIC_API_KEY inválida` (copie a chave de novo), `IA: sem créditos na conta da Anthropic` (coloque créditos em *Billing*). Nesses casos o bot não tenta de novo antes do intervalo, para não gastar à toa.
+**Mensagens no log:** `IA: chave OPENAI_API_KEY inválida` (copie a chave de novo), `IA: sem créditos na conta da OpenAI` (coloque créditos em *Billing*). Nesses casos o bot não tenta de novo antes do intervalo, para não gastar à toa.
 
 ## 10. Atualizar o projeto
 
@@ -408,8 +408,8 @@ Como o seu amigo faz com o ChatGPT: de tempos em tempos, o **Claude pesquisa na 
 ### `fontes.ia` (seção 9.4)
 | Chave | Padrão | O que faz |
 |---|---|---|
-| `ativa` | `false` | liga a IA (precisa de `ANTHROPIC_API_KEY` no `.env`) |
-| `modelo` | `claude-opus-5-5` | `claude-opus-5-5` · `claude-sonnet-5-5` (metade do preço) · `claude-haiku-5-5` (o mais barato) |
+| `ativa` | `false` | liga a IA (precisa de `OPENAI_API_KEY` no `.env`) |
+| `modelo` | `gpt-5-mini` | `gpt-5-mini` (barato) · `gpt-5` (melhor, mais caro). Um `claude-...` antigo vira `gpt-5-mini` sozinho |
 | `buscas_por_dia` | 1 | máximo de buscas por dia |
 | `intervalo_horas` | 4 | tempo mínimo entre buscas |
 | `pesquisas_por_busca` | 5 | pesquisas na web por busca (US$ 0,01 cada) |

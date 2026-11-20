@@ -54,13 +54,13 @@ fontes:
     ordenacao: 2               # 2 = mais vendidos · 1 = relevância · 5 = maior comissão
     lista_geral: 2             # grupos de ofertas gerais: lista pronta sem palavra-chave (2 = mais vendidos · 1 = maior comissão)
   ia:
-    # IA (Claude) pesquisa na internet as ofertas do ML do momento, para os grupos de ofertas
+    # IA (ChatGPT) pesquisa na internet as ofertas do ML do momento, para os grupos de ofertas
     # gerais; o bot confere cada uma na API do ML e descarta o que não bater. PAGO POR USO
-    # (cobrado pela Anthropic, em dólar): precisa de ANTHROPIC_API_KEY no .env. O painel
-    # (aba Contas) mostra o custo estimado antes de ligar.
+    # (cobrado pela OpenAI, em dólar; o ChatGPT Plus não inclui a API): precisa de
+    # OPENAI_API_KEY no .env. O painel (aba Contas) mostra o custo estimado antes de ligar.
     ativa: false
-    modelo: claude-opus-5-5    # claude-opus-5-5 | claude-sonnet-5-5 (metade do preço) | claude-haiku-5-5
-    buscas_por_dia: 1          # máximo de buscas por dia (1 por dia no Opus ≈ US$ 9 por mês)
+    modelo: gpt-5-mini         # gpt-5-mini (barato) | gpt-5 (melhor, mais caro)
+    buscas_por_dia: 1          # máximo de buscas por dia (1 por dia no gpt-5-mini ≈ US$ 2 por mês)
     intervalo_horas: 4         # tempo mínimo entre uma busca e outra
     pesquisas_por_busca: 5     # pesquisas na web por busca (US$ 0,01 cada, mais os tokens)
     gasto_max_mes_usd: 10      # chegou nisso no mês, a IA para até o mês seguinte (0 = sem teto)

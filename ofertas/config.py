@@ -58,7 +58,7 @@ class Config:
         self.ml_etiqueta: str = os.getenv("ML_ETIQUETA", "").strip()
         self.shopee_app_id: str = os.getenv("SHOPEE_APP_ID", "").strip()
         self.shopee_app_secret: str = os.getenv("SHOPEE_APP_SECRET", "").strip()
-        self.anthropic_api_key: str = os.getenv("ANTHROPIC_API_KEY", "").strip()
+        self.openai_api_key: str = os.getenv("OPENAI_API_KEY", "").strip()
         self.evolution_url: str = os.getenv("EVOLUTION_URL", "http://localhost:8080").strip()
         self.evolution_api_key: str = os.getenv("EVOLUTION_API_KEY", "").strip()
         self.evolution_instancia: str = os.getenv("EVOLUTION_INSTANCIA", "bot-ofertas").strip()

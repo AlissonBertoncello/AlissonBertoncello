@@ -1,5 +1,5 @@
 """P1 (página de ofertas desligada), P2 (departamentos escolhidos, ranking no nível certo,
-categoria sem ranking anotada) e IA1 (Claude pesquisa, a API do ML confere)."""
+categoria sem ranking anotada) e IA1 (ChatGPT pesquisa, a API do ML confere)."""
 import datetime as dt
 import json
 from types import SimpleNamespace as NS
@@ -86,7 +86,7 @@ def test_outro_erro_do_ranking_continua_sendo_erro():
 # ── IA: limites e custo ─────────────────────────────────────────────
 
 def _ligar_ia(monkeypatch, **op):
-    monkeypatch.setattr(config, "anthropic_api_key", "sk-ant-teste")
+    monkeypatch.setattr(config, "openai_api_key", "sk-teste")
     monkeypatch.setattr(config, "fonte_ia", {"ativa": True, **op})
 
 
@@ -97,17 +97,30 @@ def test_ia_desligada_por_padrao():
 
 def test_ia_sem_chave_nao_busca(monkeypatch):
     monkeypatch.setattr(config, "fonte_ia", {"ativa": True})
-    assert ia.motivo_para_nao_buscar(T) == "sem ANTHROPIC_API_KEY no .env"
+    assert ia.motivo_para_nao_buscar(T) == "sem OPENAI_API_KEY no .env"
+
+
+def test_modelo_antigo_do_claude_vira_o_padrao(monkeypatch):
+    _ligar_ia(monkeypatch, modelo="claude-opus-5-5")
+    assert ia.opcoes()["modelo"] == "gpt-5-mini"
+    _ligar_ia(monkeypatch, modelo="gpt-5")
+    assert ia.opcoes()["modelo"] == "gpt-5"
 
 
 def test_estimativa_de_custo():
-    op = {**ia.opcoes(), "modelo": "claude-opus-5-5", "pesquisas_por_busca": 5, "buscas_por_dia": 3,
+    op = {**ia.opcoes(), "modelo": "gpt-5", "pesquisas_por_busca": 5, "buscas_por_dia": 3,
           "gasto_max_mes_usd": 0}
     c = ia.estimativa(op)
-    # 43 mil tokens lidos a US$ 4/milhão + 4 mil escritos a US$ 20/milhão + 5 pesquisas a US$ 0,01
-    assert c["por_busca"] == pytest.approx(0.172 + 0.08 + 0.05, abs=0.001)
+    # 43 mil tokens lidos a US$ 1,25/milhão + 6 mil escritos a US$ 10/milhão + 5 pesquisas a US$ 0,01
+    assert c["por_busca"] == pytest.approx(0.05375 + 0.06 + 0.05, abs=0.001)
     assert c["por_mes"] == pytest.approx(c["por_busca"] * 90, abs=0.05)
-    assert ia.estimativa({**op, "gasto_max_mes_usd": 10})["por_mes"] == 10
+    assert ia.estimativa({**op, "gasto_max_mes_usd": 1})["por_mes"] == 1
+
+
+def test_custo_com_cache_conta_mais_barato():
+    sem = ia.custo_real("gpt-5-mini", 40000, 3000, 2)
+    com = ia.custo_real("gpt-5-mini", 40000, 3000, 2, cache_lida=20000)
+    assert com == pytest.approx(sem - 20000 * 0.25 * 0.9 / 1e6)
 
 
 def test_limites_por_dia_intervalo_e_gasto(monkeypatch):
@@ -125,19 +138,13 @@ def test_limites_por_dia_intervalo_e_gasto(monkeypatch):
     assert ia.gasto_do_mes(hoje=dt.date(2026, 11, 20)) == pytest.approx(1.10)
 
 
-# ── IA: pedido ao Claude (falso) ────────────────────────────────────
+# ── IA: pedido ao ChatGPT (falso, com respostas no formato real do SDK da OpenAI) ──
 
-def _uso(entrada=40000, saida=3000, pesquisas=4):
-    return NS(input_tokens=entrada, output_tokens=saida, cache_creation_input_tokens=0,
-              cache_read_input_tokens=0, server_tool_use=NS(web_search_requests=pesquisas))
-
-
-class Claude:
+class ChatGPT:
     def __init__(self, respostas):
         self.respostas = list(respostas)
         self.pedidos = []
-        self.beta = NS(messages=NS(create=self._create))
-        self.messages = NS(create=self._create)
+        self.responses = NS(create=self._create)
 
     def _create(self, **pedido):
         self.pedidos.append(pedido)
@@ -154,41 +161,58 @@ SUGESTOES = [
 ]
 
 
-def _resposta_final():
-    return NS(stop_reason="tool_use", usage=_uso(), content=[
-        NS(type="text", text="Achei estas."),
-        NS(type="tool_use", name="entregar_ofertas", input={"ofertas": SUGESTOES})])
+def _resposta(lista=None, com_links=True, pesquisas=5, texto=None, recusa=False):
+    """Resposta no formato real do SDK (Response da API Responses), como a OpenAI devolve."""
+    from openai.types.responses import Response
+    fontes = [{"type": "url", "url": "https://lista.mercadolivre.com.br/tenis-nike"}]
+    if com_links:
+        fontes.insert(0, {"type": "url",
+                          "url": "https://produto.mercadolivre.com.br/MLB-1234567890-tenis-nike-revolution-_JM"})
+    saida = [{"type": "web_search_call", "id": f"ws_{i}", "status": "completed",
+              "action": {"type": "search", "query": "tênis nike oferta mercado livre", "sources": fontes}}
+             for i in range(pesquisas)]
+    if texto is None:
+        texto = json.dumps({"ofertas": lista}) if lista is not None else "Pesquisei, mas não montei a lista."
+    anotacoes = [{"type": "url_citation", "title": "Relógio Casio", "start_index": 0, "end_index": 1,
+                  "url": "https://www.mercadolivre.com.br/relogio-casio/p/MLB22334455"}] if com_links else []
+    conteudo = ([{"type": "refusal", "refusal": "não posso"}] if recusa
+                else [{"type": "output_text", "text": texto, "annotations": anotacoes}])
+    saida.append({"type": "message", "id": "msg_1", "role": "assistant", "status": "completed",
+                  "content": conteudo})
+    return Response.model_validate({
+        "id": "resp_1", "object": "response", "created_at": 1, "model": "gpt-5-mini", "status": "completed",
+        "parallel_tool_calls": True, "tool_choice": "auto", "tools": [], "output": saida,
+        "usage": {"input_tokens": 40000, "output_tokens": 3000, "total_tokens": 43000,
+                  "input_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 0},
+                  "output_tokens_details": {"reasoning_tokens": 1000}}})
 
 
-def test_pede_com_pesquisa_na_web_e_continua_pesquisa_longa(monkeypatch):
+def test_pede_com_pesquisa_na_web_e_lista_em_json(monkeypatch):
     _ligar_ia(monkeypatch)
-    claude = Claude([NS(stop_reason="pause_turn", usage=_uso(10000, 500, 2), content=[NS(type="text", text="...")]),
-                     _resposta_final()])
-    monkeypatch.setattr(ia, "_cliente", lambda: claude)
+    gpt = ChatGPT([_resposta(SUGESTOES, com_links=False, pesquisas=4)])
+    monkeypatch.setattr(ia, "_cliente", lambda: gpt)
     sugestoes, uso = ia.pedir_sugestoes()
     assert [s["titulo"] for s in sugestoes] == ["Tênis Nike", "Relógio Casio", "Inventado"]
-    assert len(claude.pedidos) == 2 and claude.pedidos[1]["messages"][-1]["role"] == "assistant"
-    p = claude.pedidos[0]
-    assert p["model"] == "claude-opus-5-5"
-    pesquisa = next(t for t in p["tools"] if t["name"] == "web_search")
-    assert pesquisa["type"] == "web_search_20260209" and pesquisa["max_uses"] == 5
-    assert "mercadolivre.com.br" in pesquisa["allowed_domains"]
-    assert uso["pesquisas"] == 6 and uso["custo"] == pytest.approx(
-        ia.custo_real("claude-opus-5-5", 50000, 3500, 6))
+    assert len(gpt.pedidos) == 1
+    p = gpt.pedidos[0]
+    assert p["model"] == "gpt-5-mini" and p["max_tool_calls"] == 5
+    assert p["text"]["format"]["type"] == "json_schema"
+    pesquisa = p["tools"][0]
+    assert pesquisa["type"] == "web_search" and pesquisa["user_location"]["country"] == "BR"
+    assert "mercadolivre.com.br" in pesquisa["filters"]["allowed_domains"]
+    assert uso["pesquisas"] == 4 and uso["custo"] == pytest.approx(ia.custo_real("gpt-5-mini", 40000, 3000, 4))
 
 
-def test_haiku_usa_a_pesquisa_basica(monkeypatch):
-    _ligar_ia(monkeypatch, modelo="claude-haiku-5-5")
-    claude = Claude([_resposta_final()])
-    monkeypatch.setattr(ia, "_cliente", lambda: claude)
-    ia.pedir_sugestoes()
-    assert claude.pedidos[0]["tools"][0]["type"] == "web_search_20250305"
-    assert "fallbacks" not in claude.pedidos[0]
-
-
-def test_lista_em_json_no_texto_tambem_vale():
-    r = NS(content=[NS(type="text", text='Aqui: {"ofertas": [{"url": "u", "titulo": "t", "preco": 1, "preco_original": 0}]}')])
+def test_lista_em_json_no_meio_do_texto_tambem_vale():
+    r = _resposta(texto='Aqui: {"ofertas": [{"url": "u", "titulo": "t", "preco": 1, "preco_original": 0}]}')
     assert ia._sugestoes_da_resposta(r)[0]["titulo"] == "t"
+
+
+def test_recusa_do_modelo_vira_erro(monkeypatch):
+    _ligar_ia(monkeypatch)
+    monkeypatch.setattr(ia, "_cliente", lambda: ChatGPT([_resposta(recusa=True)]))
+    with pytest.raises(ia.ErroIA, match="recusou"):
+        ia.pedir_sugestoes()
 
 
 class ClienteML:
@@ -256,15 +280,15 @@ def ciclo(monkeypatch):
 
 def test_ciclo_envia_oferta_achada_pela_ia_e_conferida(monkeypatch, ciclo):
     _ligar_ia(monkeypatch)
-    claude = Claude([_resposta_final()])
-    monkeypatch.setattr(ia, "_cliente", lambda: claude)
+    gpt = ChatGPT([_resposta(SUGESTOES, com_links=False)])
+    monkeypatch.setattr(ia, "_cliente", lambda: gpt)
     monkeypatch.setattr(mercadolivre, "cliente_padrao", lambda: ClienteML())
     g = Grupo("clube", "Clube", ofertas_gerais=True)
     assert pipeline.executar_ciclo(ciclo, [g], registrar=False) == 1
     assert ciclo.envios[0] in {"MLB1234567890", "MLB22334455"}
     # no ciclo seguinte não pergunta de novo (intervalo), usa o estoque
     pipeline.executar_ciclo(ciclo, [g], registrar=False)
-    assert len(claude.pedidos) == 1
+    assert len(gpt.pedidos) == 1
     assert ia.ler_estado()["buscas_dia"] == {dt.date.today().isoformat(): 1}
 
 
@@ -274,21 +298,32 @@ def test_ciclo_sem_grupo_de_ofertas_gerais_nao_chama_a_ia(monkeypatch, ciclo):
     pipeline.executar_ciclo(ciclo, [Grupo("b", "B", {"MLB1": "x"})], registrar=False)  # _cliente falha se chamar
 
 
-def test_erro_da_chave_nao_derruba_o_ciclo(monkeypatch, caplog):
-    import anthropic
+def _erro_http(classe, status, corpo=None):
     import httpx2 as httpx  # mesmo pacote HTTP do SDK
+    req = httpx.Request("POST", "https://api.openai.com/v1/responses")
+    return classe("erro", response=httpx.Response(status, request=req), body=corpo)
+
+
+def test_erro_da_chave_nao_derruba_o_ciclo(monkeypatch, caplog):
+    import openai
     _ligar_ia(monkeypatch)
 
     class Recusa:
         def _create(self, **k):
-            raise anthropic.AuthenticationError("invalid x-api-key", response=httpx.Response(
-                401, request=httpx.Request("POST", "https://api.anthropic.com/v1/messages")), body=None)
+            raise _erro_http(openai.AuthenticationError, 401)
     r = Recusa()
-    r.beta = NS(messages=NS(create=r._create))
+    r.responses = NS(create=r._create)
     monkeypatch.setattr(ia, "_cliente", lambda: r)
     assert ia.buscar(T) == []
-    assert any("chave ANTHROPIC_API_KEY inválida" in x.message for x in caplog.records)
+    assert any("chave OPENAI_API_KEY inválida" in x.message for x in caplog.records)
     assert ia.motivo_para_nao_buscar(T + 60) is not None  # não fica tentando à toa
+
+
+def test_sem_creditos_explica_o_que_fazer():
+    import openai
+    e = _erro_http(openai.RateLimitError, 429, {"code": "insufficient_quota", "message": "quota"})
+    assert "sem créditos na conta da OpenAI" in str(ia._erro_da_api(e))
+    assert "tente mais tarde" in str(ia._erro_da_api(_erro_http(openai.RateLimitError, 429)))
 
 
 # ── painel ──────────────────────────────────────────────────────────
@@ -309,22 +344,32 @@ def arquivos(tmp_path, monkeypatch):
 def test_painel_le_e_grava_a_ia(arquivos):
     import yaml
     d = painel.ler_tudo()
-    assert d["ia"]["ativa"] is False and d["ia"]["modelo"] == "claude-opus-5-5"
-    assert d["env"]["ANTHROPIC_API_KEY"] == {"secreto": True, "definido": False, "valor": ""}
-    assert d["ia_info"]["precos"]["claude-opus-5-5"] == [4.0, 20.0]
-    d["env"] = {"ANTHROPIC_API_KEY": "sk-ant-xyz"}
+    assert d["ia"]["ativa"] is False and d["ia"]["modelo"] == "gpt-5-mini"
+    assert d["env"]["OPENAI_API_KEY"] == {"secreto": True, "definido": False, "valor": ""}
+    assert d["ia_info"]["precos"]["gpt-5-mini"] == [0.25, 2.0]
+    d["env"] = {"OPENAI_API_KEY": "sk-xyz"}
     d["ia"].update(ativa=True, buscas_por_dia=2, gasto_max_mes_usd=5.5)
     assert painel.salvar(d) == []
     ia_yaml = yaml.safe_load((arquivos / "config.yaml").read_text(encoding="utf-8"))["fontes"]["ia"]
     assert ia_yaml["ativa"] is True and ia_yaml["buscas_por_dia"] == 2 and ia_yaml["gasto_max_mes_usd"] == 5.5
-    assert "ANTHROPIC_API_KEY=sk-ant-xyz" in (arquivos / ".env").read_text(encoding="utf-8")
-    assert painel.ler_tudo()["env"]["ANTHROPIC_API_KEY"]["valor"] == ""  # segredo não volta para a tela
+    assert "OPENAI_API_KEY=sk-xyz" in (arquivos / ".env").read_text(encoding="utf-8")
+    assert painel.ler_tudo()["env"]["OPENAI_API_KEY"]["valor"] == ""  # segredo não volta para a tela
+
+
+def test_painel_troca_modelo_antigo_do_claude(arquivos):
+    texto = (arquivos / "config.yaml").read_text(encoding="utf-8")
+    (arquivos / "config.yaml").write_text(texto.replace("modelo: gpt-5-mini", "modelo: claude-opus-5-5"),
+                                          encoding="utf-8")
+    d = painel.ler_tudo()
+    assert d["ia"]["modelo"] == "gpt-5-mini"
+    d["env"] = {}
+    assert painel.salvar(d) == []
 
 
 def test_painel_valida_a_ia(arquivos):
     d = painel.ler_tudo()
     d["env"] = {}
-    d["ia"].update(modelo="gpt-5", buscas_por_dia=99, intervalo_horas=0)
+    d["ia"].update(modelo="claude-opus-5-5", buscas_por_dia=99, intervalo_horas=0)
     erros = painel.salvar(d)
     assert any("modelo desconhecido" in e for e in erros)
     assert any("buscas_por_dia" in e for e in erros) and any("intervalo_horas" in e for e in erros)
@@ -333,68 +378,41 @@ def test_painel_valida_a_ia(arquivos):
 def test_tela_mostra_custo_antes_de_ligar():
     html = painel.ARQ_HTML.read_text(encoding="utf-8")
     assert 'id="ia-custo"' in html and "Ligar a IA? Custo estimado" in html
-    assert "ANTHROPIC_API_KEY" in html
+    assert "OPENAI_API_KEY" in html and "ANTHROPIC" not in html
 
 
-# ── IA: aproveitar os links que vieram nas pesquisas (correção do teste F de 19/11) ──
-
-def _mensagem_real(stop_reason="end_turn", com_links=True, texto="Pesquisei, mas não montei a lista."):
-    """Resposta no formato real do SDK (BetaMessage), como a API devolve."""
-    from anthropic.types.beta import BetaMessage
-    resultados = [{"type": "web_search_result", "url": "https://lista.mercadolivre.com.br/tenis-nike",
-                   "title": "Tênis Nike", "encrypted_content": "x", "page_age": None}]
-    if com_links:
-        resultados.insert(0, {"type": "web_search_result", "title": "Tênis Nike Revolution | Mercado Livre",
-                              "url": "https://produto.mercadolivre.com.br/MLB-1234567890-tenis-nike-revolution-_JM",
-                              "encrypted_content": "x", "page_age": None})
-    return BetaMessage.model_validate({
-        "id": "msg_1", "type": "message", "role": "assistant", "model": "claude-opus-5-5",
-        "stop_reason": stop_reason, "stop_sequence": None,
-        "usage": {"input_tokens": 40000, "output_tokens": 3000,
-                  "server_tool_use": {"web_search_requests": 5, "web_fetch_requests": 0}},
-        "content": [
-            {"type": "server_tool_use", "id": "srvtoolu_1", "name": "web_search",
-             "input": {"query": "tênis nike oferta mercado livre"}},
-            {"type": "web_search_tool_result", "tool_use_id": "srvtoolu_1", "content": resultados},
-            {"type": "text", "text": texto, "citations": [
-                {"type": "web_search_result_location", "title": "Relógio Casio",
-                 "url": "https://www.mercadolivre.com.br/relogio-casio/p/MLB22334455",
-                 "encrypted_index": "x", "cited_text": "..."}] if com_links else None}]})
-
+# ── IA: aproveitar os links que vieram nas pesquisas ────────────────
 
 def test_sem_lista_da_ia_usa_os_links_das_pesquisas(monkeypatch):
     _ligar_ia(monkeypatch)
-    claude = Claude([_mensagem_real()])
-    monkeypatch.setattr(ia, "_cliente", lambda: claude)
+    gpt = ChatGPT([_resposta()])
+    monkeypatch.setattr(ia, "_cliente", lambda: gpt)
     sugestoes, uso = ia.pedir_sugestoes()
-    assert len(claude.pedidos) == 1  # já tinha links: não pede de novo
+    assert len(gpt.pedidos) == 1  # já tinha links: não pede de novo
     assert uso["da_lista"] == 0 and uso["das_pesquisas"] == 2
     ofertas, descartadas = ia.conferir(sugestoes, ClienteML())
     assert {o.id_produto for o in ofertas} == {"MLB1234567890", "MLB22334455"} and descartadas == 0
     diag = ia.ARQ_ULTIMA_RESPOSTA.read_text(encoding="utf-8")
-    assert "lista da IA (entregar_ofertas): não veio" in diag and "MLB-1234567890" in diag
+    assert "lista da IA: não veio" in diag and "MLB-1234567890" in diag
 
 
 def test_sem_lista_e_sem_links_pede_so_a_lista_uma_vez(monkeypatch):
     _ligar_ia(monkeypatch)
-    claude = Claude([_mensagem_real(com_links=False), _mensagem_real(com_links=False)])
-    monkeypatch.setattr(ia, "_cliente", lambda: claude)
+    gpt = ChatGPT([_resposta(com_links=False), _resposta(com_links=False, pesquisas=0)])
+    monkeypatch.setattr(ia, "_cliente", lambda: gpt)
     sugestoes, uso = ia.pedir_sugestoes()
-    assert sugestoes == [] and len(claude.pedidos) == 2  # uma vez só
-    segundo = claude.pedidos[1]
-    assert segundo["messages"][-1] == {"role": "user", "content": ia._PEDIDO_LISTA}
-    assert next(t for t in segundo["tools"] if t["name"] == "web_search")["max_uses"] == 1
+    assert sugestoes == [] and len(gpt.pedidos) == 2  # uma vez só
+    segundo = gpt.pedidos[1]
+    assert segundo["input"] == ia._PEDIDO_LISTA and segundo["previous_response_id"] == "resp_1"
+    assert "tools" not in segundo  # não pesquisa de novo
 
 
 def test_lista_da_ia_e_links_das_pesquisas_somam_sem_repetir(monkeypatch):
     _ligar_ia(monkeypatch)
-    m = _mensagem_real(stop_reason="tool_use")
-    from anthropic.types.beta import BetaToolUseBlock
-    m.content.append(BetaToolUseBlock(type="tool_use", id="toolu_1", name="entregar_ofertas", input={"ofertas": [
-        {"url": "https://www.mercadolivre.com.br/relogio-casio/p/MLB22334455", "titulo": "Relógio Casio",
-         "preco": 150, "preco_original": 300}]}))
-    claude = Claude([m])
-    monkeypatch.setattr(ia, "_cliente", lambda: claude)
+    lista = [{"url": "https://www.mercadolivre.com.br/relogio-casio/p/MLB22334455", "titulo": "Relógio Casio",
+              "preco": 150, "preco_original": 300}]
+    gpt = ChatGPT([_resposta(lista)])
+    monkeypatch.setattr(ia, "_cliente", lambda: gpt)
     sugestoes, uso = ia.pedir_sugestoes()
     assert uso["da_lista"] == 1 and uso["das_pesquisas"] == 2
     from ofertas.afiliado_ml import extrair_id
@@ -405,14 +423,6 @@ def test_lista_da_ia_e_links_das_pesquisas_somam_sem_repetir(monkeypatch):
 def test_pagina_de_lista_ou_de_outro_site_nao_e_produto():
     assert ia.links_das_pesquisas([{"url": "https://lista.mercadolivre.com.br/tenis"},
                                    {"url": "https://www.pelando.com.br/d/tenis-MLB123456789"}]) == []
-
-
-def test_busca_que_nao_termina_aproveita_os_links(monkeypatch):
-    _ligar_ia(monkeypatch)
-    claude = Claude([_mensagem_real(stop_reason="pause_turn")] * (ia.CONTINUAR_MAX + 2))
-    monkeypatch.setattr(ia, "_cliente", lambda: claude)
-    sugestoes, uso = ia.pedir_sugestoes()
-    assert uso["das_pesquisas"] == 2 and len(sugestoes) == 2
 
 
 # ── G2: em alta no ML (termos mais buscados agora) ──────────────────

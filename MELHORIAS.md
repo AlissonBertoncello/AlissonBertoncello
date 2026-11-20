@@ -30,7 +30,7 @@ Ideias levantadas a partir de grupos concorrentes. Cada item depende de aprovaç
 | Diagnóstico | Página geral aberta sem ofertas: log, cópia em data/ml_geral_debug.html e pausa de 3 h |
 | P1 | Página de ofertas do ML não é mais aberta (barrava até com login); a tela "Para continuar, acesse sua conta" também conta como bloqueio |
 | P2 | Ofertas gerais: departamentos de varejo escolhidos (moda e calçados com peso 2; sem comida, bebida, livros), ranking lido no nível que tem ranking e subcategoria sem ranking anotada |
-| IA1 | IA (Claude com pesquisa na web) acha ofertas do ML; cada uma é conferida na API do ML antes de ir ao estoque; chave, modelo, buscas por dia, teto de gasto e custo estimado no painel (aba Contas) |
+| IA1 | IA (ChatGPT com pesquisa na web; até 19/11/2026 era o Claude) acha ofertas do ML; cada uma é conferida na API do ML antes de ir ao estoque; chave, modelo, buscas por dia, teto de gasto e custo estimado no painel (aba Contas) |
 | Teste | `TESTAR_FONTES.bat` agora testa A, B, D1 e F (IA, só se ligada) |
 | IA1b | IA: além da lista final, aproveita os links de produto do ML que vieram nas pesquisas (já pagas); sem lista e sem links, pede só a lista uma vez; resposta guardada para diagnóstico |
 | Q1–Q5 | Produtos bons: rankings primeiro (em alta só de reserva, filtrado), nota de qualidade (marca, desconto, ranking, preço) nos grupos de ofertas gerais, pisos por grupo (25% / R$ 25 nos de ofertas gerais), lista de marcas no painel, log sem a linha do estoque vazio |
@@ -77,7 +77,7 @@ https://meli.la/...
 | # | Mudança | Custo | Esforço |
 |---|---|---|---|
 | 1 | **Gancho por grupo**: lista de frases de abertura por grupo, editável no painel, em rodízio | grátis | pequeno |
-| 2 | **Gancho escrito por IA** (Claude) para cada produto | pago por uso (baixo); precisa de chave da API da Anthropic | médio |
+| 2 | **Gancho escrito por IA** (ChatGPT) para cada produto | pago por uso (baixo); usa a mesma OPENAI_API_KEY da busca | médio |
 | 3 | **Título curto**: 6–8 palavras principais, sem repetições | grátis | pequeno |
 | 4 | **Parcelamento e cupom** quando a página de ofertas do ML mostrar (conferir em `data\ml_ofertas_debug.html`) | grátis | médio |
 | 5 | **Formato enxuto**: preço sem centavos quando redondo, menos emojis, rodapé de convite em 1 linha | grátis | pequeno |
