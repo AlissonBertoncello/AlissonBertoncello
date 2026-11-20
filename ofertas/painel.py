@@ -44,7 +44,7 @@ CAMPOS_ENV = {
 }
 # sobe quando a tela passa a precisar de campos novos: a tela compara com a dela e avisa
 # se quem responde é um painel antigo que ficou aberto desde antes da atualização
-VERSAO_PAINEL = 5
+VERSAO_PAINEL = 6
 _RE_CHAVE = re.compile(r"^[a-z0-9_]{1,30}$")
 _RE_HORA = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 _RE_CAT = re.compile(r"^MLB\d{1,10}$")
@@ -675,14 +675,29 @@ class _Handler(BaseHTTPRequestHandler):
         self._json({"ok": True, "rodando": bot_rodando()})
 
 
+def _versao_aberta(porta: int):
+    """Versão do painel que já responde nesta porta (None = não deu para saber)."""
+    import urllib.request
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{porta}/api/config", timeout=3) as r:
+            return json.loads(r.read().decode("utf-8")).get("versao", 0)
+    except Exception:
+        return None
+
+
 def abrir(porta: int = PORTA, navegador: bool = True) -> None:
     try:
         srv = ThreadingHTTPServer(("127.0.0.1", porta), _Handler)
     except OSError:
+        if _versao_aberta(porta) not in (VERSAO_PAINEL, None):
+            print("⚠️  Tem um painel ANTIGO aberto (de antes da atualização). Ele é que aparece no navegador.")
+            print("   Feche todas as janelas pretas do bot (ou reinicie o computador) e abra o CONFIGURAR.bat de novo.")
+            return
         print(f"ℹ️  O painel já está aberto: http://127.0.0.1:{porta}")
         if navegador:
             webbrowser.open(f"http://127.0.0.1:{porta}")
         return
+    print(f"   Pasta do bot: {ARQ_HTML.parent.parent}")
     url = f"http://127.0.0.1:{porta}"
     print(f"\n✅ Painel de configuração em {url}")
     print("   (se o navegador não abrir sozinho, copie o endereço acima)")

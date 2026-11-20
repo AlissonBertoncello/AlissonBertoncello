@@ -368,8 +368,12 @@ De tempos em tempos, o **ChatGPT pesquisa na internet** as melhores ofertas do M
 
 ## 10. Atualizar o projeto
 
-1. Baixe o ZIP de novo (**Code → Download ZIP**) e extraia **por cima** da pasta.
-2. Pronto. O seu `config.yaml`, o `.env` e a pasta `data\` **não** fazem parte do ZIP, então ficam como estão.
+**Jeito fácil:** dois cliques em **`ATUALIZAR.bat`**. Ele fecha o painel e o bot abertos, baixa a versão nova do GitHub, troca os arquivos e confere se deu certo. O seu `config.yaml`, o `.env` e a pasta `data\` não são mexidos.
+
+**Pelo ZIP (se não tiver o `ATUALIZAR.bat`):**
+1. Feche todas as janelas pretas do bot.
+2. Baixe o ZIP (**Code → Download ZIP**) e extraia. Ele cria uma pasta `AlissonBertoncello-main`: **abra essa pasta**, copie tudo o que está **dentro** dela e cole na pasta do bot, escolhendo **Substituir**. (Extrair direto "por cima" só cria essa pasta dentro da do bot e não troca nada.)
+3. Pronto. O seu `config.yaml`, o `.env` e a pasta `data\` **não** fazem parte do ZIP, então ficam como estão.
 
 - Novidades de configuração aparecem no `config.exemplo.yaml` (e no painel) — compare se quiser usar alguma.
 - Se o `config.yaml` sumir por algum motivo, o bot recria sozinho a partir da última cópia salva pelo painel (`data\meu_config.yaml`) ou, se não houver, do `config.exemplo.yaml`.
