@@ -330,11 +330,24 @@ def mais_vendidos(cid: str, cliente) -> list[Oferta]:
     """Ranking de mais vendidos da subcategoria (com a posição de cada produto). Categoria
     sem ranking (404) fica anotada e não é pedida de novo por uma semana."""
     from .mercadolivre import _destaques_de
+    # Fonte adicional, desligada por padrão; mantém integralmente o fluxo anterior.
+    if config.fonte_ml.get("ranking_adicional", False):
+        try:
+            from .ml_ranking_adicional import descobrir
+            extras = descobrir(cliente, str(config.fonte_ml.get("site") or "MLB"), cid,
+                               int(config.fonte_ml.get("limite_destaques", 20)))
+        except Exception as exc:
+            log.warning("Ranking adicional indisponível em %s: %s", cid, exc)
+            extras = []
+    else:
+        extras = []
     if cid in _sem_ranking():
         return []
     site = str(config.fonte_ml.get("site") or "MLB")
     try:
-        return _destaques_de(cliente, site, cid, int(config.fonte_ml.get("limite_destaques", 20)))
+        atuais = _destaques_de(cliente, site, cid, int(config.fonte_ml.get("limite_destaques", 20)))
+        ids = {o.id_produto for o in atuais}
+        return atuais + [o for o in extras if o.id_produto not in ids]
     except Exception as e:
         if "HTTP 404" not in str(e):
             raise
