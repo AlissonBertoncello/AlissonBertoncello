@@ -342,7 +342,7 @@ def mais_vendidos(cid: str, cliente) -> list[Oferta]:
     else:
         extras = []
     if cid in _sem_ranking():
-        return []
+        return extras
     site = str(config.fonte_ml.get("site") or "MLB")
     try:
         atuais = _destaques_de(cliente, site, cid, int(config.fonte_ml.get("limite_destaques", 20)))
@@ -350,13 +350,18 @@ def mais_vendidos(cid: str, cliente) -> list[Oferta]:
         return atuais + [o for o in extras if o.id_produto not in ids]
     except Exception as e:
         if "HTTP 404" not in str(e):
+            if extras:
+                log.warning("Ranking tradicional %s indisponível (%s); usando %d ofertas adicionais",
+                            cid, e, len(extras))
+                return extras
             raise
         guardado = _termos.get("_sem_ranking")
         if not guardado or time.time() - guardado["em"] > VALIDADE_TERMOS_DIAS * 86400:
             guardado = _termos["_sem_ranking"] = {"em": time.time(), "termos": []}
-        guardado["termos"].append(cid)
+        if cid not in guardado["termos"]:
+            guardado["termos"].append(cid)
         _salvar_termos()
-        return []
+        return extras
 
 
 def catalogo(termo: str, cliente, limite: int = 10) -> list[Oferta]:
