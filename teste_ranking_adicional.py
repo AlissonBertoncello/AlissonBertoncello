@@ -29,16 +29,19 @@ def main():
     args = parser.parse_args()
     cliente = ClienteML.do_config()
     resultados = []
+    categorias_relatorio = []
     ids = set()
     for nome, categoria in CATEGORIAS.items():
         try:
             ofertas = descobrir(cliente, "MLB", categoria, args.limite)
         except Exception as exc:
             print(f"{nome}: ERRO {exc}")
+            categorias_relatorio.append({"nome": nome, "categoria": categoria, "erro": str(exc)})
             continue
         novas = [o for o in ofertas if o.id_produto not in ids]
         ids.update(o.id_produto for o in novas)
         print(f"{nome}: {len(ofertas)} ofertas, {len(novas)} novas")
+        categorias_relatorio.append({"nome": nome, "categoria": categoria, "encontradas": len(ofertas), "novas": len(novas)})
         resultados.extend(novas)
     validas = [o for o in resultados if o.titulo and o.imagem and o.preco_original
                and o.preco is not None and o.preco < o.preco_original
@@ -52,6 +55,7 @@ def main():
             print(f"LINKBUILDER: {type(exc).__name__}: {exc}")
     relatorio = {
         "total": len(resultados),
+        "categorias": categorias_relatorio,
         "dados_completos": len(validas),
         "ofertas": [{
             "id": o.id_produto,
