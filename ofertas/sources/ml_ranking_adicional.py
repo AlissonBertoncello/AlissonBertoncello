@@ -16,7 +16,7 @@ def descobrir(cliente, site: str, categoria: str, limite: int = 20) -> list[Ofer
     USER_PRODUCT não expõe nome/imagem nesta credencial (403), por isso fica
     fora até existir fonte confiável desses campos.
     """
-    from .mercadolivre import produto_para_oferta
+    from .mercadolivre import produto_para_oferta, ErroAPI, item_para_oferta
 
     try:
         ranking = cliente.destaques(site, categoria)
@@ -27,17 +27,45 @@ def descobrir(cliente, site: str, categoria: str, limite: int = 20) -> list[Ofer
     saida: list[Oferta] = []
     vistos: set[str] = set()
     for posicao, entrada in enumerate(ranking[:max(1, limite)], 1):
-        if entrada.get("type") != "PRODUCT":
+        if entrada.get("type") not in ("PRODUCT", "ITEM"):
             continue
         pid = entrada.get("id")
         if not pid or pid in vistos:
             continue
         vistos.add(pid)
         try:
+            if entrada.get("type") == "ITEM":
+                for item in cliente.itens([pid]):
+                    oferta = item_para_oferta(item)
+                    if (oferta and oferta.imagem and oferta.preco is not None
+                            and oferta.preco_original and 0 < oferta.preco < oferta.preco_original):
+                        oferta.posicao = posicao
+                        saida.append(oferta)
+                continue
             produto = cliente.produto(pid)
             if not produto.get("name") or not produto.get("pictures"):
                 continue
-            anuncios = cliente.itens_do_produto(pid)
+            anuncios = []
+            vencedor = produto.get("buy_box_winner") or {}
+            if vencedor:
+                anuncios.append(vencedor)
+            try:
+                anuncios.extend(cliente.itens_do_produto(pid))
+            except ErroAPI:
+                # O catálogo continua utilizável quando a listagem não é autorizada.
+                pass
+            if vencedor.get("item_id") and (vencedor.get("price") is None
+                                             or vencedor.get("original_price") is None):
+                try:
+                    for item in cliente.itens([vencedor["item_id"]]):
+                        oferta = item_para_oferta(item)
+                        if (oferta and oferta.imagem and oferta.preco is not None
+                                and oferta.preco_original and 0 < oferta.preco < oferta.preco_original):
+                            oferta.posicao = posicao
+                            saida.append(oferta)
+                            break
+                except ErroAPI:
+                    pass
             # Não usar apenas o menor preço: exigir desconto verificável.
             elegiveis = [a for a in anuncios
                          if a.get("item_id") and a.get("price") is not None
