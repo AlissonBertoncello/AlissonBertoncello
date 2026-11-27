@@ -106,7 +106,7 @@ def montar_mensagem(o: Oferta, grupo: Grupo | None = None, gancho: str | None = 
 
     linhas += ["", f"*{chamada_compra(o, grupo)}*", o.link]
     if config.aviso_preco:
-        linhas.append(AVISO_PRECO)
+        linhas += ["", AVISO_PRECO]  # uma linha em branco entre o link e o aviso
     if grupo and grupo.convite:
         linhas += ["", grupo.chamada or CHAMADA_PADRAO, f"👉 {grupo.convite}"]
     return "\n".join(linhas)

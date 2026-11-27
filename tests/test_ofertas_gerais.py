@@ -301,7 +301,7 @@ def test_aviso_de_preco_vem_logo_abaixo_do_link():
     from ofertas.formatter import montar_mensagem
     g = Grupo("g", "G", convite="https://chat.whatsapp.com/X")
     msg = montar_mensagem(Oferta("mercadolivre", "1", "Fone", "https://ml/1", 50, 100, url_afiliado="https://meli.la/1"), g)
-    assert "https://meli.la/1\n⚠️ Preço e disponibilidade podem variar.\n\n" in msg
+    assert "https://meli.la/1\n\n⚠️ Preço e disponibilidade podem variar.\n\n" in msg
 
 
 def test_log_do_catalogo(monkeypatch, ciclo, caplog):
