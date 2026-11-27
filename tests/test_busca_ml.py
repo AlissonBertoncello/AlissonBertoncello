@@ -105,3 +105,50 @@ def test_marcas_novas_da_pagina():
     for titulo in ("Kit 10 Cuecas Boxer Lupo Algodão", "Camiseta Polo Core Masculino Insider",
                    "Amazon Echo Dot 5ª Geração"):
         assert qualidade.marca_boa(Oferta("mercadolivre", "x", titulo, "u", 100, 200)), titulo
+
+
+# ── D: diversidade de categoria e marca (27/11) ─────────────────────
+
+def test_categoria_pelo_titulo():
+    from ofertas import qualidade
+    casos = {"Tênis Nike Court Vision": "calçados", "Kit 10 Cuecas Boxer Lupo": "roupas",
+             "Relógio Tommy Hilfiger David": "acessórios", "Boné Nike Club Swoosh": "acessórios",
+             "Fritadeira Air Fryer 5,5l Widemax": "casa e cozinha", "Caixa de Som Boombox AIWA": "eletrônicos",
+             "Lavadora de Alta Pressão WAP": "ferramentas", "Máscara de Reconstrução Profunda para Cabelos": "beleza e perfume",
+             "Perfume Árabe Masculino": "beleza e perfume", "Whey Protein Growth": "fitness"}
+    for titulo, cat in casos.items():
+        assert qualidade.categoria(titulo) == cat, titulo
+
+
+def test_nao_repete_categoria_nem_marca_em_seguida(monkeypatch):
+    from ofertas import db, pipeline
+    from ofertas.config import config
+    from ofertas.models import Grupo, Oferta
+    monkeypatch.setattr(config, "palavras_bloqueadas", [])
+
+    def o(i, titulo, preco, antes):
+        return Oferta("mercadolivre", f"MLB{i}", titulo, f"https://ml/{i}", preco, antes)
+    estoque = [o(1, "Tênis Nike Court Vision Masculino", 250, 600), o(2, "Tênis Nike Court Vision Feminino", 250, 600),
+               o(3, "Tênis Kappa Park Unissex", 70, 170), o(4, "Fritadeira Air Fryer Mondial 12L", 399, 880),
+               o(5, "Camiseta Polo Insider Core", 115, 275)]
+    g = Grupo("clube", "Clube", ofertas_gerais=True, desconto_minimo=15, preco_minimo=25)
+    enviados = []
+    for _ in range(4):
+        restantes = [x for x in estoque if x.id_produto not in enviados]
+        [escolhida] = pipeline.escolher_do_grupo(g, restantes, 1)
+        db.registrar(escolhida, g.chave)
+        enviados.append(escolhida.id_produto)
+    # o 1º é o de nota mais alta (Kappa, -59%); depois nunca a mesma categoria em seguida
+    assert enviados[0] == "MLB3"
+    from ofertas import qualidade
+    cats = [qualidade.categoria(next(x.titulo for x in estoque if x.id_produto == i)) for i in enviados]
+    assert all(a != b for a, b in zip(cats, cats[1:])), cats
+    assert not {"MLB1", "MLB2"} <= set(enviados[:3])  # os dois Nike não saem um logo depois do outro
+
+
+def test_grupo_comum_nao_muda():
+    from ofertas import pipeline
+    from ofertas.models import Grupo, Oferta
+    a = Oferta("mercadolivre", "A", "Tênis X", "u", 50, 100)
+    b = Oferta("mercadolivre", "B", "Tênis Y", "u", 40, 100)
+    assert [x.id_produto for x in pipeline.escolher_do_grupo(Grupo("g", "G"), [a, b], 2)] == ["B", "A"]

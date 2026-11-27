@@ -90,3 +90,49 @@ def nota(o: Oferta) -> float:
 
 def e_marca(termo: str) -> bool:
     return _normal(termo).strip() in marcas()
+
+
+# ── diversidade: não repetir a mesma categoria (nem a mesma marca) em seguida ──
+# tipo de produto pelo título (o primeiro que bater); a ordem importa: "relógio smart"
+# é acessório, "lavadora de alta pressão" é ferramenta, "kit cuecas" é roupa
+CATEGORIAS = (
+    ("calçados", r"\b(t[eê]nis|sapat[eê]nis|sapato|sand[aá]lia|chinelo|bota|rasteir|mocassim|slide|papete|chuteira|babuche|alpargata)"),
+    ("acessórios", r"\b(rel[oó]gio|smartwatch|[oó]culos|bon[eé]|bolsa|mochila|carteira|cinto|pulseira|colar|brinco|anel|mala\b|necessaire|chap[eé]u|gorro)"),
+    ("roupas", r"\b(camis|blusa|cal[cç]a|bermuda|short|vestido|jaqueta|moletom|agasalho|casaco|meia|cueca|suti[aã]|lingerie|regata|polo\b|conjunto|legging|top\b|pijama|t-shirt|saia|biqu[ií]ni|mai[oô])"),
+    ("beleza e perfume", r"\b(perfume|eau de|col[oô]nia|desodorante|body splash|shampoo|condicionador|creme|hidratante|maquiag|batom|s[eé]rum|protetor solar|m[aá]scara (de reconstru|capilar|de hidrata|de nutri)|capilar|cabelos?\b|escova (rotativa|secadora|alisadora)|secador|prancha|chapinha|barbeador|aparador|depilador)"),
+    ("ferramentas", r"\b(furadeira|parafusadeira|martelete|trena|chave|soquete|alicate|serra|esmerilhadeira|martelo|n[ií]vel|ferrament|lixadeira|lavadora de alta|compressor|tupia|multímetro|multimetro)"),
+    ("eletrônicos", r"\b(fone|headphone|headset|caixa de som|celular|smartphone|iphone|galaxy|carregador|power ?bank|tablet|notebook|mouse|teclado|monitor|smart tv|\btv\b|echo|alexa|kindle|ssd|pendrive|c[aâ]mera|console|controle|playstation|xbox|airpods|projetor)"),
+    ("casa e cozinha", r"\b(panela|frigideira|air ?fryer|fritadeira|liquidificador|cafeteira|jogo de cama|toalha|travesseiro|edredom|organizador|garrafa|copo|pote|aspirador|ventilador|lumin[aá]ria|l[aâ]mpada|tapete|cortina|faca|talher|micro-?ondas|batedeira|sanduicheira|geladeira|ar[- ]condicionado|cooktop|forno|espremedor|mixer|cadeira|colch[aã]o)"),
+    ("fitness", r"\b(whey|creatina|suplemento|halter|anilha|academia|yoga|bicicleta ergom|esteira|el[aá]stico|caneleira|kettlebell)"),
+)
+PERDA_MESMA_CATEGORIA_ULTIMA = 45   # mesma categoria do último envio
+PERDA_MESMA_CATEGORIA_RECENTE = 25  # mesma categoria de um dos últimos 3
+PERDA_MESMA_MARCA_RECENTE = 20      # mesma marca de um dos últimos 3
+RECENTES = 3
+
+
+def categoria(titulo: str) -> str | None:
+    t = (titulo or "").lower()
+    return next((nome for nome, rx in CATEGORIAS if re.search(rx, t)), None)
+
+
+def _marca_do_titulo(titulo: str) -> str | None:
+    t = _normal(titulo)
+    return next((m for m in marcas() if f" {m} " in t), None)
+
+
+def nota_com_diversidade(o: Oferta, recentes: list[str]) -> float:
+    """Nota de qualidade menos a perda por repetir a categoria/marca dos últimos envios
+    (recentes: títulos, o mais recente primeiro). Nada é proibido: só muda a ordem."""
+    pontos = nota(o)
+    cat = categoria(o.titulo)
+    cats = [categoria(t) for t in recentes[:RECENTES]]
+    if cat:
+        if cats and cats[0] == cat:
+            pontos -= PERDA_MESMA_CATEGORIA_ULTIMA
+        elif cat in cats:
+            pontos -= PERDA_MESMA_CATEGORIA_RECENTE
+    marca = marca_boa(o)
+    if marca and marca in {_marca_do_titulo(t) for t in recentes[:RECENTES]}:
+        pontos -= PERDA_MESMA_MARCA_RECENTE
+    return pontos

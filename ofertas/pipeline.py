@@ -159,12 +159,12 @@ def _chave_similar(titulo: str) -> str:
     return db.chave_do_titulo(titulo)
 
 
-def escolher(ofertas: list[Oferta], n: int, por_nota: bool = False) -> list[Oferta]:
+def escolher(ofertas: list[Oferta], n: int, por_nota: bool = False, chave=None) -> list[Oferta]:
     """Top N por desconto (ou pela nota de qualidade: marca, desconto, ranking, preço),
     pulando variações do mesmo produto."""
     escolhidas: list[Oferta] = []
     vistas: set[str] = set()
-    chave = qualidade.nota if por_nota else (lambda o: o.desconto or 0)
+    chave = chave or (qualidade.nota if por_nota else (lambda o: o.desconto or 0))
     for o in sorted(ofertas, key=chave, reverse=True):
         chave = _chave_similar(o.titulo)
         if chave in vistas:
@@ -251,8 +251,12 @@ def filtrar_do_grupo(grupo: Grupo, brutas: list[Oferta], motivos: Counter | None
 
 
 def escolher_do_grupo(grupo: Grupo, boas: list[Oferta], n: int) -> list[Oferta]:
-    """Grupos de ofertas gerais escolhem pela nota de qualidade; os outros, pelo desconto."""
-    return escolher(boas, n, por_nota=grupo.ofertas_gerais)
+    """Grupos de ofertas gerais escolhem pela nota de qualidade, perdendo pontos quem repete
+    a categoria ou a marca dos últimos envios (moda, depois outra área…); os outros, pelo desconto."""
+    if not grupo.ofertas_gerais:
+        return escolher(boas, n)
+    recentes = db.ultimos_titulos(grupo.chave, qualidade.RECENTES) if boas else []
+    return escolher(boas, n, chave=lambda o: qualidade.nota_com_diversidade(o, recentes))
 
 
 def _melhores(grupo: Grupo, brutas: list[Oferta], rotulo: str, n: int) -> tuple[list[Oferta], list[Oferta]]:
@@ -354,8 +358,9 @@ def _as_melhores(grupo: Grupo, ofertas: list[Oferta], n: int) -> list[Oferta]:
     if melhores and grupo.ofertas_gerais:
         o = melhores[0]
         marca = qualidade.marca_boa(o)
-        log.info("[%s] Escolhida pela nota %.0f: %s (%s%s)", grupo.nome, qualidade.nota(o), o.titulo[:60],
-                 f"-{o.desconto}%" if o.desconto else "sem desconto", f", marca {marca}" if marca else "")
+        log.info("[%s] Escolhida pela nota %.0f: %s (%s%s%s)", grupo.nome, qualidade.nota(o), o.titulo[:60],
+                 f"-{o.desconto}%" if o.desconto else "sem desconto", f", marca {marca}" if marca else "",
+                 f", {qualidade.categoria(o.titulo)}" if qualidade.categoria(o.titulo) else "")
     return melhores
 
 
