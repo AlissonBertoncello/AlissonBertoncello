@@ -111,6 +111,11 @@ def _linha_categoria(c: dict, recuo: str) -> str:
     return f"{recuo}{c['id']}: {c['name']}{qtd}"
 
 
+def cmd_buscar_ml(_):
+    from .busca_ml import rodar
+    rodar()
+
+
 def cmd_testar_fontes(_):
     from .teste_fontes import rodar
     rodar()
@@ -333,6 +338,8 @@ def main():
     pt.set_defaults(fn=cmd_testar)
 
     sub.add_parser("diagnostico", help="testa quais caminhos de busca do ML funcionam").set_defaults(fn=cmd_diagnostico)
+    sub.add_parser("buscar-ml", help="busca crua no ML por todos os caminhos, sem filtro (não envia nada)"
+                   ).set_defaults(fn=cmd_buscar_ml)
     sub.add_parser("testar-fontes", help="testa de onde o bot consegue trazer ofertas (não envia nada)"
                    ).set_defaults(fn=cmd_testar_fontes)
 
