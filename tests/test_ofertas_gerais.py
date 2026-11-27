@@ -73,15 +73,27 @@ def _ligar_pagina(monkeypatch):
     monkeypatch.setattr(config, "fonte_ml", fonte)
 
 
-def test_pagina_de_ofertas_desligada_por_padrao(monkeypatch):
+def test_pagina_de_ofertas_ligada_por_padrao_geral_e_moda(monkeypatch):
+    """Desde 26/11 a API não dá o preço: a página de ofertas (geral + moda) é a fonte do ML."""
     monkeypatch.setattr(config, "fonte_ml", {"ativa": True})
-    monkeypatch.setattr(ml_geral, "_chrome_ler", lambda urls: (_ for _ in ()).throw(AssertionError("abriu")))
+    lidas = []
+    monkeypatch.setattr(ml_geral, "_chrome_ler", lambda urls: lidas.extend(urls) or
+                        {u: _pagina(_card(str(i + 1), "Tênis Nike Court Vision")) for i, u in enumerate(urls)})
+    g = Grupo("g", "G", ofertas_gerais=True)
+    ml_geral.atualizar([g], agora=T)
+    assert lidas == ["https://www.mercadolivre.com.br/ofertas", "https://www.mercadolivre.com.br/ofertas?category=MLB1430"]
+    assert len(ml_geral.ofertas_para(g)) == 2
+
+
+def test_pagina_de_ofertas_pode_ser_desligada(monkeypatch):
+    monkeypatch.setattr(config, "fonte_ml", {"ativa": True, "ofertas_gerais": {"pagina_ofertas": False}})
+    monkeypatch.setattr(ml_geral, "_chrome_ler", lambda urls: pytest.fail("abriu o Chrome"))
     ml_geral.atualizar([Grupo("g", "G", ofertas_gerais=True)], agora=T)
-    assert not ml_geral.pausada()
 
 
 def test_le_poucas_paginas_e_abastece_os_grupos(monkeypatch, ciclo):
     _ligar_pagina(monkeypatch)
+    monkeypatch.setattr(ml_geral, "FONTES_PADRAO", [""])
     lidas = []
 
     def chrome(urls):

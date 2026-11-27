@@ -630,7 +630,7 @@ function cartaoGrupo(g, i, aberto) {
     el("div", {}, chave_("Aceitar os mais vendidos sem desconto (“Por R$ X”)", "sem_desconto"),
       el("span", { class: "dica", text: "Os 5 primeiros do ranking de mais vendidos passam mesmo sem preço antigo. Com desconto, vale o desconto mínimo da aba Envio e filtros." })),
     el("div", { class: "grade" },
-      campo("Desconto mínimo deste grupo (%)", pisoDesc, el("small", { text: "Vazio = o da aba Envio e filtros. Grupos de ofertas gerais: 25% se ficar vazio no arquivo." })),
+      campo("Desconto mínimo deste grupo (%)", pisoDesc, el("small", { text: "Vazio = o da aba Envio e filtros. Grupos de ofertas gerais: 15% se ficar vazio no arquivo." })),
       campo("Preço mínimo deste grupo (R$)", pisoPreco, el("small", { text: "Corta bugigangas. Grupos de ofertas gerais: R$ 25 se ficar vazio no arquivo." }))),
     campo("Etiqueta do Mercado Livre só deste grupo (opcional)", etiqueta,
       el("small", { text: "Para ver no painel de afiliados do ML quanto cada grupo vende: crie outra etiqueta lá e cole aqui. Na Shopee, o bot marca o grupo sozinho (Sub ID)." })),
@@ -663,7 +663,7 @@ $("#bt-novo").onclick = () => {
   let n = 1; while (dados.grupos.some(g => g.chave === "novo_grupo" + (n > 1 ? n : ""))) n++;
   dados.grupos.push({ chave: "novo_grupo" + (n > 1 ? n : ""), ativo: true, nome: "Novo grupo", whatsapp: [], convite: "",
                       categorias: [], shopee: [], bloquear: [], ganchos: [], chamada: "", chamada_compra: "", peso_ml: 1, peso_shopee: 1,
-                      ofertas_gerais: true, departamentos: [], sem_desconto: false, etiqueta_ml: "", desconto_minimo: 25, preco_minimo: 25, _novo: true });
+                      ofertas_gerais: true, departamentos: [], sem_desconto: false, etiqueta_ml: "", desconto_minimo: 15, preco_minimo: 25, _novo: true });
   desenharGrupos(dados.grupos.length - 1); mudou();
   setTimeout(() => $("#lista-grupos details:last-child")?.scrollIntoView({ behavior: "smooth" }), 50);
 };

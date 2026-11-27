@@ -20,6 +20,28 @@ USER_AGENT = (
     "(KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36"
 )
 _RE_ID = re.compile(r"(MLB-?\d{6,})")
+# id do produto no link: catálogo (/p/MLB123), produto do vendedor (/up/MLBU123) ou anúncio (MLB-123)
+_RE_ID_LINK = re.compile(r"/p/(MLB\d{6,})|/up/(MLBU\d{6,})|(MLB)-?(\d{6,})", re.I)
+
+
+def _link_real(href: str) -> str:
+    """Card patrocinado: o link vem pelo contador de cliques (click1.mercadolivre…/count?url=…);
+    o endereço do produto está no parâmetro url."""
+    if "click1." in href or "/mclics/" in href:
+        from urllib.parse import parse_qs, urlparse
+        url = (parse_qs(urlparse(href).query).get("url") or [""])[0]
+        if url:
+            return url
+    return href
+
+
+def _id_do_link(url: str) -> str | None:
+    m = _RE_ID_LINK.search(url)
+    if not m:
+        return None
+    if m.group(1) or m.group(2):
+        return (m.group(1) or m.group(2)).upper()
+    return m.group(3).upper() + m.group(4)
 
 
 def parse_preco_br(texto: str | None) -> float | None:
@@ -50,9 +72,11 @@ def _parse_card(card) -> Oferta | None:
     a = card.select_one("a.poly-component__title")
     if not (a and a.get("href")):
         return None
-    url = a["href"].split("#")[0].split("?")[0]
-    m = _RE_ID.search(a["href"])
-    id_produto = m.group(1).replace("-", "") if m else url.rstrip("/").rsplit("/", 1)[-1][:40]
+    href = _link_real(a["href"])
+    url = href.split("#")[0].split("?")[0]
+    if "click1." in url or "/mclics/" in url:
+        return None  # patrocinado sem o endereço do produto
+    id_produto = _id_do_link(url) or url.rstrip("/").rsplit("/", 1)[-1][:40]
 
     desconto = None
     selo = card.select_one(".poly-price__discount-polylabel, .andes-money-amount__discount")

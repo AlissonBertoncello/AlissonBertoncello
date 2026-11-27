@@ -514,9 +514,9 @@ REAIS = [
 def test_pisos_do_grupo_de_ofertas_gerais_cortam_o_fraco():
     from ofertas import config as cfg
     [g] = cfg.ler_grupos({"clube": {"ofertas_gerais": True}})
-    assert (g.desconto_minimo, g.preco_minimo) == (25, 25.0)
+    assert (g.desconto_minimo, g.preco_minimo) == (15, 25.0)
     boas = {o.id_produto for o in pipeline.filtrar_do_grupo(g, REAIS)}
-    assert boas == {"1", "2", "3", "4", "5", "6", "11"}  # sai Funko, graxa, balança, gravata
+    assert boas == {"1", "2", "3", "4", "5", "6", "7", "11"}  # sai graxa (-10%), balança e gravata (< R$ 25)
     [comum] = cfg.ler_grupos({"mulher": {"categorias": {"MLB1": "x"}}})
     assert (comum.desconto_minimo, comum.preco_minimo) == (None, None)  # vale o de filtros
     [proprio] = cfg.ler_grupos({"c": {"ofertas_gerais": True, "desconto_minimo": 40, "preco_minimo": 0}})
@@ -598,7 +598,7 @@ def test_painel_grupo_de_ofertas_gerais_mostra_os_pisos_padrao(arquivos):
     import yaml
     assert painel.salvar(d) == []
     d = painel.ler_tudo()
-    assert (d["grupos"][0]["desconto_minimo"], d["grupos"][0]["preco_minimo"]) == (25, 25)
+    assert (d["grupos"][0]["desconto_minimo"], d["grupos"][0]["preco_minimo"]) == (15, 25)
     gy = yaml.safe_load((arquivos / "config.yaml").read_text(encoding="utf-8"))["grupos"][d["grupos"][0]["chave"]]
     assert "desconto_minimo" not in gy and "preco_minimo" not in gy  # padrão: não precisa escrever
 

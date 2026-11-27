@@ -148,7 +148,7 @@ def ler_grupos(dados: dict) -> list[Grupo]:
 
 
 # grupos de ofertas gerais: pisos de qualidade quando o grupo não define os seus
-PISOS_OFERTAS_GERAIS = (25, 25.0)  # desconto mínimo (%), preço mínimo (R$)
+PISOS_OFERTAS_GERAIS = (15, 25.0)  # desconto mínimo (%), preço mínimo (R$)
 
 
 def pisos_do_grupo(g: dict) -> tuple[int | None, float | None]:

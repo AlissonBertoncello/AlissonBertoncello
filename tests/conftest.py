@@ -18,6 +18,7 @@ def isolar(tmp_path, monkeypatch):
                  "_rodizio_alta"):
         monkeypatch.setattr(ml_geral, nome, {})
     monkeypatch.setattr(ml_geral, "_pausada_ate", 0.0)
+    monkeypatch.setattr(pipeline, "_api_vazia", {"seguidas": 0, "pausa_ate": 0.0})
     monkeypatch.setattr(ml_geral, "_em_alta_recusada", [])
     monkeypatch.setattr(ml_geral, "ARQ_TERMOS", tmp_path / "termos.json")
 

@@ -295,15 +295,15 @@ Dois cliques em **`CONFIGURAR.bat`**: o painel abre no navegador (endereço `htt
 
 Na aba **Grupos**, a chave **Ofertas gerais do Mercado Livre** faz o grupo receber **produtos de qualquer categoria**, como os grupos de "promoções". Não precisa de lista de categorias nem de marcas. Em cada ciclo, o bot tenta nesta ordem:
 
-1. **Ofertas achadas pela IA ou pela página de ofertas** (se ligadas — hoje as duas ficam desligadas);
+1. **Página de ofertas do ML (Ofertas do dia — geral e moda)**, lida no Chrome logado na sua conta de afiliado: 2 páginas por ciclo, cada uma relida no máximo a cada 30 min (~50 produtos por página, com preço e desconto). Se o ML barrar, fica pausada por 3 h e o grupo segue com a Shopee. **Desde 26/11 a API do ML não dá mais o preço** (erro 403 PolicyAgent), por isso esta é a fonte principal; para conferir o que o ML devolve por cada caminho, rode o **`BUSCAR_ML.bat`** (resultado em `data\busca_ml\`);
 2. **Mais vendidos e catálogo do ML (API oficial, grátis):** o bot percorre sozinho os departamentos de varejo — Calçados, Roupas e Bolsas (com peso 2), Beleza, Joias e Relógios, Esportes e Fitness, Ferramentas, Celulares, Eletrônicos, Informática, Casa e Móveis, Saúde — e lê, em rodízio, o ranking de mais vendidos e o catálogo de 3 subcategorias por ciclo. **Junta as candidatas e manda a de nota mais alta** (veja abaixo). Comida, bebida, livros, carros e imóveis ficam de fora;
-3. **Em alta no ML (reserva):** só quando os rankings não têm nada novo — os termos mais buscados agora em cada departamento do grupo (relidos a cada 6 h), sem a lista geral, sem palavra solta que não seja marca ("graxa", "snoopy"), sem datas e festa ("black friday", "natal", "bandeira") e sem palavras bloqueadas;
+3. **Em alta no ML (reserva):** (os itens 2 e 3 usam a API: depois de 3 buscas seguidas sem nenhum produto, ficam pulados por 6 h e são testados de novo) só quando os rankings não têm nada novo — os termos mais buscados agora em cada departamento do grupo (relidos a cada 6 h), sem a lista geral, sem palavra solta que não seja marca ("graxa", "snoopy"), sem datas e festa ("black friday", "natal", "bandeira") e sem palavras bloqueadas;
 4. as **categorias do grupo**, se houver;
 5. na vez da Shopee: a **lista de mais vendidos da Shopee** (sem palavra-chave) e depois as palavras-chave do grupo.
 
 **Nota de qualidade (grupos de ofertas gerais):** cada candidata ganha pontos pelo desconto (até 80), **+40 se for de marca conhecida** (pela ficha do produto no ML ou pelo título — ~200 marcas já vêm na lista: Nike, Adidas, Olympikus, Casio, JBL, Samsung, Mondial, Philco, Bosch, Tramontina, Natura, Boticário…; acrescente outras em *Envio e filtros → Marcas boas*), até +20 pela posição no ranking e +10 se o preço estiver entre R$ 60 e R$ 1.500. Produto sem marca não é proibido: só perde para um de marca. O log mostra a escolhida, ex.: `Escolhida pela nota 117: Escova Rotativa Mondial… (-54%, marca mondial)`.
 
-**Pisos do grupo:** no cartão do grupo, *Desconto mínimo deste grupo* e *Preço mínimo deste grupo*. Vazio = o da aba Envio e filtros; nos grupos de ofertas gerais, vazio no arquivo = **25% e R$ 25**.
+**Pisos do grupo:** no cartão do grupo, *Desconto mínimo deste grupo* e *Preço mínimo deste grupo*. Vazio = o da aba Envio e filtros; nos grupos de ofertas gerais, vazio no arquivo = **15% e R$ 25**.
 
 > ⚠️ As **palavras bloqueadas em todos os grupos** (aba Envio e filtros) valem também para os grupos de ofertas gerais. Se ali estiverem `masculino`, `óculos`, `barba`… (vindas do grupo feminino), produtos masculinos nunca chegam ao Clube. Para um grupo só, use as palavras bloqueadas **do grupo**.
 

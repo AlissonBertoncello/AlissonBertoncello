@@ -23,7 +23,7 @@ MARCAS_PADRAO = (
     "calvin klein", "levis", "levi's", "hering", "colcci", "aramis", "polo wear",
     "ralph lauren", "diesel", "hugo boss", "osklen", "arezzo", "schutz", "vizzano",
     "moleca", "beira rio", "usaflex", "piccadilly", "democrata", "ferracini", "pegada", "kipling",
-    "samsonite", "mormaii", "speedo",
+    "samsonite", "mormaii", "speedo", "lupo", "insider", "puket", "torx",
     # relógios, óculos e acessórios
     "casio", "g-shock", "technos", "orient", "seiko", "citizen", "invicta", "fossil", "michael kors",
     "mondaine", "ray-ban", "rayban", "chilli beans", "pandora", "vivara", "swarovski",
@@ -39,7 +39,8 @@ MARCAS_PADRAO = (
     "bose", "edifier", "multilaser", "intelbras", "positivo", "dell", "lenovo", "acer", "asus",
     "hp", "logitech", "redragon", "hyperx", "razer", "kingston", "sandisk", "seagate", "tp-link",
     "amazfit", "huawei", "lenoxx", "philips walita", "baseus", "anker", "ugreen", "aiwa",
-    "playstation", "xbox", "nintendo", "gopro", "canon", "nikon",
+    "playstation", "xbox", "nintendo", "gopro", "canon", "nikon", "amazon", "echo dot", "kindle",
+    "soundcore", "anker", "wap",
     # casa, cozinha e eletroportáteis
     "tramontina", "electrolux", "brastemp", "consul", "arno", "oster", "black+decker",
     "black decker", "cadence", "wap", "electrolux", "midea", "panasonic", "nespresso",

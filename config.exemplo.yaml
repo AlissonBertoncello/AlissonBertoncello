@@ -42,7 +42,8 @@ fontes:
     # em rodízio, mais as ofertas achadas pela IA (fontes.ia). A página geral de ofertas só
     # é aberta com pagina_ofertas: true (desligada: o ML barra o acesso automático).
     ofertas_gerais:
-      pagina_ofertas: false    # true = tenta também mercadolivre.com.br/ofertas num Chrome próprio
+      pagina_ofertas: true     # Ofertas do dia (geral + moda) no Chrome logado no afiliado: a fonte do ML desde 26/11
+      # perfil: afiliado       # afiliado = Chrome logado (padrão) | proprio = Chrome separado, sem login
       paginas_por_ciclo: 2     # páginas lidas por ciclo, somando todos os grupos
       atualizar_minutos: 30    # cada página (geral ou de um departamento) é relida no máximo nesse intervalo
       paginas_max: 10          # rodízio: página 1 até esta e recomeça
@@ -78,8 +79,8 @@ fontes:
 #   departamentos: {MLB1246: Beleza e Cuidado Pessoal}  -> só esses departamentos (vazio = todos)
 #   sem_desconto: true     -> aceita os 5 primeiros do ranking de mais vendidos sem desconto ("Por R$ X")
 #   etiqueta_ml: minha_tag -> etiqueta do Linkbuilder só deste grupo (para ver as vendas por grupo)
-#   desconto_minimo: 25 / preco_minimo: 25 -> pisos só deste grupo (grupos de ofertas gerais:
-#                             25% e R$ 25 se não informar; os outros usam os de filtros)
+#   desconto_minimo: 15 / preco_minimo: 25 -> pisos só deste grupo (grupos de ofertas gerais:
+#                             15% e R$ 25 se não informar; os outros usam os de filtros)
 grupos:
   mulher:
     nome: Achadinhos da Gabi 💄

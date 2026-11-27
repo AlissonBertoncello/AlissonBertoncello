@@ -7,9 +7,10 @@
    catálogo de cada uma, em rodízio, sem lista fixa de marcas.
 2. Ofertas achadas pela IA (sources/ia_ofertas.py), já conferidas na API do ML, entram
    no mesmo estoque (fonte "ia").
-3. Opcional e desligada por padrão (pagina_ofertas: true): página geral de ofertas
-   (mercadolivre.com.br/ofertas) num Chrome com perfil próprio. Nos testes o ML barrou
-   todo acesso automático a ela (tela de segurança ou de verificação de conta).
+3. Página de ofertas (mercadolivre.com.br/ofertas, as "Ofertas do dia" — geral e moda)
+   lida no Chrome logado no afiliado. Desde 26/11 a API não dá mais o preço (403
+   PolicyAgent em /items e /products/{id}/items); a página trouxe 168 produtos com preço
+   na busca crua de 27/11. Poucas páginas por ciclo; se o ML barrar, pausa por 3 h.
 
 Ajustes em fontes.mercadolivre.ofertas_gerais no config.yaml (todos opcionais).
 """
@@ -67,12 +68,17 @@ def _opcoes() -> dict:
             "atualizar_minutos": int(o.get("atualizar_minutos", 30)),
             "paginas_max": int(o.get("paginas_max", 10)),
             "janela": str(o.get("janela") or "visivel").lower(),
-            "pagina_ofertas": bool(o.get("pagina_ofertas", False))}
+            "pagina_ofertas": bool(o.get("pagina_ofertas", True)),
+            "perfil": str(o.get("perfil") or "afiliado").lower()}
+
+
+# sem departamentos escolhidos: a página geral e a de moda (calçados, roupas e bolsas)
+FONTES_PADRAO = ["", "MLB1430"]
 
 
 def fontes_do_grupo(g: Grupo) -> list[str]:
-    """Páginas de ofertas que interessam ao grupo: as dos departamentos dele, ou a geral."""
-    return list(g.departamentos) or [""]
+    """Páginas de ofertas que interessam ao grupo: as dos departamentos dele, ou a geral + moda."""
+    return list(g.departamentos) or list(FONTES_PADRAO)
 
 
 def pausada() -> bool:
@@ -82,10 +88,14 @@ def pausada() -> bool:
 # ── 1. página de ofertas ─────────────────────────────────────────────
 
 def _chrome_ler(urls: list[str]) -> dict[str, str]:
-    """Abre as páginas num Chrome com perfil próprio (janela fora da tela, se der)."""
+    """Abre as páginas no Chrome logado no afiliado (padrão: foi o que funcionou em 27/11)
+    ou, com perfil: proprio, num Chrome com perfil próprio, sem login."""
     from playwright.sync_api import sync_playwright
 
-    from ..afiliado_ml import _abrir_contexto
+    from ..afiliado_ml import _abrir_contexto, pagina_chrome
+    if _opcoes()["perfil"] != "proprio":
+        with pagina_chrome() as page:
+            return ml_pagina.ler_paginas(page, urls, pausa_s=(3, 7))
 
     PERFIL_DIR.mkdir(parents=True, exist_ok=True)
     visivel = _opcoes()["janela"] != "oculta"

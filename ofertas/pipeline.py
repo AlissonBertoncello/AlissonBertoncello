@@ -268,6 +268,30 @@ def _melhores(grupo: Grupo, brutas: list[Oferta], rotulo: str, n: int) -> tuple[
     return (diferentes + parecidas if diferentes else []), parecidas
 
 
+# a API do ML deixou de dar o preço (26/11): depois de algumas buscas seguidas sem nenhum
+# produto, a fonte da API fica pulada por algumas horas e é testada de novo depois
+API_VAZIA_SEGUIDAS = 3
+API_VAZIA_PAUSA_H = 6
+_api_vazia = {"seguidas": 0, "pausa_ate": 0.0}
+
+
+def api_ml_pausada(agora: float | None = None) -> bool:
+    return (agora or time.time()) < _api_vazia["pausa_ate"]
+
+
+def _anotar_api(trouxe_algo: bool, agora: float | None = None) -> None:
+    if trouxe_algo:
+        _api_vazia["seguidas"] = 0
+        return
+    _api_vazia["seguidas"] += 1
+    if _api_vazia["seguidas"] >= API_VAZIA_SEGUIDAS:
+        _api_vazia["seguidas"] = 0
+        _api_vazia["pausa_ate"] = (agora or time.time()) + API_VAZIA_PAUSA_H * 3600
+        log.warning("Mercado Livre: a API não trouxe nenhum produto com preço em %d buscas seguidas — "
+                    "pulada por %d h (as ofertas do ML seguem pela página de ofertas)",
+                    API_VAZIA_SEGUIDAS, API_VAZIA_PAUSA_H)
+
+
 def _fonte_automatica(grupo: Grupo, n: int) -> tuple[list[Oferta], list[Oferta]]:
     """Ofertas gerais pela API do ML: subcategorias de cada departamento em rodízio — o
     ranking de mais vendidos e o catálogo pelo nome da subcategoria. Junta as candidatas
@@ -282,6 +306,7 @@ def _fonte_automatica(grupo: Grupo, n: int) -> tuple[list[Oferta], list[Oferta]]
         vez = []
     juntas: list[Oferta] = []
     reserva: list[Oferta] = []
+    coletadas = 0
     for cid, nome in vez:
         for rotulo, buscar in ((f"Mais vendidos '{nome}'", lambda: ml_geral.mais_vendidos(cid, cliente)),
                                (f"Catálogo do ML '{nome}'", lambda: ml_geral.catalogo(nome, cliente))):
@@ -291,9 +316,11 @@ def _fonte_automatica(grupo: Grupo, n: int) -> tuple[list[Oferta], list[Oferta]]
                 _checar_rede()
                 log.debug("[%s] %s: %s", grupo.nome, rotulo, e)
                 continue
+            coletadas += len(brutas)
             achadas, parecidas = _melhores(grupo, brutas, rotulo, n)
             juntas += achadas
             reserva = reserva or parecidas
+    _anotar_api(coletadas > 0)
     if juntas:
         return _as_melhores(grupo, juntas, n), []
     # reserva: termos mais buscados agora no ML (em alta), procurados no catálogo
@@ -358,8 +385,9 @@ def _das_categorias(grupo: Grupo, n: int) -> tuple[list[Oferta], list[Oferta]]:
 
 
 def _candidatas_ml(grupo: Grupo, n: int) -> list[Oferta]:
-    """Grupo com ofertas gerais: estoque (ofertas da IA conferidas no ML) -> mais vendidos e
-    catálogo do ML automáticos -> categorias do grupo. Grupo comum: categorias do grupo.
+    """Grupo com ofertas gerais: estoque (página de ofertas do ML; IA, se ligada) -> mais
+    vendidos e catálogo da API -> categorias do grupo (as duas puladas enquanto a API vier
+    sem preço). Grupo comum: categorias do grupo.
     Pula a fonte sem oferta nova (ou só com produto parecido com os últimos enviados)."""
     if not config.fonte_ml.get("ativa"):
         return []
@@ -372,6 +400,8 @@ def _candidatas_ml(grupo: Grupo, n: int) -> list[Oferta]:
             if achadas:
                 return achadas
         fontes = [_fonte_automatica, _das_categorias]
+        if api_ml_pausada():  # API sem preço: só a página de ofertas
+            fontes = []
     for fonte in fontes:
         achadas, parecidas = fonte(grupo, n)
         if achadas:
